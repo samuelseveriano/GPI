@@ -19,7 +19,7 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +42,7 @@ jobs:
 
       - name: Validação real dos conectores públicos (runner com internet)
         continue-on-error: true
+        timeout-minutes: 15
         shell: pwsh
         run: |
           python scripts/validate_connectors.py validacao_conectores.json *> val.log
@@ -59,6 +60,7 @@ jobs:
         run: python packaging/make_manifest.py dist/GPI
 
       - name: Testes de inicialização do executável
+        timeout-minutes: 15
         shell: pwsh
         run: ./packaging/smoke_test.ps1 -Exe dist/GPI/GPI.exe
 
