@@ -4,6 +4,15 @@
 # Cada resultado é gravado em smoke_resultados.txt (anexado ao relatório de build).
 param([string]$Exe = "dist/GPI/GPI.exe", [string]$Report = "smoke_resultados.txt")
 $ErrorActionPreference = "Stop"
+# qualquer exceção do PowerShell vira anotação de erro com a linha exata (o log completo nem sempre é acessível)
+trap {
+  $msg = "exceção na linha $($_.InvocationInfo.ScriptLineNumber): $($_.Exception.Message) | $($_.InvocationInfo.Line.Trim())"
+  Write-Host "FALHA: $msg"
+  if ($Report) { Add-Content -Encoding utf8 $Report "FALHA: $msg" -ErrorAction SilentlyContinue }
+  Write-Output "::error title=smoke-excecao::$msg"
+  Get-Process GPI -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  exit 1
+}
 $tmp = $env:RUNNER_TEMP
 if (-not $tmp) { $tmp = $env:TEMP }
 $Report = [IO.Path]::GetFullPath((Join-Path (Get-Location) $Report))
