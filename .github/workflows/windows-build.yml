@@ -34,10 +34,18 @@ jobs:
 
       - name: Validação real dos conectores públicos (runner com internet)
         continue-on-error: true
-        run: python scripts/validate_connectors.py validacao_conectores.json
+        shell: pwsh
+        run: |
+          python scripts/validate_connectors.py validacao_conectores.json *> val.log
+          $t = (Get-Content val.log -Tail 30) -join '%0A'
+          Write-Output "::notice title=validacao-conectores::$t"
 
       - name: Empacotar GPI.exe (one-folder)
-        run: pyinstaller --noconfirm --clean packaging/gpi.spec
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean packaging/gpi.spec *> pyi.log
+          $c = $LASTEXITCODE
+          if ($c -ne 0) { $t = (Get-Content pyi.log -Tail 40) -join '%0A'; Write-Output "::error title=pyinstaller::$t"; exit $c }
 
       - name: Documentação e manifesto de integridade
         run: python packaging/make_manifest.py dist/GPI

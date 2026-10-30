@@ -9,7 +9,9 @@ $env:GPI_DATA_DIR = $data
 function Fail($msg) {
   Write-Host "FALHA: $msg"
   $log = Join-Path $data "logs/gpi.log"
-  if (Test-Path $log) { Get-Content $log -Tail 80 }
+  $tail = ""
+  if (Test-Path $log) { $tail = (Get-Content $log -Tail 30) -join '%0A' }
+  Write-Output "::error title=smoke::$msg%0A$tail"
   exit 1
 }
 
