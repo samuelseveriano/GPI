@@ -478,3 +478,18 @@ def test_stop_right_after_start_exits_promptly(tmp_path):
     finally:
         if p.poll() is None:
             p.kill()
+
+
+def test_unexpected_model_error_does_not_break_forecast(tmp_path, monkeypatch):
+    """Erro inesperado em um modelo vira 'não aplicável' — a previsão dos demais continua."""
+    from gpi.forecasting import models as fm
+    from gpi import services as sv
+    monkeypatch.setitem(fm.MODELS, "quebra", ("Modelo com erro", lambda y, h, **kw: 1 / 0))
+    db = Database(tmp_path / "f.sqlite")
+    from gpi.demo import DEMO_SOURCE, make_demo_csv
+    from gpi.importer import import_file
+    import_file(db, "demo.csv", make_demo_csv(), source=DEMO_SOURCE, is_demo=True)
+    sku = sv.skus(db)[0]["sku"]
+    res = sv.forecast(db, sku, "M", 6, ["naive", "quebra", "seasonal_naive"])
+    assert "falha interna" in res["modelos"]["quebra"]["erro"]
+    assert res["modelo_escolhido"] in ("naive", "seasonal_naive")

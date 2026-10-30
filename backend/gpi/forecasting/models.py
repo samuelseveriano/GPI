@@ -14,6 +14,7 @@ As fórmulas estão em docs/METODOLOGIA.md e na página "Metodologia" da interfa
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 import math
 import numpy as np
 from scipy.optimize import minimize
@@ -347,7 +348,18 @@ def run_model(key: str, y: np.ndarray, h: int, m: int) -> ModelResult:
     y = np.asarray(y, dtype=float)
     if np.any(np.isnan(y)):
         raise ModelNotApplicable("a série contém valores ausentes")
-    return MODELS[key][1](y, h, m=m)
+    try:
+        r = MODELS[key][1](y, h, m=m)
+    except ModelNotApplicable:
+        raise
+    except Exception as e:  # noqa: BLE001 — falha de um modelo não derruba a previsão dos demais
+        logging.getLogger("gpi.models").exception("modelo %s falhou (n=%d, h=%d, m=%d)", key, len(y), h, m)
+        raise ModelNotApplicable(f"falha interna do modelo ({type(e).__name__}: {e})") from e
+    f = np.asarray(r.forecast, dtype=float)
+    if f.shape != (h,) or not np.all(np.isfinite(f)):
+        logging.getLogger("gpi.models").warning("modelo %s gerou previsão inválida: %s", key, f)
+        raise ModelNotApplicable("o modelo gerou previsão inválida (valores não finitos)")
+    return r
 
 
 # Modelos opcionais (Fase 3): SARIMA, LightGBM e XGBoost — registrados só se instalados
