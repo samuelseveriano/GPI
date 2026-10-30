@@ -1,7 +1,10 @@
-# Build do GPI para Windows x64: testes → GPI.exe (PyInstaller, one-folder) → testes de
-# inicialização → GPI-Windows-Portable.zip publicado como artefato.
-# Não usa segredos. Runners gratuitos: ilimitados em repositório público; em repositório
-# privado consomem a cota mensal do plano (minutos Windows contam em dobro).
+# Build do GPI para Windows x64, em jobs separados:
+#   1. testes      — testes automatizados (Windows)
+#   2. conectores  — validação REAL das APIs públicas (não bloqueia o build; falhas ficam no relatório)
+#   3. build       — GPI.exe (PyInstaller, one-folder) → testes do executável A–H → GPI-Windows-Portable.zip
+# Não usa segredos. Em caso de falha, os logs de cada job são publicados como artefato "logs-<job>".
+# Versões das actions: checkout@v5 / setup-python@v6 / upload-artifact@v5 usam Node 24
+# (as v4/v5 anteriores usam Node 20, descontinuado nos runners do GitHub).
 name: windows-build
 
 on:
@@ -17,37 +20,82 @@ env:
   PYTHONUTF8: "1"
 
 jobs:
-  build:
+  testes:
+    name: 1. Testes automatizados
     runs-on: windows-latest
-    timeout-minutes: 75
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
-
-      - name: Instalar dependências de build
+      - name: Instalar dependências (inclui statsmodels, LightGBM e XGBoost)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-optional.txt pytest "pyinstaller>=6.6,<7"
-
-      - name: Testes automatizados
+          pip install -r requirements.txt -r requirements-optional.txt pytest
+      - name: Executar pytest
         shell: pwsh
         run: |
-          python -m pytest -q -rfE --tb=short tests *> pytest.log
+          python -m pytest -q -rfEs --tb=short --junitxml=pytest.xml tests *> pytest.log
           $c = $LASTEXITCODE
+          Get-Content pytest.log -Tail 5
           if ($c -ne 0) { $t = (Get-Content pytest.log -Tail 60) -join '%0A'; Write-Output "::error title=pytest::$t"; exit $c }
+      - name: Publicar relatório de testes
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: relatorio-testes
+          path: |
+            pytest.log
+            pytest.xml
+          retention-days: 30
 
-      - name: Validação real dos conectores públicos (runner com internet)
-        continue-on-error: true
+  conectores:
+    name: 2. Validação real dos conectores
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Coletar uma amostra real de cada fonte pública
+        continue-on-error: true      # APIs externas fora do ar não impedem o build — mas não são declaradas validadas
         timeout-minutes: 15
+        run: |
+          python scripts/validate_connectors.py validacao_conectores.json 2>&1 | tee val.log
+          { echo "### Conectores (coleta real)"; echo '```'; cat val.log | cut -c1-180; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=validacao-conectores::$(tail -n 30 val.log | cut -c1-200 | sed ':a;N;$!ba;s/\n/%0A/g')"
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: validacao-conectores
+          path: |
+            validacao_conectores.json
+            val.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  build:
+    name: 3. Compilar e testar GPI.exe
+    needs: testes
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar dependências de build
         shell: pwsh
         run: |
-          python scripts/validate_connectors.py validacao_conectores.json *> val.log
-          $t = (Get-Content val.log -Tail 30) -join '%0A'
-          Write-Output "::notice title=validacao-conectores::$t"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-optional.txt "pyinstaller>=6.6,<7"
+          pip freeze | Out-File -Encoding utf8 dependencias.txt
 
       - name: Empacotar GPI.exe (one-folder)
         shell: pwsh
@@ -55,39 +103,66 @@ jobs:
           pyinstaller --noconfirm --clean packaging/gpi.spec *> pyi.log
           $c = $LASTEXITCODE
           if ($c -ne 0) { $t = (Get-Content pyi.log -Tail 40) -join '%0A'; Write-Output "::error title=pyinstaller::$t"; exit $c }
+          Select-String -Path pyi.log -Pattern "WARNING: (Hidden import|lib not found)" | Select-Object -First 40 | ForEach-Object { $_.Line } | Out-File -Encoding utf8 pyi_avisos.txt
 
       - name: Documentação e manifesto de integridade
         run: python packaging/make_manifest.py dist/GPI
 
-      - name: Testes de inicialização do executável
-        timeout-minutes: 15
+      - name: Testes do executável (A–H, cópia limpa sem Python no PATH)
+        timeout-minutes: 20
         shell: pwsh
-        run: ./packaging/smoke_test.ps1 -Exe dist/GPI/GPI.exe
+        run: ./packaging/smoke_test.ps1 -Exe dist/GPI/GPI.exe -Report smoke_resultados.txt
+
+      - name: Relatório de build
+        shell: pwsh
+        run: |
+          $exe = Get-Item dist/GPI/GPI.exe
+          $files = (Get-ChildItem -Recurse -File dist/GPI | Measure-Object -Property Length -Sum)
+          $pkgs = Get-Content dependencias.txt | Where-Object { $_ -match '^(numpy|scipy|pandas|scikit-learn|statsmodels|lightgbm|xgboost|starlette|uvicorn|pyinstaller)==' }
+          $report = @(
+            "GPI - relatório de build",
+            "Commit: $env:GITHUB_SHA",
+            "Execução: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
+            "Runner: $env:RUNNER_OS $env:RUNNER_ARCH  |  $(python --version)  |  PyInstaller $(pyinstaller --version)",
+            "GPI.exe: $([math]::Round($exe.Length/1KB)) KB; pacote: $($files.Count) arquivos, $([math]::Round($files.Sum/1MB,1)) MB",
+            "",
+            "Bibliotecas principais:", $pkgs,
+            "",
+            "Testes automatizados: aprovados (job 1)",
+            "Testes do executável:", (Get-Content smoke_resultados.txt)
+          )
+          New-Item -ItemType Directory -Force dist/GPI/relatorios | Out-Null
+          $report | Out-File -Encoding utf8 dist/GPI/relatorios/relatorio_build.txt
+          Copy-Item dependencias.txt, selftest.json dist/GPI/relatorios/
+          $report | Out-File -Encoding utf8 relatorio_build.txt
+          "### Build do GPI.exe" >> $env:GITHUB_STEP_SUMMARY
+          '```' >> $env:GITHUB_STEP_SUMMARY
+          $report >> $env:GITHUB_STEP_SUMMARY
+          '```' >> $env:GITHUB_STEP_SUMMARY
 
       - name: Gerar GPI-Windows-Portable.zip
         shell: pwsh
         run: Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable.zip
 
-      - name: Relatório de build
-        shell: pwsh
-        run: |
-          $zip = Get-Item GPI-Windows-Portable.zip
-          @"
-          GPI - relatório de build
-          Commit: $env:GITHUB_SHA
-          Runner: $env:RUNNER_OS $env:RUNNER_ARCH
-          Python: $(python --version)
-          PyInstaller: $(pyinstaller --version)
-          Pacote: $($zip.Name) $([math]::Round($zip.Length/1MB,1)) MB
-          Testes automatizados: aprovados
-          Testes de inicialização do executável: aprovados
-          "@ | Out-File -Encoding utf8 relatorio_build.txt
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: GPI-Windows-Portable
           path: |
             GPI-Windows-Portable.zip
             relatorio_build.txt
-            validacao_conectores.json
+          retention-days: 30
+
+      - name: Preservar logs em caso de falha
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: logs-build
+          path: |
+            pyi.log
+            pyi_avisos.txt
+            dependencias.txt
+            smoke_resultados.txt
+            selftest.json
+            ${{ runner.temp }}/gpi-smoke-data/logs/
+          if-no-files-found: ignore
           retention-days: 30
