@@ -1,0 +1,17 @@
+{
+  "port": 8765,
+  "port_range": 10,
+  "open_browser": true,
+  "data_dir": null,
+  "telemetry": false,
+  "log_level": "INFO",
+
+  "auto_sync": true,
+  "history_start_year": 2016,
+  "proxy": null,
+  "ca_bundle": null,
+  "contact": null,
+  "mercadolivre_access_token": null,
+  "automl_budget_s": 420,
+  "youtube_daily_units": 3000
+}

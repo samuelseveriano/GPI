@@ -1,0 +1,4 @@
+# Modelos opcionais (Fase 3) — incluídos no build do Windows; o GPI funciona sem eles.
+statsmodels>=0.14     # SARIMA / SARIMAX
+lightgbm>=4.0
+xgboost>=2.0

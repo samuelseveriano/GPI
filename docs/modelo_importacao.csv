@@ -1,0 +1,4 @@
+Data;SKU;Produto;Categoria;Quantidade;Preço unitário
+02/01/2025;ABC-001;Exemplo de produto;Categoria X;3;49,90
+03/01/2025;ABC-001;Exemplo de produto;Categoria X;5;49,90
+03/01/2025;XYZ-010;Outro produto;Categoria Y;1;120,00

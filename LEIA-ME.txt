@@ -1,0 +1,9 @@
+GPI - Global Product Intelligence (versao portatil para Windows)
+
+1. Clique duas vezes em GPI.exe.
+2. O navegador abre em http://127.0.0.1:8765 e a janela "GPI em execucao" aparece.
+3. Para encerrar, feche a janela "GPI em execucao".
+
+Nao precisa instalar Python, banco de dados nem ser administrador.
+Seus dados ficam em %LOCALAPPDATA%\GPI.
+Manual completo: MANUAL.md. Informacoes para a TI: docs\TI.md.
