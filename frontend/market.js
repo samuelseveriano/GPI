@@ -3,7 +3,7 @@ window.GPI_MARKET = function (H) {
   const { api, post, fmt, pct, escH, loading, errBox, main, $ } = H;
   const usd = (v) => v == null ? '—' : 'US$ ' + (Math.abs(v) >= 1e9 ? fmt(v / 1e9, 2) + ' bi' : Math.abs(v) >= 1e6 ? fmt(v / 1e6, 1) + ' mi' : fmt(v, 0));
   const growth = (v) => v == null ? '<span class="muted">—</span>' : `<span class="${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}">${v > 0 ? '+' : ''}${pct(v, 0)}</span>`;
-  const STATE = { funcional: ['ok', 'funcional'], restrita: ['', 'restrita'], falhou: ['bad', 'falhou'], nao_testada: ['', 'não testada'], aguardando: ['', 'aguardando'] };
+  const STATE = { funcional: ['ok', 'funcional'], restrita: ['', 'restrita'], falhou: ['bad', 'falhou'], nao_testada: ['', 'não testada'], aguardando: ['', 'aguardando'], 'sem dados': ['', 'sem dados'] };
   const badgeState = (s, validated) => { const [c, t] = STATE[s] || ['', s]; return `<span class="badge ${c}">${t}</span>${s === 'falhou' && validated ? ' <span class="badge ok" title="Já realizou coleta real validada anteriormente">validada antes</span>' : ''}`; };
   const DISCLAIMER = '<p class="muted small">O score é uma classificação heurística para priorizar investigação — <b>não é probabilidade de sucesso nem recomendação de importação</b>. Custos, margem, demanda efetiva e risco precisam ser estimados antes de qualquer compra.</p>';
   const label = (r) => r ? `<span class="badge lbl">${escH(r)}</span>` : '';

@@ -1,7 +1,7 @@
 /* GPI Fase 3 — Central de Integrações, YouTube, Reviews, Comparador e Marketplaces. */
 window.GPI_MARKET3 = function (H) {
   const { api, post, fmt, pct, escH, loading, errBox, main, $ } = H;
-  const STATE = { funcional: ['ok', 'funcional'], restrita: ['', 'não conectada'], falhou: ['bad', 'falhou'], nao_testada: ['', 'aguardando coleta'], aguardando: ['', 'aguardando'] };
+  const STATE = { funcional: ['ok', 'funcional'], restrita: ['', 'não conectada'], falhou: ['bad', 'falhou'], nao_testada: ['', 'aguardando coleta'], aguardando: ['', 'aguardando'], 'sem dados': ['', 'sem dados'] };
   const badge = (s) => { const [c, t] = STATE[s] || ['', s]; return `<span class="badge ${c}">${t}</span>`; };
   const TYPE = { auto: 'Automática', api_key: 'Chave de API', client_id: 'ID de aplicativo', oauth: 'Login OAuth (PKCE)', optin: 'Aceite de termos', approval: 'Exige aprovação do provedor' };
   const del = (path) => api(path, { method: 'DELETE' });

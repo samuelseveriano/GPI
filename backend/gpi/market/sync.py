@@ -182,9 +182,8 @@ class SyncManager:
             jobs.sort(key=lambda j: j.priority)
             cap = (self.cfg or {}).get("max_jobs_per_source")   # usado só na validação rápida do CI
             if cap:
+                seen.update(j.key for j in jobs[int(cap):])   # pulados nesta amostra; não voltam na próxima rodada
                 jobs = jobs[:int(cap)]
-                if not jobs:
-                    break
             self.state["total"] += len(jobs)
             for j in jobs:
                 if self.http.cancel_event.is_set():

@@ -136,6 +136,10 @@ class MarketStore:
         if cs["n"]:
             stats = {"n": stats["n"] + cs["n"], "a": min(x for x in (stats["a"], cs["a"]) if x) if (stats["a"] or cs["a"]) else None,
                      "b": max(x for x in (stats["b"], cs["b"]) if x) if (stats["b"] or cs["b"]) else None}
+        if validated and not stats["n"]:
+            # a API respondeu, mas nenhum registro foi gravado: não há evidência de coleta → não validada
+            validated, state = False, "sem dados"
+            message = (message + "; " if message else "") + "a fonte respondeu, mas nenhum registro foi gravado ainda"
         if cur:
             c = cur[0]
             self.db.execute(
