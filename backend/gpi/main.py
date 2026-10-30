@@ -295,6 +295,45 @@ def control_window(url: str, server, on_close):
     return True
 
 
+# ---------------------------------------------------------------------- autoteste dos modelos
+SELFTEST_REQUIRED = ("naive", "seasonal_naive", "holt_winters", "ets_auto", "croston_sba", "random_forest", "hist_gb",
+                     "sarima", "lightgbm", "xgboost")
+
+
+def selftest(data: Path) -> int:
+    """Importa e executa cada modelo do pacote numa série sintética de teste (não é dado de mercado;
+    serve só para provar que as bibliotecas compiladas carregam e fazem inferência neste computador).
+    Resultado em <dados>/selftest.json; código 0 somente se todos os modelos exigidos funcionarem."""
+    import numpy as np
+
+    from .forecasting import models as fm
+    t = np.arange(48)
+    y = 100 + 0.8 * t + 15 * np.sin(2 * np.pi * t / 12) + np.random.default_rng(0).normal(0, 3, 48)
+    out = {"versao": __version__, "bibliotecas": {}, "modelos": {}}
+    for lib in ("numpy", "scipy", "pandas", "sklearn", "statsmodels", "lightgbm", "xgboost", "starlette", "uvicorn"):
+        try:
+            mod = __import__(lib)
+            out["bibliotecas"][lib] = getattr(mod, "__version__", "?")
+        except Exception as e:  # noqa: BLE001
+            out["bibliotecas"][lib] = f"ERRO: {type(e).__name__}: {e}"
+    for key in fm.MODELS:
+        t0 = time.time()
+        try:
+            r = fm.run_model(key, y, 6, 12)
+            f = np.asarray(r.forecast, float)
+            good = f.shape == (6,) and bool(np.all(np.isfinite(f)))
+            out["modelos"][key] = {"ok": good, "segundos": round(time.time() - t0, 2),
+                                   "previsao": [round(float(v), 2) for v in f]}
+        except Exception as e:  # noqa: BLE001
+            out["modelos"][key] = {"ok": False, "erro": f"{type(e).__name__}: {e}"}
+    missing = [k for k in SELFTEST_REQUIRED if not out["modelos"].get(k, {}).get("ok")]
+    out["exigidos_com_falha"] = missing
+    out["ok"] = not missing
+    (data / "selftest.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    logging.getLogger("gpi").info("autoteste dos modelos: %s", "OK" if out["ok"] else f"falhas {missing}")
+    return 0 if out["ok"] else 6
+
+
 # ---------------------------------------------------------------------- principal
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Global Product Intelligence")
@@ -304,9 +343,11 @@ def main(argv=None) -> int:
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--console", action="store_true")
     ap.add_argument("--port", type=int)
+    ap.add_argument("--selftest", action="store_true",
+                    help="autoteste dos modelos (estatísticos e de ML) dentro do pacote; grava selftest.json")
     args = ap.parse_args(argv)
     global _NO_DIALOG
-    _NO_DIALOG = bool(args.smoke or args.check)
+    _NO_DIALOG = bool(args.smoke or args.check or args.selftest)
 
     cfg0 = load_config()
     data = data_dir(cfg0)
@@ -336,6 +377,8 @@ def main(argv=None) -> int:
     if not ok:
         fatal("Arquivos do GPI ausentes ou alterados — extraia novamente o pacote.\n\n" + "\n".join(probs[:10]))
         return 4
+    if args.selftest:
+        return selftest(data)
     # primeira execução: copia o config de exemplo para a pasta do usuário
     ucfg = data / "config.json"
     if not ucfg.exists():
@@ -381,11 +424,11 @@ def main(argv=None) -> int:
     url = f"http://{HOST}:{port}/"
     t = threading.Thread(target=server.run, daemon=True, name="gpi-server")
     t.start()
-    for _ in range(120):
-        if gpi_running(port):
+    for _ in range(240):
+        if server.started or not t.is_alive():   # pronto — ou já encerrado por um --stop muito rápido
             break
-        time.sleep(0.25)
-    else:
+        time.sleep(0.125)
+    if not server.started and not server.should_exit:
         fatal("O servidor local não respondeu. Veja o log em " + str(data / "logs" / "gpi.log"))
         shutdown()
         return 5
