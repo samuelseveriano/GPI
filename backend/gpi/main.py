@@ -240,12 +240,15 @@ def stop(data: Path) -> int:
     return 0
 
 
+_NO_DIALOG = False  # --smoke/--check (testes automatizados): sem caixa de diálogo bloqueante
+
+
 def fatal(msg: str):
     """Mensagem de erro amigável (caixa de diálogo no Windows quando não há console)."""
     logging.getLogger("gpi").error(msg)
     if sys.stderr is not None:
         print(msg, file=sys.stderr)
-    if os.name == "nt" and frozen():
+    if os.name == "nt" and frozen() and not _NO_DIALOG and not os.environ.get("GPI_NO_DIALOG"):
         try:
             import ctypes
             ctypes.windll.user32.MessageBoxW(None, msg, "GPI — erro ao iniciar", 0x10)
@@ -302,6 +305,8 @@ def main(argv=None) -> int:
     ap.add_argument("--console", action="store_true")
     ap.add_argument("--port", type=int)
     args = ap.parse_args(argv)
+    global _NO_DIALOG
+    _NO_DIALOG = bool(args.smoke or args.check)
 
     cfg0 = load_config()
     data = data_dir(cfg0)

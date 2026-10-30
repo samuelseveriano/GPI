@@ -5,6 +5,7 @@ $data = Join-Path $env:RUNNER_TEMP "gpi-smoke-data"
 if (-not $env:RUNNER_TEMP) { $data = Join-Path $env:TEMP "gpi-smoke-data" }
 Remove-Item -Recurse -Force $data -ErrorAction SilentlyContinue
 $env:GPI_DATA_DIR = $data
+$env:GPI_NO_DIALOG = "1"
 New-Item -ItemType Directory -Force $data | Out-Null
 # sem sincronização automática no teste de inicialização (a coleta real é validada em outra etapa)
 '{"auto_sync": false}' | Set-Content -Encoding utf8 (Join-Path $data "config.json")

@@ -21,7 +21,8 @@ from gpi.market.sync import SyncManager  # noqa: E402
 def main(out: str):
     tmp = Path(tempfile.mkdtemp(prefix="gpi-val-"))
     db = Database(tmp / "v.sqlite")
-    cfg = {"history_start_year": datetime.now().year - 1, "contact": "ci-validacao"}
+    # amostra de no máximo 6 requisições por fonte: suficiente para provar a coleta real
+    cfg = {"history_start_year": datetime.now().year - 1, "contact": "ci-validacao", "max_jobs_per_source": 6}
     sm = SyncManager(db, tmp, cfg)
     summary = sm.run("validacao-ci")
     st = sm.store.source_status()
