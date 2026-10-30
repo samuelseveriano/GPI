@@ -435,3 +435,46 @@ def test_forecast_types_are_separated():
     assert forecast_type({"source": "wikimedia"}) == "interesse"
     assert forecast_type({"source": "gpi", "indicator": "Menções em notícias e discussões"}) == "popularidade"
     assert forecast_type({"source": "bcb_ptax"}) == "indicador"
+
+
+# ---------------------------------------------------------------- correções do build Windows
+def test_selftest_runs_builtin_models(tmp_path):
+    """--selftest executa cada modelo do pacote; os embutidos precisam funcionar sempre.
+    SARIMA/LightGBM/XGBoost só são exigidos onde as bibliotecas existem (build do Windows)."""
+    code = launcher.selftest(tmp_path)
+    out = json.loads((tmp_path / "selftest.json").read_text(encoding="utf-8"))
+    for k in ("naive", "seasonal_naive", "holt_winters", "ets_auto", "croston_sba", "random_forest", "hist_gb"):
+        assert out["modelos"][k]["ok"], (k, out["modelos"][k])
+    from gpi.forecasting.extra_models import available
+    missing_libs = [k for k, ok in available().items() if not ok]
+    assert sorted(out["exigidos_com_falha"]) == sorted(missing_libs)
+    assert code == (0 if not missing_libs else 6)
+
+
+def test_source_without_records_is_not_validated(tmp_path):
+    """Uma API que responde sem gravar nenhum registro não é declarada validada."""
+    from gpi.market.store import MarketStore
+    st = MarketStore(Database(tmp_path / "x.sqlite"))
+    st.set_source_status("fonte_x", "funcional", "0 novas observações", success=True, validated=True)
+    s = st.source_status()["fonte_x"]
+    assert s["state"] == "sem dados" and not s["validated"]
+
+
+def test_stop_right_after_start_exits_promptly(tmp_path):
+    """--stop enviado logo que o servidor responde: o processo deve sair (antes havia espera de 30 s)."""
+    env = {**os.environ, "GPI_DATA_DIR": str(tmp_path / "d"), "PYTHONPATH": str(ROOT / "backend")}
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "config.json").write_text(json.dumps({"auto_sync": False}))
+    port = _free_port()
+    p = subprocess.Popen([sys.executable, "-m", "gpi.main", "--no-browser", "--console", "--port", str(port)], env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(200):
+            if launcher.gpi_running(port):
+                break
+            time.sleep(0.05)
+        subprocess.run([sys.executable, "-m", "gpi.main", "--stop"], env=env, capture_output=True, timeout=30)
+        assert p.wait(15) == 0
+    finally:
+        if p.poll() is None:
+            p.kill()
