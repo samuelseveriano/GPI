@@ -22,7 +22,7 @@ for opt in ("lightgbm", "xgboost"):
         __import__(opt)
         binaries += collect_dynamic_libs(opt)
         datas += collect_data_files(opt)
-        hidden += collect_submodules(opt)
+        hidden += collect_submodules(opt, filter=lambda n: ".testing" not in n and ".tests" not in n)
     except ImportError:
         pass
 try:

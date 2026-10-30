@@ -94,6 +94,8 @@ class BcbPtax(Connector):
         cur, y = job.params["currency"], job.params["year"]
         url = self.url(cur, y, ctx.today)
         daily = self.parse(ctx.http.request_json(url))
+        if not daily:
+            return [], []          # moeda sem cotação PTAX no período: nada a gravar (não é falha)
         meta = dict(source=self.id, indicator=f"PTAX venda — {self.CURRENCIES[cur]}", kind="observado",
                     product_key=None, product_name=None, category="Câmbio", country="Brasil",
                     unit=f"BRL por 1 {cur}", currency="BRL", freq="D", origin_url=url,
@@ -249,7 +251,7 @@ class ComexStat(Connector):
 
     def run(self, job, ctx):
         scope, y = job.params["scope"], job.params["year"]
-        rows = self.parse(ctx.http.request_json(self.URL, "POST", self.body(scope, y), min_interval=6.0), y)
+        rows = self.parse(ctx.http.request_json(self.URL, "POST", self.body(scope, y), min_interval=12.0), y)
         by = defaultdict(lambda: {"desc": "", "fob": [], "kg": []})
         for r in rows:
             b = by[r["code"]]
@@ -298,11 +300,16 @@ class UnComtrade(Connector):
         codes = [h["codigo"] for h in heads.get("prioritarias", [])][:20]
         if not codes:
             return []
+        # A API pública 'preview' aceita só 1 período por chamada: um job por país e mês.
         jobs = []
-        for rep in self.REPORTERS:
-            for y in range(max(ctx.today.year - 5, 2019), ctx.today.year + 1):
-                jobs.append(Job(f"{self.id}:{rep}:{y}:{len(codes)}", {"reporter": rep, "year": y, "codes": codes},
-                                7 if y >= ctx.today.year - 1 else None, priority=4))
+        first = date(ctx.today.year - 2, ctx.today.month, 1)
+        d = first
+        while d < ctx.today.replace(day=1):
+            recent = (ctx.today.year - d.year) * 12 + ctx.today.month - d.month <= 6
+            for rep in self.REPORTERS:
+                jobs.append(Job(f"{self.id}:{rep}:{d:%Y%m}:{len(codes)}", {"reporter": rep, "period": f"{d:%Y%m}",
+                                                                          "codes": codes}, 7 if recent else None, priority=4))
+            d = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
         return jobs
 
     @staticmethod
@@ -321,12 +328,8 @@ class UnComtrade(Connector):
         return out
 
     def run(self, job, ctx):
-        rep, y, codes = job.params["reporter"], job.params["year"], job.params["codes"]
-        periods = ",".join(f"{y}{m:02d}" for m in range(1, 13) if date(y, m, 1) < ctx.today.replace(day=1))
-        if not periods:
-            return [], []
-        q = {"reporterCode": rep, "period": periods, "partnerCode": 156, "cmdCode": ",".join(codes),
-             "flowCode": "M"}
+        rep, per, codes = job.params["reporter"], job.params["period"], job.params["codes"]
+        q = {"reporterCode": rep, "period": per, "partnerCode": 156, "cmdCode": ",".join(codes), "flowCode": "M"}
         url = self.URL + "?" + urllib.parse.urlencode(q)
         rows = self.parse(ctx.http.request_json(url, min_interval=3.0))
         by = defaultdict(list)
@@ -337,7 +340,8 @@ class UnComtrade(Connector):
             meta = dict(source=self.id, indicator="Importação da China — valor", kind="observado",
                         product_key=tx.heading_key(code), product_name=None, category=tx.category_for_heading(code),
                         country=f"China → {self.REPORTERS[rep]}", unit="US$", currency="USD", freq="M",
-                        origin_url=url, method="API pública UN Comtrade (preview, sem chave)", reliability="A")
+                        origin_url=self.URL, method="API pública UN Comtrade (preview, sem chave, 1 período por chamada)",
+                        reliability="A")
             batches.append(Batch(f"comtrade:{rep}:{code}:value", meta, obs))
         return batches, []
 
