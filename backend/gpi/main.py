@@ -82,12 +82,12 @@ def load_config(user_data: Path | None = None) -> dict:
     cfg = dict(DEFAULTS)
     f = resource_dir() / "config" / "gpi.json"
     if f.exists():
-        cfg.update(json.loads(f.read_text(encoding="utf-8")))
+        cfg.update(json.loads(f.read_text(encoding="utf-8-sig")))
     if user_data is not None:
         uf = user_data / "config.json"
         if uf.exists():
             try:
-                cfg.update(json.loads(uf.read_text(encoding="utf-8")))
+                cfg.update(json.loads(uf.read_text(encoding="utf-8-sig")))
             except ValueError:
                 logging.getLogger("gpi").warning("config.json do usuário inválido; usando padrões")
     return cfg
