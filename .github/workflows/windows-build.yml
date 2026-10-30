@@ -34,7 +34,11 @@ jobs:
           pip install -r requirements.txt -r requirements-optional.txt pytest "pyinstaller>=6.6,<7"
 
       - name: Testes automatizados
-        run: python -m pytest -q tests
+        shell: pwsh
+        run: |
+          python -m pytest -q -rfE --tb=short tests *> pytest.log
+          $c = $LASTEXITCODE
+          if ($c -ne 0) { $t = (Get-Content pytest.log -Tail 60) -join '%0A'; Write-Output "::error title=pytest::$t"; exit $c }
 
       - name: Validação real dos conectores públicos (runner com internet)
         continue-on-error: true
