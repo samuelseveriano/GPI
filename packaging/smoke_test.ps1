@@ -9,7 +9,9 @@ trap {
   $msg = "exceção na linha $($_.InvocationInfo.ScriptLineNumber): $($_.Exception.Message) | $($_.InvocationInfo.Line.Trim())"
   Write-Host "FALHA: $msg"
   if ($Report) { Add-Content -Encoding utf8 $Report "FALHA: $msg" -ErrorAction SilentlyContinue }
-  Write-Output "::error title=smoke-excecao::$msg"
+  $tail = ""
+  if ($data) { $log = Join-Path $data "logs/gpi.log"; if (Test-Path $log) { $tail = (Get-Content $log -Tail 40) -join '%0A' } }
+  Write-Output "::error title=smoke-excecao::$msg%0A$tail"
   Get-Process GPI -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
   exit 1
 }
@@ -124,6 +126,10 @@ if ($before -lt 1) { Fail "importação de teste não gravou SKUs" }
 $body = @{ sku = $skus[0].sku; horizon = 6 } | ConvertTo-Json
 $fc = Invoke-RestMethod -Method Post -Uri "$base/api/forecast" -Headers $hdr -ContentType "application/json" -Body $body -NoProxy -TimeoutSec 300
 Note "   $before SKUs gravados; previsão pela API executada (modelo escolhido: $($fc.modelo_escolhido))"
+foreach ($k in $fc.modelos.PSObject.Properties.Name) {
+  $e = $fc.modelos.$k.erro
+  if ($e) { Note ("   modelo {0,-15} não aplicável a esta série: {1}" -f $k, $e) }
+}
 
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
