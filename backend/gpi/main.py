@@ -409,8 +409,10 @@ def main(argv=None) -> int:
 
     # 3. servidor
     t_app = time.time()
+    log.info("carregando bibliotecas do servidor…")
     import uvicorn
     from .app import create_app
+    log.info("bibliotecas carregadas em %.1f s", time.time() - t_app)
 
     holder = {}
 
