@@ -8,6 +8,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import urllib.parse
 import logging
 import secrets
 from urllib.parse import unquote, urlsplit
@@ -429,7 +430,10 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         if not c.get("client_id"):
             return err("informe primeiro o App ID (client_id)")
         state, verifier = flows.start(p["id"], {"redirect_uri": redirect_uri(request)})
-        return JSONResponse({"url": authorize_url(p["auth_url"], c["client_id"], redirect_uri(request), state, verifier)})
+        url = authorize_url(p["auth_url"], c["client_id"], redirect_uri(request), state, verifier, p.get("scope"))
+        if p.get("auth_extra"):
+            url += "&" + urllib.parse.urlencode(p["auth_extra"])
+        return JSONResponse({"url": url})
 
     async def oauth_callback(request):
         q = request.query_params
@@ -448,7 +452,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
                 "grant_type": "authorization_code", "client_id": c.get("client_id", ""),
                 "client_secret": c.get("client_secret", ""), "code": q.get("code", ""),
                 "redirect_uri": f["redirect_uri"], "code_verifier": f["verifier"]})
-            integ.store_ml_token(sync.creds, r)
+            integ.store_oauth_token(sync.creds, p["id"], r)
         except Exception as e:  # noqa: BLE001
             log.warning("OAuth %s falhou: %s", p["id"], e)
             return page("Conexão não concluída", "Falha ao obter o token: " + str(e)[:300])

@@ -134,6 +134,14 @@ class MarketStore:
                                "FROM content_items WHERE source = ?", (source,))[0]
         except Exception:  # noqa: BLE001 — banco anterior à migração v3
             cs = {"n": 0}
+        try:
+            ss = self.db.query("SELECT COUNT(*) AS n, MIN(ref_date) AS a, MAX(ref_date) AS b FROM search_observations "
+                               "WHERE source = ?", (source,))[0]
+        except Exception:  # noqa: BLE001 — banco anterior à migração v4
+            ss = {"n": 0}
+        if ss["n"]:
+            cs = {"n": cs["n"] + ss["n"], "a": min(x for x in (cs.get("a"), ss["a"]) if x) if (cs.get("a") or ss["a"]) else None,
+                  "b": max(x for x in (cs.get("b"), ss["b"]) if x) if (cs.get("b") or ss["b"]) else None}
         if cs["n"]:
             stats = {"n": stats["n"] + cs["n"], "a": min(x for x in (stats["a"], cs["a"]) if x) if (stats["a"] or cs["a"]) else None,
                      "b": max(x for x in (stats["b"], cs["b"]) if x) if (stats["b"] or cs["b"]) else None}

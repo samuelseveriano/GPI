@@ -55,11 +55,41 @@ class Taobao(Restricted):
 
 
 class GoogleTrends(Restricted):
-    id, name, order = "google_trends", "Google Trends", 95
-    docs_url = "https://developers.google.com/search/apis/trends"
-    restricted_reason = ("Não há API pública gratuita aberta: a API oficial está em acesso restrito (alfa, "
-                         "mediante inscrição). Bibliotecas não oficiais raspam o site e não são usadas. "
-                         "O interesse público é medido pela Wikimedia.")
+    id, name, order = "google_trends", "Google Trends API (séries históricas)", 95
+    docs_url = "https://developers.google.com/search/blog/2025/07/trends-api"
+    restricted_reason = ("A API oficial de séries históricas está em alfa, com acesso mediante inscrição e aprovação "
+                         "do Google (interesse relativo com escala consistente, 5 anos, por país/região). Sem aprovação, "
+                         "o GPI usa o feed oficial 'Trending Now' (buscas em alta) e, se conectado, o Planejador de "
+                         "palavras-chave do Google Ads. Bibliotecas não oficiais raspam o site e não são usadas.")
+
+
+class BaiduIndex(Restricted):
+    id, name, order = "baidu_index", "Baidu Index (百度指数) — China", 96
+    docs_url = "https://index.baidu.com/"
+    restricted_reason = ("Não há API pública: o índice só é exibido no site após login de usuário chinês e possui "
+                         "proteções contra coleta automática. Ferramentas que o extraem usam cookies de sessão e "
+                         "contornam essas proteções — o GPI não as utiliza.")
+
+
+class OceanEngineIndex(Restricted):
+    id, name, order = "ocean_engine", "巨量算数 (Douyin/Toutiao) — China", 97
+    docs_url = "https://trendinsight.oceanengine.com/"
+    restricted_reason = ("Índice de interesse do ecossistema Douyin/Toutiao disponível apenas no site, com login; "
+                         "não há API aberta para terceiros fora da China.")
+
+
+class AlibabaInsights(Restricted):
+    id, name, order = "alibaba_insights", "Alibaba / 1688 — dados de busca de compradores", 98
+    docs_url = "https://open.1688.com/"
+    restricted_reason = ("Dados de busca e de demanda do ecossistema Alibaba (生意参谋, 1688) são ferramentas pagas "
+                         "para vendedores cadastrados; as APIs abertas exigem empresa registrada e aprovação.")
+
+
+class MicrosoftAdsKeywords(Restricted):
+    id, name, order = "msads_kp", "Microsoft Advertising — Keyword Planner", 99
+    docs_url = "https://learn.microsoft.com/advertising/guides/get-started"
+    restricted_reason = ("API (Ad Insight) exige conta Microsoft Advertising e developer token; não implementada nesta "
+                         "fase — o Planejador do Google Ads cobre Brasil e EUA com volumes de busca.")
 
 
 class Trustpilot(Restricted):

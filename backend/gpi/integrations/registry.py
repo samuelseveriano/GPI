@@ -53,6 +53,15 @@ PROVIDERS = [
      "documentacao": "https://developers.mercadolivre.com.br/pt_br/autenticacao-e-autorizacao",
      "auth_url": "https://auth.mercadolivre.com.br/authorization",
      "token_url": "https://api.mercadolibre.com/oauth/token"},
+    {"id": "comtrade", "nome": "UN Comtrade (chave gratuita opcional)", "tipo": "api_key", "conectores": ["comtrade"],
+     "campos": [{"nome": "api_key", "rotulo": "Primary key da assinatura 'comtrade - v1' (gratuita)", "secreto": True}],
+     "descricao": "Sem chave, o GPI já usa o endpoint público (1 mês por chamada). Com a chave gratuita, cada chamada "
+                  "traz até 12 meses: a coleta fica ~12× mais rápida e a cota é maior.",
+     "permissoes": "Somente leitura de estatísticas públicas de comércio. Plano gratuito: cota diária de chamadas; "
+                   "o GPI não usa endpoints pagos.",
+     "como_obter": "comtradedeveloper.un.org → Sign up → Products → 'comtrade - v1' (free) → Subscribe → "
+                   "Profile → copie a Primary key.",
+     "link": "https://comtradedeveloper.un.org/", "documentacao": "https://comtradedeveloper.un.org/apis"},
     {"id": "rss", "nome": "Feeds RSS de sites especializados", "tipo": "auto", "conectores": ["rss"],
      "descricao": "Manchetes de sites de tecnologia e reviews (lista editável). Apenas título, resumo curto e link.",
      "permissoes": "Leitura de feeds publicados pelos próprios sites para distribuição. O GPI guarda manchete e "
@@ -62,11 +71,47 @@ PROVIDERS = [
      "permissoes": "Os feeds do Google Notícias têm termos de uso próprios (uso pessoal/não comercial). "
                    "Fica desativado até você confirmar que o uso é permitido para a sua empresa.",
      "documentacao": "https://policies.google.com/terms"},
-    {"id": "google_trends", "nome": "Google Trends", "tipo": "approval", "conectores": ["google_trends"],
-     "descricao": "Interesse de busca no Google.",
-     "permissoes": "A API oficial está em acesso restrito (alfa) mediante inscrição. Sem acesso aprovado, o GPI "
-                   "usa a Wikimedia para medir interesse público.",
-     "link": "https://developers.google.com/search/apis/trends"},
+    {"id": "google_trends_rss", "nome": "Google Trends — Trending Now (RSS oficial)", "tipo": "auto",
+     "conectores": ["google_trends_rss"],
+     "descricao": "Buscas em alta no Google no Brasil e nos EUA, com tráfego em faixas. Conectado automaticamente.",
+     "permissoes": "Leitura do feed público oficial do Google Trends. Os dados são exibidos com a atribuição "
+                   "'Fonte: Google Trends'.", "link": "https://trends.google.com/trending?geo=BR"},
+    {"id": "google_ads", "nome": "Google Ads — Planejador de palavras-chave", "tipo": "oauth", "conectores": ["google_ads_kp"],
+     "campos": [{"nome": "developer_token", "rotulo": "Developer token (Central da API do Google Ads)", "secreto": True},
+                {"nome": "customer_id", "rotulo": "ID da conta Google Ads (ex.: 123-456-7890)", "secreto": False},
+                {"nome": "login_customer_id", "rotulo": "ID da conta de administrador (MCC), se houver", "secreto": False},
+                {"nome": "client_id", "rotulo": "OAuth Client ID (tipo 'App para computador')", "secreto": False},
+                {"nome": "client_secret", "rotulo": "OAuth Client secret", "secreto": True}],
+     "descricao": "Volume mensal de buscas (aproximado) e histórico de 12 meses por produto, no Brasil e nos EUA.",
+     "permissoes": "Login na página oficial do Google (o GPI não vê sua senha) com o escopo "
+                   "'https://www.googleapis.com/auth/adwords' — permite ler e gerenciar a conta de anúncios; o GPI usa "
+                   "SOMENTE o planejador de palavras-chave (nenhum anúncio é criado ou alterado). O developer token "
+                   "precisa estar aprovado (acesso Básico ou superior) para dados de contas reais.",
+     "como_obter": "1) ads.google.com: crie/acesse uma conta (não precisa veicular anúncios). 2) Ferramentas → Central "
+                   "da API: solicite o developer token. 3) console.cloud.google.com: ative a 'Google Ads API' e crie "
+                   "credenciais OAuth do tipo 'App para computador'. 4) Preencha os campos e clique em Conectar.",
+     "link": "https://developers.google.com/google-ads/api/docs/get-started/introduction",
+     "documentacao": "https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas",
+     "auth_url": "https://accounts.google.com/o/oauth2/v2/auth", "token_url": "https://oauth2.googleapis.com/token",
+     "scope": "https://www.googleapis.com/auth/adwords", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
+    {"id": "google_trends", "nome": "Google Trends API (séries históricas, alfa)", "tipo": "approval",
+     "conectores": ["google_trends"],
+     "descricao": "Interesse de busca relativo com escala consistente, 5 anos, por país e região (ISO 3166-2).",
+     "permissoes": "Acesso em alfa mediante inscrição e aprovação do Google. Enquanto não houver acesso, o GPI usa o "
+                   "Trending Now (RSS) e o Planejador do Google Ads.",
+     "alternativas": "Trending Now (automático) · Planejador de palavras-chave do Google Ads (conexão assistida)",
+     "link": "https://developers.google.com/search/blog/2025/07/trends-api"},
+    {"id": "china_search", "nome": "Busca na China (Baidu Index, 巨量算数, Alibaba)", "tipo": "approval",
+     "conectores": ["baidu_index", "ocean_engine", "alibaba_insights"],
+     "descricao": "Interesse de busca de consumidores na China continental.",
+     "permissoes": "Nenhuma dessas fontes oferece API aberta a terceiros: exigem login chinês, contrato pago ou "
+                   "empresa registrada. O GPI não raspa nem contorna essas proteções. Visualizações da Wikipédia em "
+                   "chinês NÃO equivalem a buscas na China e não são apresentadas como tal.",
+     "alternativas": "Sinais de oferta (exportações chinesas via UN Comtrade/Comex Stat), claramente identificados",
+     "link": "https://index.baidu.com/"},
+    {"id": "msads", "nome": "Microsoft Advertising — Keyword Planner", "tipo": "approval", "conectores": ["msads_kp"],
+     "descricao": "Volumes de busca no Bing.", "permissoes": "Exige conta e developer token Microsoft Advertising; "
+     "não implementado nesta fase.", "link": "https://learn.microsoft.com/advertising/guides/get-started"},
     {"id": "amazon", "nome": "Amazon Brasil / EUA", "tipo": "approval", "conectores": ["amazon_br", "amazon_us"],
      "descricao": "Preços e rankings de produtos.", "permissoes": "Product Advertising API: exige conta aprovada no "
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
@@ -88,6 +133,13 @@ PROVIDERS = [
      "permissoes": "Sem API pública para consulta de preços de terceiros; exige licença/parceria.",
      "link": "https://www.buscape.com.br/"},
 ]
+
+
+NIVEL = {"auto": 1, "api_key": 2, "client_id": 2, "oauth": 2, "optin": 2, "approval": 3}
+NIVEL_NOME = {1: "Conexão automática", 2: "Conexão assistida", 3: "Acesso restrito"}
+for _p in PROVIDERS:
+    _p["nivel"] = NIVEL[_p["tipo"]]
+    _p["nivel_nome"] = NIVEL_NOME[_p["nivel"]]
 
 
 def provider(pid: str) -> dict | None:
@@ -116,6 +168,31 @@ def test_connection(pid: str, http, creds, cfg: dict) -> tuple[bool, str]:
             tok = ml_token(http, creds)
             me = http.request_json("https://api.mercadolibre.com/users/me", headers={"Authorization": f"Bearer {tok}"}, ttl=0)
             return True, f"conectado como {me.get('nickname', me.get('id'))}"
+        if pid == "google_trends_rss":
+            from ..connectors.search import parse_trending
+            res = []
+            for geo in ("BR", "US"):
+                items = parse_trending(http.request_text(f"https://trends.google.com/trending/rss?geo={geo}", ttl=0))
+                res.append(f"{geo}: {len(items)} buscas em alta")
+            return True, "; ".join(res)
+        if pid == "google_ads":
+            from ..connectors.search import gads_call
+            r = gads_call(http, creds, ":generateKeywordIdeas", {
+                "language": "languageConstants/1014", "geoTargetConstants": ["geoTargetConstants/2076"],
+                "keywordPlanNetwork": "GOOGLE_SEARCH", "keywordSeed": {"keywords": ["air fryer"]}})
+            n = len(r.get("results", []))
+            return (n > 0, f"API respondeu ({creds.get('google_ads').get('api_version')}): {n} ideias de palavras-chave"
+                    if n else "a API respondeu sem ideias (verifique o nível de acesso do developer token)")
+        if pid == "comtrade":
+            key = creds.get("comtrade").get("api_key")
+            if not key:
+                return False, "informe a chave"
+            r = http.request_json("https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode=76&period=2023"
+                                  "&partnerCode=156&cmdCode=TOTAL&flowCode=M", ttl=0,
+                                  headers={"Ocp-Apim-Subscription-Key": key})
+            n = len(r.get("data") or []) if isinstance(r, dict) else 0
+            return (n > 0, f"chave válida ({n} registro retornado: importações do Brasil vindas da China, 2023)"
+                    if n else f"a API respondeu sem dados: {str(r)[:200]}")
         if pid == "rss":
             from ..connectors.content import RSS_DEFAULT, parse_feed
             feeds = cfg.get("rss_feeds") or RSS_DEFAULT
@@ -166,6 +243,17 @@ def ml_token(http, creds) -> str:
         "refresh_token": c["refresh_token"]})
     store_ml_token(creds, r)
     return r["access_token"]
+
+
+def store_oauth_token(creds, pid: str, r: dict):
+    if pid == "mercadolivre":
+        return store_ml_token(creds, r)
+    if not r.get("access_token"):
+        raise SourceError(f"o provedor não emitiu token: {r.get('error_description') or r.get('error')}", "restrita")
+    data = {"access_token": r["access_token"], "expires_at": str(time.time() + float(r.get("expires_in", 3600)))}
+    if r.get("refresh_token"):
+        data["refresh_token"] = r["refresh_token"]
+    creds.set(pid, data)
 
 
 def store_ml_token(creds, r: dict):
