@@ -57,6 +57,27 @@ A Central de Integrações agrupa as fontes em três níveis:
 
 ## Lista de conectores validados com resposta real
 
+### Fase 4 (31/10/2026 — GitHub Actions, runner Ubuntu nos EUA, execução 41156252313)
+
+| Fonte | Situação | Registros na amostra |
+|---|---|---|
+| Google Trends — Trending Now (RSS) | ✅ validada | 20 buscas em alta (10 BR, 10 EUA). Nenhuma dessas 20 era termo de produto com intenção comercial (eram notícias/esportes) — o filtro as manteve fora dos rankings, como esperado |
+| BCB PTAX | ✅ validada | 962 |
+| Wikimedia | ✅ validada | 681 |
+| Comex Stat | ✅ validada | 86.114 |
+| UN Comtrade (público, 1 período/chamada) | ✅ validada | 120 |
+| Feeds RSS | ✅ validada | 190 itens |
+| IBGE PMC | ❌ tempo esgotado a partir dos EUA (rede). O erro "byte 0x8b" relatado numa rede brasileira (resposta gzip) foi corrigido e testado com servidor local; falta a confirmação real numa rede brasileira | 0 |
+| Google Ads — Planejador | ⏸ não testada (exige credenciais do usuário) | — |
+| UN Comtrade com chave | ⏸ não testada (exige chave do usuário) | — |
+
+**Desempenho da coleta (mesma amostra, cache vazio, mesmo computador):** sequencial (Fase 3) 343 s;
+fontes em paralelo (Fase 4) 228 s — 34% menos. O tempo paralelo é dominado pelo IBGE, que aguarda o
+tempo-limite; sem ele, as demais fontes terminam em ~100 s (Comex Stat, com 12 s entre chamadas por
+limite da API, é a mais lenta).
+
+### Fase 3
+
 Resultado da coleta real no GitHub Actions (job *2. Validação real dos conectores*, runner Ubuntu nos EUA,
 31/10/2026; artefato `validacao-conectores`). Amostra de até 6 requisições por fonte — a sincronização
 completa no computador do usuário coleta o histórico inteiro.
