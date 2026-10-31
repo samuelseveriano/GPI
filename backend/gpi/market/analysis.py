@@ -26,6 +26,7 @@ def make_analyzer(cfg: dict | None = None):
                 out[name] = {"erro": str(e)}
                 state["erros"].append(f"análise/{name}: {e}")
 
+        step("consumo_rapido", lambda: _consumer(store, cfg, state, forecasts=False))
         step("descoberta", lambda: _discovery(store, cfg))
         step("derivadas", lambda: intel.build_derived(store))
         step("conteudo", lambda: content_intel.process(store, ContentStore(store.db)))
@@ -33,10 +34,29 @@ def make_analyzer(cfg: dict | None = None):
         # e o ranking é recalculado ao fim para incorporar as previsões novas
         step("oportunidades", lambda: _intel(store))
         step("previsoes", lambda: _forecasts(store, cfg, state))
+        step("consumo", lambda: _consumer(store, cfg, state, forecasts=True))
         out["segundos"] = round(time.time() - t0, 1)
         return out
 
+    def quick(store: MarketStore, state: dict) -> dict:
+        """Entre as etapas da coleta: atualiza o painel de consumo com o que já chegou (sem previsões)."""
+        return _consumer(store, cfg, state, forecasts=False)
+
+    analyze.quick = quick
     return analyze
+
+
+def _consumer(store, cfg, state, forecasts: bool):
+    from ..products import trends
+    t0 = time.time()
+    res = trends.analyze(store.db, cfg, forecasts=forecasts, state=state)
+    prev = store.load_result("consumer") or {}
+    if not forecasts and prev.get("previsoes"):
+        res["previsoes"] = prev["previsoes"]          # análise rápida não descarta as previsões anteriores
+    res["segundos_analise"] = round(time.time() - t0, 2)
+    store.save_result("consumer", res)
+    return {"series": len(res["series"]), "produtos": res["kpis"]["produtos_monitorados"],
+            "segundos": res["segundos_analise"]}
 
 
 def _discovery(store, cfg):

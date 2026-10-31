@@ -105,8 +105,15 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
     data_dir.mkdir(parents=True, exist_ok=True)
     ext = ".duckdb" if dbmod.ENGINE == "duckdb" else ".sqlite"
     db = dbmod.Database(data_dir / f"gpi{ext}")
+    analyzer = make_analyzer(cfg)
     sync = SyncManager(db, data_dir, cfg, connectors=connectors, http=sync_http,
-                       analyzer=make_analyzer(cfg), today_fn=today_fn)
+                       analyzer=analyzer, today_fn=today_fn)
+    sync.quick_analyzer = getattr(analyzer, "quick", None)
+    try:
+        from .products.catalog import Catalog
+        Catalog(db, cfg).ensure_seeded()          # catálogo de referência disponível desde a primeira abertura
+    except Exception:  # noqa: BLE001
+        log.exception("falha ao preparar o catálogo de produtos")
     if start_sync:
         sync.start_scheduler()
     token = secrets.token_urlsafe(24)
@@ -531,6 +538,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/compare", m_compare),
         Route("/api/market/marketplaces", m_marketplaces),
         Route("/api/market/models", m_models),
+        *__import__("gpi.products.api", fromlist=["routes"]).routes(db, sync, cfg),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
     app = Starlette(routes=routes, middleware=[Middleware(HostGuard)])

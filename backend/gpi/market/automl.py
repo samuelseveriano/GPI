@@ -30,10 +30,13 @@ FORECAST_TYPES = {
     "interesse": "Previsão de interesse de pesquisa/atenção (visualizações — não são vendas)",
     "popularidade": "Previsão de popularidade (menções em notícias e discussões — não são vendas)",
     "indicador": "Projeção de indicador de mercado (câmbio, varejo — não são vendas da empresa)",
+    "busca": "Previsão de volume de buscas aproximado (Google Ads) — interesse de pesquisa, não unidades vendidas",
 }
 
 
 def forecast_type(meta: dict) -> str:
+    if meta.get("source") == "google_ads_kp":
+        return "busca"
     if meta.get("source") == "wikimedia":
         return "interesse"
     if meta.get("source") in ("comexstat", "comtrade"):
