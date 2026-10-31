@@ -58,14 +58,20 @@ def main(out: str, compare: bool):
                       "FROM search_observations WHERE source = 'google_trends_rss' GROUP BY country")
     report["google_trends"] = trends
     Path(out).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    for k, v in report["fontes"].items():
-        print(f"{k:18s} {v['estado']:11s} validada={v['validada']} registros={v['registros']} "
-              f"{v['segundos'] if v['segundos'] is not None else '-'}s {v['mensagem'] or ''}"[:220])
+    # resumo primeiro (as anotações do GitHub são truncadas em ~4 KB)
+    for mode, r in runs.items():
+        print(f"desempenho {mode}: {r['segundos']} s")
     for t_ in trends:
         print(f"google_trends {t_['country']}: {t_['termos']} termos em alta, {t_['com_produto']} com produto, "
               f"{t_['comerciais']} comerciais")
-    for mode, r in runs.items():
-        print(f"desempenho {mode}: {r['segundos']} s")
+    ok = [k for k, v in report["fontes"].items() if v["validada"]]
+    bad = [k for k, v in report["fontes"].items() if v["estado"] == "falhou"]
+    print(f"validadas: {', '.join(ok)} | falharam: {', '.join(bad) or 'nenhuma'}")
+    for k, v in report["fontes"].items():
+        if v["estado"] == "restrita":
+            continue
+        print(f"{k:18s} {v['estado']:11s} validada={v['validada']} registros={v['registros']} "
+              f"{v['segundos'] if v['segundos'] is not None else '-'}s {v['mensagem'] or ''}"[:200])
 
 
 if __name__ == "__main__":

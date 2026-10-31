@@ -400,27 +400,28 @@ def test_migration_from_phase3_database_preserves_data(tmp_path):
 
 # ------------------------------------------------------------------ API e regressão de Vendas próprias
 def test_consumer_api_and_own_sales_still_work(tmp_path):
-    from pathlib import Path
-    from starlette.testclient import TestClient
-    from gpi.app import create_app
-    app = create_app(tmp_path / "d", Path(__file__).resolve().parents[1] / "frontend", cfg={"auto_sync": False})
-    c = TestClient(app, base_url="http://127.0.0.1:8765")
-    h = {"X-GPI": "1"}
-    d = c.get("/api/consumer/dashboard").json()
-    assert d["kpis"]["produtos_monitorados"] >= 100 and d["kpis"]["paises_com_buscas"] == []
-    assert c.get("/api/consumer/country/CN").json()["rankings"]["mais_pesquisados"]["itens"] == []
-    assert c.get("/api/consumer/country/XX").status_code == 404
-    p = c.get("/api/consumer/product/charger%2Busb_c:65w").json()
-    assert p["produto"]["parent_id"] == "charger+usb_c"
-    a = c.get("/api/consumer/analyze", params={"texto": "comprar fone bluetooth"}).json()
-    assert a["produto"]["chave"] == "earbuds" and a["intencao"]["intencao"] == "compra"
-    for path in ("/api/consumer/opportunities", "/api/consumer/alerts", "/api/consumer/anomalies", "/api/consumer/forecasts",
-                 "/api/consumer/discovery", "/api/consumer/catalog?q=air", "/api/consumer/performance", "/api/consumer/compare"):
-        assert c.get(path).status_code == 200, path
-    # Vendas próprias (regressão): importar, listar, prever
-    assert c.post("/api/demo", headers=h).status_code == 200
-    sku = c.get("/api/skus").json()[0]["sku"]
-    fc = c.post("/api/forecast", headers=h, json={"sku": sku, "horizon": 3})
-    assert fc.status_code == 200 and len(fc.json()["modelos"][fc.json()["modelo_escolhido"]]["previsao"]) == 3
-    html = c.get("/").text
-    assert 'id="dd-vendas"' in html and 'aria-expanded="false"' in html and "consumer.js" in html
+    import urllib.parse
+    from test_api_integration import Srv
+    srv = Srv(tmp_path / "d")                       # servidor real em 127.0.0.1 (mesmo usado nos testes da Fase 1)
+    try:
+        get = lambda path: srv.req(path)
+        code, d = get("/api/consumer/dashboard")
+        assert code == 200 and d["kpis"]["produtos_monitorados"] >= 100 and d["kpis"]["paises_com_buscas"] == []
+        assert get("/api/consumer/country/CN")[1]["rankings"]["mais_pesquisados"]["itens"] == []
+        assert get("/api/consumer/country/XX")[0] == 404
+        p = get("/api/consumer/product/" + urllib.parse.quote("charger+usb_c:65w"))[1]
+        assert p["produto"]["parent_id"] == "charger+usb_c"
+        a = get("/api/consumer/analyze?texto=" + urllib.parse.quote("comprar fone bluetooth"))[1]
+        assert a["produto"]["chave"] == "earbuds" and a["intencao"]["intencao"] == "compra"
+        for path in ("/api/consumer/opportunities", "/api/consumer/alerts", "/api/consumer/anomalies", "/api/consumer/forecasts",
+                     "/api/consumer/discovery", "/api/consumer/catalog?q=air", "/api/consumer/performance", "/api/consumer/compare"):
+            assert get(path)[0] == 200, path
+        # Vendas próprias (regressão): importar, listar, prever
+        assert srv.req("/api/demo", {})[0] == 200
+        sku = get("/api/skus")[1][0]["sku"]
+        code, fc = srv.req("/api/forecast", {"sku": sku, "horizon": 3})
+        assert code == 200 and len(fc["modelos"][fc["modelo_escolhido"]]["previsao"]) == 3
+        html = srv.req("/", raw=True)[1].decode("utf-8")
+        assert 'id="dd-vendas"' in html and 'aria-expanded="false"' in html and "consumer.js" in html
+    finally:
+        srv.stop()
