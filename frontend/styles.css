@@ -131,3 +131,17 @@ blockquote { margin: 6px 0 10px; padding: 6px 12px; border-left: 3px solid var(-
 table.cmp td, table.cmp th { min-width: 180px; }
 .integ h2 { margin-bottom: 4px; }
 .conf { font-size: 11px; }
+
+/* Fase 4 — submenu recolhível "Vendas próprias" */
+nav .dd { display: flex; width: 100%; align-items: center; justify-content: space-between; margin-top: 14px; padding: 8px 18px;
+  background: none; border: 0; border-left: 3px solid transparent; border-radius: 0; color: #6b7686; font: inherit; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 1px; font-weight: 600; cursor: pointer; text-align: left; }
+nav .dd:hover { background: var(--side-active); color: var(--side-ink); }
+nav .dd i { font-style: normal; transition: transform .2s ease; }
+nav .dd[aria-expanded="true"] i { transform: rotate(90deg); }
+nav .dd.has-active { color: #fff; border-left-color: #2dd4bf; background: var(--side-active); }
+nav .dd:focus-visible { outline: 2px solid #2dd4bf; outline-offset: -2px; }
+nav .dd-list { overflow: hidden; max-height: 0; transition: max-height .28s ease; }
+nav .dd-list.open { max-height: 420px; }
+nav .dd-list a { padding-left: 30px; }
+@media (prefers-reduced-motion: reduce) { nav .dd-list, nav .dd i { transition: none; } }

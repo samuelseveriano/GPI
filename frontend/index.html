@@ -9,36 +9,53 @@
 </head>
 <body>
 <aside>
-  <div class="brand"><b>GPI</b><small>Global Product Intelligence · local · v0.3</small></div>
+  <div class="brand"><b>GPI</b><small>Global Product Intelligence · local · v0.4</small></div>
   <nav id="nav">
+    <h6>Visão geral</h6>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#oportunidades-consumo">Oportunidades</a>
+    <a href="#alertas">Alertas de tendências</a>
+    <h6>Inteligência de consumo</h6>
+    <a href="#mais-pesquisados">Produtos Mais Pesquisados</a>
+    <a href="#consumo/BR">Brasil</a>
+    <a href="#consumo/CN">China</a>
+    <a href="#consumo/US">Estados Unidos</a>
+    <a href="#comparacao-internacional">Comparação Internacional</a>
+    <a href="#emergentes">Tendências Emergentes</a>
     <h6>Inteligência de mercado</h6>
-    <a href="#painel">Visão Geral</a>
-    <a href="#radar">Radar Global</a>
-    <a href="#brasil">Brasil</a>
-    <a href="#china">China</a>
+    <a href="#comparador">Comparativo de Produtos</a>
     <a href="#marketplaces">Marketplaces</a>
+    <a href="#reviews">Reviews e Opiniões</a>
     <a href="#youtube">YouTube Intelligence</a>
-    <a href="#reviews">Review Intelligence</a>
-    <a href="#comparador">Comparador de Produtos</a>
-    <a href="#ml">Machine Learning</a>
+    <h6>Comércio exterior</h6>
+    <a href="#brasil">Importações do Brasil</a>
+    <a href="#radar">Importações Internacionais</a>
+    <a href="#descobertos">Categorias NCM/SH</a>
+    <a href="#china">Fornecedores (China)</a>
+    <a href="#oportunidades">Oportunidades de importação (SH4)</a>
+    <h6>Machine learning</h6>
+    <a href="#previsao-tendencias">Previsão de Tendências</a>
     <a href="#previsoes">Forecasting</a>
     <a href="#clusters">Clustering</a>
-    <a href="#oportunidades">Ranking de Oportunidades</a>
-    <a href="#descobertos">Produtos descobertos</a>
-    <h6>Fontes</h6>
+    <a href="#anomalias">Anomalias</a>
+    <a href="#metodologia">Metodologia</a>
+    <h6>Fontes e sistema</h6>
     <a href="#integracoes">Central de Integrações</a>
     <a href="#fontes">Saúde das Fontes</a>
-    <h6>Vendas próprias (opcional)</h6>
-    <a href="#visao-geral">Resumo de vendas</a>
-    <a href="#produtos">Produtos e Histórico</a>
-    <a href="#tendencias">Tendências</a>
-    <a href="#forecasting">Laboratório de Previsão</a>
-    <a href="#abcxyz">ABC / XYZ</a>
-    <a href="#estoque">Planejamento de Estoque</a>
-    <a href="#dados">Importação de planilhas</a>
-    <h6>Referência</h6>
-    <a href="#metodologia">Metodologia</a>
+    <a href="#catalogo">Catálogo e Descoberta</a>
+    <a href="#desempenho">Desempenho da Coleta</a>
     <a href="#sistema">Sistema</a>
+    <button type="button" class="dd" id="dd-vendas" aria-expanded="false" aria-controls="dd-vendas-list">
+      <span>Vendas próprias</span><i aria-hidden="true">▸</i></button>
+    <div class="dd-list" id="dd-vendas-list" role="group" aria-label="Vendas próprias">
+      <a href="#dados">Importar Vendas</a>
+      <a href="#visao-geral">Resumo de Vendas</a>
+      <a href="#produtos">Histórico de Vendas</a>
+      <a href="#tendencias">Tendências de Vendas</a>
+      <a href="#forecasting">Previsão de Demanda</a>
+      <a href="#estoque">Gestão de Estoque</a>
+      <a href="#abcxyz">ABC/XYZ</a>
+    </div>
   </nav>
   <div class="side-foot" id="foot">carregando…</div>
 </aside>
@@ -49,6 +66,7 @@
 <script src="/static/methodology.js"></script>
 <script src="/static/market.js"></script>
 <script src="/static/market3.js"></script>
+<script src="/static/consumer.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
