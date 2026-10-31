@@ -391,7 +391,8 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
                     common = sorted(set(la) & set(lb))
                     ll = lead_lag([la[k] for k in common], [lb[k] for k in common])
                     if ll:
-                        res.append({"metrica": metric, "fonte": SOURCE_NAMES.get(source, source), "a": A["country"],
+                        res.append({"metrica": METRICS[metric]["rotulo"], "metrica_id": metric,
+                                    "fonte": SOURCE_NAMES.get(source, source), "a": A["country"],
                                     "b": B["country"], "a_nome": A["pais_nome"], "b_nome": B["pais_nome"], **ll})
         if res:
             comps[pid] = res
