@@ -320,6 +320,11 @@ def tsb(y: np.ndarray, h: int, **_) -> ModelResult:
                        {"alpha": a, "beta": b}, s2, interval_method="aproximado")
 
 
+def _ml():
+    from . import ml           # importação tardia (evita dependência circular); estática para o PyInstaller
+    return ml
+
+
 MODELS = {
     "naive": ("Naive", naive),
     "seasonal_naive": ("Naive sazonal", seasonal_naive),
@@ -336,9 +341,9 @@ MODELS = {
     "tsb": ("TSB (intermitente)", tsb),
     # Machine learning (Fase 2) — importação tardia evita dependência circular
     "random_forest": ("Random Forest (defasagens)",
-                      lambda y, h, **kw: __import__("gpi.forecasting.ml", fromlist=["x"]).random_forest(y, h, kw.get("m", 1))),
+                      lambda y, h, **kw: _ml().random_forest(y, h, kw.get("m", 1))),
     "hist_gb": ("HistGradientBoosting (defasagens)",
-                lambda y, h, **kw: __import__("gpi.forecasting.ml", fromlist=["x"]).hist_gb(y, h, kw.get("m", 1))),
+                lambda y, h, **kw: _ml().hist_gb(y, h, kw.get("m", 1))),
 }
 
 

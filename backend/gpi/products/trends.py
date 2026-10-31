@@ -25,6 +25,7 @@ from ..analytics.classification import seasonality_strength, trend_test
 from ..market.taxonomy import concept_key
 from . import nlp
 from .catalog import Catalog, label
+from .intent import default_model as intent_default_model
 
 METRICS = {
     "volume_mensal_aprox": {"rotulo": "Volume de buscas (aproximado)", "unidade": "buscas/mês (arredondado pelo Google)",
@@ -423,7 +424,7 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
                  "tendencias": len({s["product_id"] for s in series if s["ind"].get("classe") not in ("estável", "sem dados")}),
                  "paises_com_buscas": sorted({PAGE_OF.get(s["country"]) for s in series if METRICS[s["metric"]]["tipo"] == "busca"}),
                  "fontes_com_dados": sorted({s["source"] for s in series})},
-        "intencao_modelo": __import__("gpi.products.intent", fromlist=["x"]).default_model().info,
+        "intencao_modelo": intent_default_model().info,
     }
     return _clean(out)
 

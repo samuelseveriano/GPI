@@ -29,6 +29,7 @@ from .forecasting.models import MODELS
 from .importer import ImportErrorGPI, import_file
 from .market import service as msv
 from .market.analysis import make_analyzer
+from .products.api import routes as consumer_routes
 from .market.sync import SyncManager
 from .integrations import registry as integ
 from .integrations.oauth import PendingFlows, authorize_url
@@ -544,7 +545,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/compare", m_compare),
         Route("/api/market/marketplaces", m_marketplaces),
         Route("/api/market/models", m_models),
-        *__import__("gpi.products.api", fromlist=["routes"]).routes(db, sync, cfg),
+        *consumer_routes(db, sync, cfg),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
     app = Starlette(routes=routes, middleware=[Middleware(HostGuard)])

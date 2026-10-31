@@ -425,3 +425,14 @@ def test_consumer_api_and_own_sales_still_work(tmp_path):
         assert 'id="dd-vendas"' in html and 'aria-expanded="false"' in html and "consumer.js" in html
     finally:
         srv.stop()
+
+
+def test_no_dynamic_internal_imports_for_pyinstaller():
+    """O PyInstaller só empacota módulos importados de forma estática: __import__("gpi...") faria o
+    GPI.exe falhar com ModuleNotFoundError (aconteceu na Fase 4 com gpi.products.api)."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    offenders = [str(p) for p in (root / "backend" / "gpi").rglob("*.py") if '__import__("gpi' in p.read_text(encoding="utf-8")]
+    assert offenders == []
+    spec = (root / "packaging" / "gpi.spec").read_text(encoding="utf-8")
+    assert 'sys.path.insert(0, os.path.join(ROOT, "backend"))' in spec and '"gpi.products.api"' in spec

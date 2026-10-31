@@ -4,8 +4,12 @@ import os
 from PyInstaller.utils.hooks import collect_submodules, collect_dynamic_libs, collect_data_files
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
+import sys
+sys.path.insert(0, os.path.join(ROOT, "backend"))      # para collect_submodules("gpi") enxergar o pacote
 
 hidden = collect_submodules("gpi") + collect_submodules("uvicorn") + [
+    "gpi.products.api", "gpi.products.trends", "gpi.products.catalog", "gpi.products.intent",
+    "gpi.products.nlp", "gpi.products.lexicon", "gpi.products.labels", "gpi.connectors.search",
     "sklearn.ensemble._hist_gradient_boosting.gradient_boosting",
     "sklearn.cluster._hdbscan.hdbscan",
     "scipy.special.cython_special",
@@ -30,6 +34,8 @@ try:
     hidden += ["statsmodels.tsa.statespace.sarimax"]
 except ImportError:
     pass
+
+assert "gpi.products.api" in collect_submodules("gpi"), "pacote gpi não encontrado pelo PyInstaller"
 
 a = Analysis(
     [os.path.join(ROOT, "packaging", "gpi_entry.py")],
