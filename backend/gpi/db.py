@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import shutil
 import threading
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -258,6 +259,7 @@ class Database:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self._tx = threading.local()
         if ENGINE == "duckdb":  # pragma: no cover
             self.con = duckdb.connect(str(self.path))
         else:
@@ -270,8 +272,27 @@ class Database:
     def execute(self, sql: str, params=()):
         with self.lock:
             cur = self.con.execute(sql, params)
-            self.con.commit()
+            if not getattr(self._tx, "depth", 0):
+                self.con.commit()
             return cur
+
+    @contextmanager
+    def transaction(self):
+        """Agrupa várias gravações num único commit (no Windows cada commit cria e apaga o diário do
+        SQLite, que o antivírus inspeciona — milhares de commits pequenos ficam muito lentos)."""
+        with self.lock:
+            self._tx.depth = getattr(self._tx, "depth", 0) + 1
+            try:
+                yield self
+            except Exception:
+                self._tx.depth -= 1
+                if self._tx.depth == 0:
+                    self.con.rollback()
+                raise
+            else:
+                self._tx.depth -= 1
+                if self._tx.depth == 0:
+                    self.con.commit()
 
     def query(self, sql: str, params=()) -> list[dict]:
         with self.lock:

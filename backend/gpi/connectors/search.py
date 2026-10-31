@@ -120,24 +120,25 @@ class GoogleTrendsTrending(Connector):
         from ..products.intent import classify
         cat = Catalog(ctx.store.db, ctx.cfg)
         ts, n = now_iso(), 0
-        for it in items:
-            if it["trafego"] is None:
-                continue
-            intent = classify(it["termo"])
-            ctx_text = it["termo"]
-            pid = cat.observe(ctx_text, self.id, geo, intent["intencao"], strong=True)
-            commercial = int(bool(pid) and intent["intencao"] not in ("noticia", "entretenimento"))
-            ctx.store.db.execute(
-                "INSERT INTO search_observations (source, country, region, term, ref_date, period, metric, value,"
-                " value_high, unit, lang, product_id, intent, commercial, url, extra, collected_at)"
-                " VALUES (?, ?, '', ?, ?, 'dia', 'trafego_faixa', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"
-                " ON CONFLICT(source, country, region, term, ref_date, metric) DO UPDATE SET value = MAX(value, excluded.value),"
-                " extra = excluded.extra, product_id = excluded.product_id, intent = excluded.intent,"
-                " commercial = excluded.commercial, collected_at = excluded.collected_at",
-                (self.id, geo, it["termo"][:200], it["data"] or ctx.today.isoformat(), it["trafego"],
-                 "buscas/dia (limite inferior da faixa)", intent["idioma"], pid, intent["intencao"], commercial,
-                 tpl.format(geo=geo), json.dumps({"faixa": it["faixa"], "noticias": it["noticias"]}, ensure_ascii=False), ts))
-            n += 1
+        with ctx.store.db.transaction():
+            for it in items:
+                if it["trafego"] is None:
+                    continue
+                intent = classify(it["termo"])
+                ctx_text = it["termo"]
+                pid = cat.observe(ctx_text, self.id, geo, intent["intencao"], strong=True)
+                commercial = int(bool(pid) and intent["intencao"] not in ("noticia", "entretenimento"))
+                ctx.store.db.execute(
+                    "INSERT INTO search_observations (source, country, region, term, ref_date, period, metric, value,"
+                    " value_high, unit, lang, product_id, intent, commercial, url, extra, collected_at)"
+                    " VALUES (?, ?, '', ?, ?, 'dia', 'trafego_faixa', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    " ON CONFLICT(source, country, region, term, ref_date, metric) DO UPDATE SET value = MAX(value, excluded.value),"
+                    " extra = excluded.extra, product_id = excluded.product_id, intent = excluded.intent,"
+                    " commercial = excluded.commercial, collected_at = excluded.collected_at",
+                    (self.id, geo, it["termo"][:200], it["data"] or ctx.today.isoformat(), it["trafego"],
+                     "buscas/dia (limite inferior da faixa)", intent["idioma"], pid, intent["intencao"], commercial,
+                     tpl.format(geo=geo), json.dumps({"faixa": it["faixa"], "noticias": it["noticias"]}, ensure_ascii=False), ts))
+                n += 1
         require(items, "Google Trends: feed sem itens")
         return [], []
 

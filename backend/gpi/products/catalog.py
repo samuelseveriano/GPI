@@ -69,6 +69,19 @@ class Catalog:
 
     # -------------------------------------------------------------------- sementes
     def ensure_seeded(self) -> int:
+        import hashlib
+        sig = hashlib.sha256(json.dumps([SEEDS, sorted(WIKI_CONCEPTS), sorted(NCM_HINT.items())], ensure_ascii=False)
+                             .encode()).hexdigest()[:16]
+        done = self.db.query("SELECT payload FROM analysis_results WHERE name = 'catalog_seed'")
+        if done and json.loads(done[0]["payload"]).get("sig") == sig:
+            return 0                                   # sementes já aplicadas nesta versão
+        with self.db.transaction():
+            n = self._seed()
+            self.db.execute("INSERT OR REPLACE INTO analysis_results (name, created_at, payload) VALUES ('catalog_seed', ?, ?)",
+                            (now_iso(), json.dumps({"sig": sig, "novos": n})))
+        return n
+
+    def _seed(self) -> int:
         have = {r["product_id"] for r in self.db.query("SELECT product_id FROM catalog_products")}
         n = 0
         for term in SEEDS:

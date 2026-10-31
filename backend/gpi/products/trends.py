@@ -54,6 +54,13 @@ def ingest_content(db, catalog: Catalog, today: date) -> int:
         "SELECT source, term FROM search_observations WHERE metric = 'mencoes'")}
     from .intent import classify
     n = 0
+    with db.transaction():
+        n = _ingest_rows(db, catalog, rows, done, classify, today)
+    return n
+
+
+def _ingest_rows(db, catalog, rows, done, classify, today) -> int:
+    n = 0
     for r in rows:
         title = (r["title"] or "").strip()
         if not title or (r["source"], title[:200]) in done:

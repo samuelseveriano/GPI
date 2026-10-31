@@ -109,11 +109,17 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
     sync = SyncManager(db, data_dir, cfg, connectors=connectors, http=sync_http,
                        analyzer=analyzer, today_fn=today_fn)
     sync.quick_analyzer = getattr(analyzer, "quick", None)
-    try:
-        from .products.catalog import Catalog
-        Catalog(db, cfg).ensure_seeded()          # catálogo de referência disponível desde a primeira abertura
-    except Exception:  # noqa: BLE001
-        log.exception("falha ao preparar o catálogo de produtos")
+    def _seed():
+        import time as _t
+        t0 = _t.monotonic()
+        try:
+            from .products.catalog import Catalog
+            n = Catalog(db, cfg).ensure_seeded()   # catálogo de referência (em segundo plano: não atrasa a abertura)
+            log.info("catálogo de produtos pronto em %.1f s (%d novos)", _t.monotonic() - t0, n)
+        except Exception:  # noqa: BLE001
+            log.exception("falha ao preparar o catálogo de produtos")
+    import threading as _th
+    _th.Thread(target=_seed, daemon=True, name="gpi-catalogo").start()
     if start_sync:
         sync.start_scheduler()
     token = secrets.token_urlsafe(24)

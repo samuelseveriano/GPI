@@ -373,7 +373,9 @@ def main(argv=None) -> int:
     log.info("GPI %s — programa em %s; dados em %s", __version__, app_dir(), data)
 
     # 1. integridade
+    t_int = time.time()
     ok, probs = verify_integrity(app_dir(), data / "integrity.json")
+    log.info("verificação de integridade: %.1f s", time.time() - t_int)
     if not ok:
         fatal("Arquivos do GPI ausentes ou alterados — extraia novamente o pacote.\n\n" + "\n".join(probs[:10]))
         return 4
@@ -406,6 +408,7 @@ def main(argv=None) -> int:
         return 2
 
     # 3. servidor
+    t_app = time.time()
     import uvicorn
     from .app import create_app
 
@@ -416,6 +419,7 @@ def main(argv=None) -> int:
 
     app = create_app(data, resource_dir() / "frontend", shutdown_cb=shutdown, cfg=cfg,
                      start_sync=cfg.get("auto_sync", True) and not args.smoke)
+    log.info("aplicação carregada em %.1f s (importação + banco)", time.time() - t_app)
     (data / "gpi.run.json").write_text(json.dumps({"port": port, "pid": os.getpid()}))
     server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning", access_log=False,
                                            workers=1, log_config=None,
