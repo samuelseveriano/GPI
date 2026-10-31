@@ -73,6 +73,8 @@ function StopApp($p) {
   $null = RunExe @("--stop") 60
   if (-not $p.WaitForExit(30000)) { $p.Kill(); Fail "GPI não encerrou em 30 s após --stop" }
 }
+# Invoke-RestMethod devolve um array JSON como um único objeto: achatar para contar e indexar
+function GetList($uri) { return @((Invoke-RestMethod -Uri $uri -NoProxy -TimeoutSec 30) | ForEach-Object { $_ }) }
 function PortFree([int]$port) {
   try { $l = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port); $l.Start(); $l.Stop(); return $true }
   catch { return $false }
@@ -115,15 +117,17 @@ foreach ($f in "styles.css", "math.js", "charts.js", "methodology.js", "market.j
   $r = Invoke-WebRequest -Uri "$base/static/$f" -UseBasicParsing -NoProxy -TimeoutSec 15
   if ($r.StatusCode -ne 200 -or $r.RawContentLength -lt 100) { Fail "/static/$f não servido" }
 }
-$src = Invoke-RestMethod -Uri "$base/api/market/sources" -NoProxy -TimeoutSec 30
-Note "   index.html + 7 arquivos CSS/JS servidos; $(@($src).Count) fontes listadas"
+$src = @(GetList "$base/api/market/sources")
+if ($src.Count -lt 5) { Fail "lista de fontes incompleta ($($src.Count))" }
+Note "   index.html + 7 arquivos CSS/JS servidos; $($src.Count) fontes listadas"
 
 Note "E) Persistência (dados demonstrativos numa pasta isolada → encerrar → reabrir)"
 $null = Invoke-RestMethod -Method Post -Uri "$base/api/demo" -Headers $hdr -NoProxy -TimeoutSec 60
-$skus = @(Invoke-RestMethod -Uri "$base/api/skus" -NoProxy -TimeoutSec 30)
+$skus = @(GetList "$base/api/skus")
 $before = $skus.Count
 if ($before -lt 1) { Fail "importação de teste não gravou SKUs" }
-$body = @{ sku = $skus[0].sku; horizon = 6 } | ConvertTo-Json
+if ($before -lt 2) { Fail "dados de teste com $before SKU(s); esperado ≥ 2" }
+$body = @{ sku = [string]$skus[0].sku; horizon = 6 } | ConvertTo-Json
 $fc = Invoke-RestMethod -Method Post -Uri "$base/api/forecast" -Headers $hdr -ContentType "application/json" -Body $body -NoProxy -TimeoutSec 300
 Note "   $before SKUs gravados; previsão pela API executada (modelo escolhido: $($fc.modelo_escolhido))"
 foreach ($k in $fc.modelos.PSObject.Properties.Name) {
@@ -139,7 +143,7 @@ if (Test-Path (Join-Path $data "gpi.run.json")) { Fail "gpi.run.json não foi re
 Note "   processo encerrado; porta 8765 liberada"
 
 $app = StartApp
-$after = @(Invoke-RestMethod -Uri "$base/api/skus" -NoProxy -TimeoutSec 30).Count
+$after = @(GetList "$base/api/skus").Count
 StopApp $app
 if ($after -ne $before) { Fail "persistência: $before SKUs antes, $after depois da reabertura" }
 Note "   reabertura: $after SKUs preservados"
