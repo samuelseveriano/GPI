@@ -37,6 +37,24 @@ O ambiente onde o código foi desenvolvido **não tinha acesso de rede** às API
 
 Scraping não é usado em nenhuma fonte. Nenhum login, CAPTCHA, limite ou bloqueio é contornado.
 
+## Fase 4 — fontes de interesse de busca e níveis de conexão
+
+A Central de Integrações agrupa as fontes em três níveis:
+
+| Nível | Significado | Fontes |
+|---|---|---|
+| 1 — Conexão automática | públicas, sem credencial | BCB, Comex Stat, IBGE, UN Comtrade (preview), Wikimedia, RSS, **Google Trends — Trending Now** |
+| 2 — Conexão assistida | chave gratuita, ID de aplicativo, OAuth ou aceite de termos | **Google Ads — Planejador de palavras-chave**, **UN Comtrade (chave gratuita)**, YouTube, Reddit, Mercado Livre, Google Notícias |
+| 3 — Acesso restrito | aprovação, contrato ou sem API pública | **Google Trends API (alfa)**, **Baidu Index**, **巨量算数**, **Alibaba/1688**, **Microsoft Advertising**, Amazon, Shopee, AliExpress, Taobao, Trustpilot, Reclame Aqui, comparadores |
+
+| Fonte | Situação verificada (out/2026) | O que o GPI faz |
+|---|---|---|
+| Google Trends API oficial | alfa, acesso por inscrição e aprovação (interesse relativo, escala consistente, 5 anos, ISO 3166-2) | marcada como restrita, com link de inscrição; nenhum endpoint é presumido |
+| Google Trends — Trending Now (RSS) | exportação pública oficial, tráfego em faixas | coleta diária BR e EUA; NLP + filtro comercial; limite inferior da faixa, nunca volume exato |
+| Google Ads — KeywordPlanIdeaService | exige conta, developer token (acesso Básico ou superior) e OAuth | botão "Conectar"; volumes tratados como aproximados; China não consultada |
+| Baidu Index / 巨量算数 / Alibaba | sem API aberta a terceiros; ferramentas existentes usam cookies de sessão | não implementado (seria contornar autenticação) |
+| Microsoft Advertising | exige conta e developer token; API SOAP | não implementado nesta fase |
+
 ## Lista de conectores validados com resposta real
 
 Resultado da coleta real no GitHub Actions (job *2. Validação real dos conectores*, runner Ubuntu nos EUA,

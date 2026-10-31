@@ -1,4 +1,4 @@
-# GPI — Global Product Intelligence · v0.3 (Fase 3)
+# GPI — Global Product Intelligence · v0.4 (Fase 4)
 
 Plataforma **local e autônoma** de inteligência de produtos: coleta dados de fontes públicas e
 autorizadas, analisa opiniões de consumidores, acompanha o YouTube, compara produtos, gera
@@ -20,6 +20,35 @@ página *Metodologia* e são verificadas por testes.
 - **Desenvolvimento:** `pip install -r requirements.txt` (opcional: `-r requirements-optional.txt`) e
   `Start_GPI.bat` (Windows) ou `./start_gpi.sh` (Linux/macOS). Dados em `data/`.
 - **Testes:** `pip install -r requirements-dev.txt` e `python -m pytest tests`.
+
+## Fase 4 — inteligência de consumo (o que foi implementado)
+
+O foco passou a ser **produtos específicos** (ex.: carregador USB-C 65W, capacete de moto, fechadura
+eletrônica), não posições SH4. Três dimensões ficam separadas e nunca são misturadas: **consumo**
+(interesse de busca), **comércio exterior** (importações) e **mercado** (preços, reviews, conteúdo).
+
+| Recurso | Situação |
+|---|---|
+| Catálogo canônico Categoria → Família → Produto → Variante, pt/en/zh, ~110 produtos de referência + descoberta automática (candidatos promovidos com evidência), SH4 só quando fundamentado | ✅ testado |
+| NLP local: limpeza, idioma, tokens (chinês por máxima correspondência), conceitos, atributos (potência, mAh, conector, marca, modelo), chave conceitual multilíngue, variantes | ✅ testado (15 termos de referência em 3 idiomas) |
+| Intenção de busca (compra, comparação, review, problema, manutenção, informação, entretenimento, notícia): regras + modelo supervisionado com controle de qualidade | ✅ regras ≥ 80% em conjunto separado · ⚠️ o modelo supervisionado fica desligado até atingir acurácia ≥ 0,60 (hoje 0,40 com 92 rótulos) |
+| Google Trends — Trending Now (RSS oficial), Brasil e EUA, filtro de relevância comercial | ✅ implementado e testado com resposta simulada · validação real no CI (ver `docs/INTEGRACOES.md`) |
+| Google Ads — Planejador de palavras-chave (API oficial, OAuth + developer token, descoberta da versão ativa) | ✅ implementado e testado com respostas simuladas · ⚠️ não validado com conta real (exige credenciais do usuário) |
+| China: Baidu Index, 巨量算数, Alibaba | 🚫 sem API aberta — identificados como acesso restrito; a página da China mostra a limitação em vez de rankings fictícios |
+| Rankings separados que declaram o que medem; "mais pesquisados" só com volume de buscas | ✅ testado |
+| Crescimento ano contra ano, tendência (Mann–Kendall), sazonalidade, aceleração, pontos de mudança, anomalias | ✅ testado |
+| Comparação internacional com lead-lag exploratório (significância, estabilidade, backtest) | ✅ testado |
+| Opportunity Score, Evidence Coverage, Forecast Confidence, Import Readiness (separados; sem margem nem quantidade de compra) | ✅ testado |
+| Coleta em paralelo por etapas (concorrência limitada por fonte), disjuntor por host, ETag/304, gzip, métricas por fonte | ✅ testado |
+| IBGE: corrigido o erro "byte 0x8b" (resposta gzip sem descompressão) | ✅ testado com servidor local · ⚠️ o IBGE não responde a partir dos EUA (CI); validar numa rede brasileira |
+| UN Comtrade: 1 período por chamada sem chave; até 12 com a chave gratuita opcional | ✅ testado |
+| Novo menu; submenu recolhível "Vendas próprias"; páginas Brasil, China, EUA, produto, comparação, oportunidades, alertas, emergentes, previsão de tendências, anomalias, catálogo, desempenho | ✅ verificado no navegador (sem erros de JavaScript) |
+| Migração automática do banco da Fase 3 (v3 → v4), sem apagar dados | ✅ testado |
+
+**Limites importantes:** o feed "Trending Now" lista poucas buscas por dia (muitas são notícias); o histórico
+se forma com as coletas diárias. Volumes mensais por produto exigem conectar o Google Ads. Não há fonte
+autorizada de buscas na China continental. Visualizações da Wikipédia e menções são exibidas como sinais
+auxiliares, com rótulo próprio — nunca como "pesquisas".
 
 ## Fase 3 — o que foi implementado
 
@@ -82,7 +111,7 @@ página *Metodologia* e são verificadas por testes.
 pip install -r requirements-dev.txt
 python -m pytest tests
 ```
-Resultado local: **94 aprovados e 3 ignorados** (os 3 exigem statsmodels/LightGBM/XGBoost). No CI do Windows,
+Resultado local: **145 aprovados e 3 ignorados** (os 3 exigem statsmodels/LightGBM/XGBoost). No CI do Windows,
 com essas bibliotecas instaladas, a suíte completa é aprovada antes de cada build.
 
 ## Formato de importação
@@ -92,6 +121,7 @@ Obrigatórias: data, quantidade e SKU ou produto. Opcionais: categoria, preço u
 ## Estrutura
 ```
 backend/gpi/            servidor, banco, importação, regras
+  products/             Fase 4: léxico pt/en/zh, NLP, intenção, catálogo, tendências de consumo, API
   connectors/           conectores das fontes (HTTP com retry/cache/proxy)
   market/               sincronização, descoberta, AutoML, clusters, oportunidades
   forecasting/          modelos estatísticos e de ML, backtesting
