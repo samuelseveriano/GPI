@@ -39,10 +39,24 @@ Scraping não é usado em nenhuma fonte. Nenhum login, CAPTCHA, limite ou bloque
 
 ## Lista de conectores validados com resposta real
 
-**Nenhum até esta entrega.** O workflow do GitHub Actions executa `scripts/validate_connectors.py` num runner
-com internet e publica `validacao_conectores.json` com o resultado real de cada fonte pública — esse arquivo é a
-lista oficial de conectores validados. Na instalação do usuário, a página *Saúde das Fontes* marca "validada"
-somente após a primeira coleta real bem-sucedida.
+Resultado da coleta real no GitHub Actions (job *2. Validação real dos conectores*, runner Ubuntu nos EUA,
+31/10/2026; artefato `validacao-conectores`). Amostra de até 6 requisições por fonte — a sincronização
+completa no computador do usuário coleta o histórico inteiro.
+
+| Fonte | Situação | Registros na amostra |
+|---|---|---|
+| BCB PTAX (câmbio USD e CNY) | ✅ validada | 962 |
+| Wikimedia (interesse público por produto) | ✅ validada | 681 |
+| Comex Stat (importações da China por SH4) | ✅ validada | 86.114 |
+| UN Comtrade (exportações chinesas) | ✅ validada | 120 |
+| Feeds RSS (6 sites) | ✅ validada | 190 itens |
+| IBGE PMC | ❌ falhou — tempo esgotado a partir dos EUA (Windows e Ubuntu); provável bloqueio de acesso do exterior; confirmar numa rede brasileira | 0 |
+| Google Notícias, YouTube, Reddit, Mercado Livre | ⏸ não testadas — exigem opt-in ou credencial do usuário | — |
+| Amazon, Shopee, AliExpress, Alibaba, Taobao, Google Trends, Trustpilot, Reclame Aqui, comparadores | 🚫 restritas — sem API pública gratuita autorizada (não há raspagem) | — |
+
+Uma fonte só é marcada "validada" quando grava pelo menos um registro real; uma API que responde sem dados
+aparece como "sem dados". Na instalação do usuário, a página *Saúde das Fontes* faz a mesma verificação na
+rede da empresa, que pode bloquear endereços diferentes dos bloqueados no GitHub.
 
 ## O que verificar na primeira execução
 1. Abrir o GPI e aguardar a sincronização (barra azul no topo).

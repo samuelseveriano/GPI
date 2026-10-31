@@ -9,10 +9,10 @@ página *Metodologia* e são verificadas por testes.
 - **TI:** `docs/TI.md` (rede, arquivos, segurança). **Build do executável:** `docs/BUILD.md`.
 - **Integrações e o que foi validado:** `docs/INTEGRACOES.md`.
 
-> **Situação do executável Windows:** o `GPI.exe` **ainda não foi gerado** — o ambiente de
-> desenvolvimento não permitia (Linux, sem rede, sem PyInstaller). O projeto inclui o
-> inicializador pronto, a especificação do PyInstaller e um workflow do GitHub Actions que gera e
-> testa o `GPI-Windows-Portable.zip`. Veja `docs/BUILD.md`.
+> **Executável Windows:** o `GPI-Windows-Portable.zip` é gerado e testado pelo GitHub Actions
+> (aba *Actions → windows-build → Artifacts*). O `GPI.exe` passa pelos testes A–H numa cópia
+> sem Python instalado: inicialização, servidor, interface, modelos de ML dentro do pacote,
+> persistência, encerramento, integridade. Veja `docs/BUILD.md`.
 
 ## Executar
 
@@ -25,8 +25,8 @@ página *Metodologia* e são verificadas por testes.
 
 | Recurso | Situação |
 |---|---|
-| Inicializador do `GPI.exe`: integridade (SHA-256), dados em `%LOCALAPPDATA%\GPI`, porta, navegador, janela de controle, encerramento seguro, `--smoke/--check/--stop` | ✅ testado (Linux) · ⚠️ `.exe` não gerado |
-| PyInstaller one-folder + workflow Windows com testes de inicialização e validação real de conectores | ✅ escrito · ⚠️ não executado |
+| Inicializador do `GPI.exe`: integridade (SHA-256), dados em `%LOCALAPPDATA%\GPI`, porta, navegador, janela de controle, encerramento seguro, `--smoke/--check/--stop/--selftest` | ✅ testado no Windows (CI) e no Linux |
+| PyInstaller one-folder + workflow Windows com testes do executável (A–H) e validação real de conectores | ✅ executado no GitHub Actions |
 | Central de Integrações: conectar, testar, sincronizar, desconectar; chave de API, Client ID, OAuth 2.0 com PKCE, opt-in de termos, links oficiais para aprovação | ✅ testado (com respostas simuladas) |
 | Cofre de credenciais (DPAPI no Windows; arquivo 0600 nos demais) | ✅ testado no Linux · ⚠️ DPAPI só roda no Windows |
 | Proteção CSRF (cabeçalho obrigatório + Origin) | ✅ testado |
@@ -35,7 +35,7 @@ página *Metodologia* e são verificadas por testes.
 | Trustpilot, Reclame Aqui, comparadores de preço | ✅ restritos, com motivo (sem raspagem) |
 | Review Intelligence: sentimento pt/en, 11 aspectos, alvo da reclamação, exemplos com link | ✅ testado (≥ 85% em 30 frases rotuladas) |
 | Comparador de produtos com fonte e confiabilidade por atributo | ✅ testado |
-| SARIMA, LightGBM, XGBoost no AutoML (se instalados) | ✅ código pronto · ⚠️ testes rodam só no CI (bibliotecas ausentes aqui) |
+| SARIMA, LightGBM, XGBoost no AutoML | ✅ testados no CI e executados dentro do `GPI.exe` (`--selftest`) |
 | Score com cobertura e confiança separadas; ausência de fonte não penaliza; 8 rankings novos | ✅ testado |
 | 15 páginas no menu (Visão Geral, Radar Global, Brasil, China, Marketplaces, YouTube, Reviews, Comparador, ML, Forecasting, Clustering, Ranking, Central de Integrações, Saúde das Fontes, Metodologia) | ✅ verificado no navegador |
 
@@ -43,7 +43,7 @@ página *Metodologia* e são verificadas por testes.
 
 | Recurso | Situação |
 |---|---|
-| Conectores públicos: BCB PTAX, Wikimedia (pt/en/zh), Comex Stat (todas as posições SH4), IBGE PMC, UN Comtrade | ✅ implementados e testados com respostas simuladas · ⚠️ coleta real a confirmar na 1ª execução |
+| Conectores públicos: BCB PTAX, Wikimedia (pt/en/zh), Comex Stat (todas as posições SH4), IBGE PMC, UN Comtrade | ✅ coleta real validada para PTAX, Wikimedia, Comex Stat, Comtrade e RSS · ❌ IBGE sem resposta a partir dos EUA (ver `docs/INTEGRACOES.md`) |
 | Fontes restritas identificadas com motivo: Amazon BR/US, Shopee, AliExpress, Alibaba, Taobao, Google Trends; Mercado Livre ativável com token OAuth | ✅ |
 | Proveniência completa por série e observação (fonte, URL, coleta, referência, país, categoria, unidade, moeda, tipo, confiabilidade, método, revisões) | ✅ testado |
 | Sincronização automática na abertura e semanal; jobs idempotentes, retry/backoff, rate limit, cache, retomada após falha, cancelamento | ✅ testado |
@@ -57,9 +57,6 @@ página *Metodologia* e são verificadas por testes.
 | Funcionamento offline com dados já coletados | ✅ testado |
 
 **Não implementado nesta fase (e por quê):**
-- SARIMA/SARIMAX, LightGBM e XGBoost: as bibliotecas não estavam disponíveis no ambiente de
-  build para testes; o AutoML usa Holt-Winters/ETS e os modelos do scikit-learn. Podem ser
-  adicionados como candidatos sem mudar a arquitetura.
 - Fornecedores chineses: não há fonte gratuita autorizada; a aba China mostra preços médios
   indicativos de importação (Comex Stat), não cotações.
 - Comparações regionais por UF no Brasil.
@@ -85,7 +82,8 @@ página *Metodologia* e são verificadas por testes.
 pip install -r requirements-dev.txt
 python -m pytest tests
 ```
-Resultado nesta entrega: **89 testes aprovados e 3 ignorados** (modelos opcionais sem biblioteca instalada).
+Resultado local: **94 aprovados e 3 ignorados** (os 3 exigem statsmodels/LightGBM/XGBoost). No CI do Windows,
+com essas bibliotecas instaladas, a suíte completa é aprovada antes de cada build.
 
 ## Formato de importação
 Uma linha por venda (ou por dia/SKU). Exemplo em `docs/modelo_importacao.csv`.

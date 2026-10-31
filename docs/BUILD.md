@@ -1,28 +1,70 @@
-# Relatório de build — GPI v0.3 (Fase 3)
+# Build do GPI para Windows — GPI v0.3 (Fase 3)
 
-## Situação: executável Windows NÃO gerado neste ambiente
+O executável é gerado e testado automaticamente pelo GitHub Actions
+(`.github/workflows/windows-build.yml`) a cada push na branch `main`, ou manualmente em
+*Actions → windows-build → Run workflow*.
 
-| Item | Situação |
+## Como baixar o aplicativo
+1. Abra o repositório no GitHub → aba **Actions** → workflow **windows-build**.
+2. Clique na execução mais recente com o ícone verde (✓).
+3. No fim da página, em **Artifacts**, clique em **GPI-Windows-Portable** (é preciso estar logado no GitHub).
+4. O download é um ZIP que contém `GPI-Windows-Portable.zip` e `relatorio_build.txt`. Extraia o
+   `GPI-Windows-Portable.zip` numa pasta (ex.: Documentos\GPI) e dê dois cliques em `GPI\GPI.exe`.
+5. O navegador abre em `http://127.0.0.1:8765`. Os dados ficam em `%LOCALAPPDATA%\GPI`.
+
+Não é preciso instalar Python, Node.js, banco de dados, Docker, nem ter privilégio de administrador.
+A execução continua sujeita às políticas de segurança da empresa (antivírus/EDR, proxy) — ver `docs/TI.md`.
+Artefatos ficam disponíveis por 30 dias; um novo push gera um novo pacote.
+
+## O que o workflow faz
+| Job | Runner | O que executa | Bloqueia o pacote? |
+|---|---|---|---|
+| 1. Testes automatizados | Windows | `pytest` com statsmodels, LightGBM e XGBoost instalados; publica `relatorio-testes` (log + JUnit XML) | Sim |
+| 2. Validação real dos conectores | Ubuntu | Coleta uma amostra real de cada API pública (até 6 requisições por fonte); publica `validacao-conectores` | Não — fonte fora do ar não impede o build, mas só aparece como validada com registros gravados |
+| 3. Compilar e testar GPI.exe | Windows | PyInstaller one-folder → manifesto SHA-256 → testes A–H → relatório → ZIP | Sim |
+
+Testes do executável (`packaging/smoke_test.ps1`), executados numa **cópia do pacote em outra pasta,
+com o Python removido do PATH e sem variáveis PYTHON\***:
+
+| Teste | Verificação |
 |---|---|
-| `GPI-Windows-Portable.zip` | **Pendente.** O ambiente de desenvolvimento é Linux, sem acesso à internet (PyPI bloqueado), sem PyInstaller/Nuitka e sem Wine. Não foi possível compilar nem testar um `.exe`. |
-| Inicializador (`backend/gpi/main.py`) | Pronto e testado (Linux): integridade de arquivos, pasta de dados separada, porta, servidor, navegador, janela de controle, encerramento seguro, modo `--smoke`. |
-| Especificação PyInstaller (`packaging/gpi.spec`) | Escrita, **não executada**. One-folder, `GPI.exe` sem console, sem UPX (reduz falsos positivos de antivírus). |
-| Workflow GitHub Actions (`.github/workflows/windows-build.yml`) | Escrito, **não executado**. Testes → validação real dos conectores → PyInstaller → manifesto → testes de inicialização do `.exe` → ZIP como artefato. |
-| Testes de inicialização do `.exe` (`packaging/smoke_test.ps1`) | Escritos, **não executados**: `--smoke`, acesso a 127.0.0.1:8765, interface, proteção de Host, `--stop`, persistência, detecção de arquivo alterado. |
-| Testes automatizados (Python) | **89 aprovados, 3 ignorados** (SARIMA/LightGBM/XGBoost: bibliotecas indisponíveis aqui; rodam no CI do Windows). |
+| A — Inicialização | `GPI.exe --smoke`: integridade, servidor, `/api/health`, encerramento |
+| B — Servidor local | `http://127.0.0.1:8765` responde; proteção de Host (403) e CSRF (POST sem cabeçalho recusado) |
+| C — Interface | `index.html` e os 7 arquivos CSS/JS servidos; lista de fontes carregada |
+| D — Machine learning | `GPI.exe --selftest`: importa numpy, scipy, pandas, scikit-learn, statsmodels, LightGBM, XGBoost **dentro do pacote** e executa cada um dos 15 modelos numa série sintética de teste; falha se qualquer modelo exigido falhar |
+| E — Persistência | grava dados demonstrativos numa pasta isolada, executa uma previsão pela API, encerra, reabre e confere os mesmos SKUs |
+| F — Encerramento | `--stop` encerra o processo, remove `gpi.run.json` e libera a porta 8765 |
+| G — Integridade | altera um arquivo do pacote e confirma que o GPI recusa abrir (código 4) |
+| H — Distribuição limpa | todos os testes acima rodam na cópia sem Python no PATH |
 
-## Como gerar o executável (uma vez, por quem mantém o sistema)
+Em caso de falha, a etapa mostra a anotação `smoke`/`smoke-excecao` com a linha e o final do `gpi.log`,
+e o artefato **logs-build** guarda `pyi.log`, avisos do PyInstaller, dependências e o log do GPI.
 
-**Opção A — GitHub Actions (recomendada, sem instalar nada):**
-1. Envie este projeto para um repositório no GitHub.
-2. Aba *Actions* → *windows-build* → *Run workflow* (ou faça push na branch `main`).
-3. Ao terminar (~15–25 min), baixe o artefato **GPI-Windows-Portable**: contém o ZIP, o `relatorio_build.txt` e `validacao_conectores.json` (resultado das coletas reais no runner com internet).
+## Diagnóstico das falhas corrigidas (out/2026)
+| Execução | Falha | Causa | Correção |
+|---|---|---|---|
+| #1–#2 | PyInstaller: `RuntimeError: Child process call to _collect_submodules() failed` — `xgboost/testing/__init__.py`: `No module named 'hypothesis'` | `collect_submodules("xgboost")` importava o pacote de testes interno do XGBoost | `gpi.spec`: filtro que exclui submódulos `.testing`/`.tests` (sem instalar dependências de desenvolvimento) |
+| #2 | Validação: `UnicodeEncodeError` (cp1252) | saída do Python no console do Windows | `PYTHONUTF8=1` e `PYTHONIOENCODING=utf-8` no workflow; JSON gravado em UTF-8 |
+| #2 | PTAX CNY vazio, Comex Stat HTTP 429, Comtrade "Maximum number of periods for preview is 1" | conector tratava resposta vazia como erro; intervalo curto entre chamadas; vários períodos numa chamada | resposta vazia = sem dados; 12 s entre chamadas ao Comex Stat; um período por chamada ao Comtrade |
+| #4 | Job cancelado após 60 min | teste do `.exe` com `Start-Process -Wait` sem limite; validação dos conectores sem limite (26 min) | todo `GPI.exe` aguardado com tempo máximo; validação limitada (15 min, amostra por fonte) e em job separado |
+| #5 | Teste de integridade travado | caixa de diálogo de erro do Windows aguardando clique | sem diálogo nos modos `--smoke/--check/--selftest` |
+| #7–#8 | `/api/forecast` retornava 500 no teste do `.exe` | o script de teste enviava a lista de SKUs como `sku` (array JSON do PowerShell 7); a API não validava o tipo | script corrigido; API responde 400 para tipos inválidos; erro inesperado de um modelo não derruba mais a previsão |
+| testes Linux | `test_full_start_stop_cycle` intermitente | corrida: `--stop` logo após o início deixava o processo esperando 30 s | inicializador usa o estado do próprio servidor (`server.started`) |
+| validação | Wikimedia marcada "validada" com 0 registros | amostra do CI parava antes das consultas de visualizações; status não exigia registros | fonte só é validada com registros gravados ("sem dados" caso contrário); amostra não pula consultas dependentes |
 
-Runners gratuitos: ilimitados em repositório público. Em repositório privado, consomem a cota mensal do plano, e minutos de Windows são cobrados em dobro em relação ao Linux. Artefatos ficam disponíveis por 30 dias (configurado no workflow).
+## Dependências empacotadas
+Python 3.12 (runtime embutido pelo PyInstaller), Starlette, Uvicorn, NumPy, SciPy, pandas,
+scikit-learn, statsmodels, LightGBM, XGBoost, openpyxl, além da interface (HTML/CSS/JS), `config/` e `docs/`.
+Excluídos: matplotlib, IPython, notebook, pytest, torch, tensorflow e os submódulos de teste do XGBoost/LightGBM.
+A lista exata de versões de cada build está em `relatorios/dependencias.txt` dentro do pacote.
 
-**Opção B — computador Windows de desenvolvimento:** `powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1` (requer Python 3.12 nesse computador, não no do usuário final).
+## Build local (opcional, para quem mantém o sistema)
+`powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1` num Windows com Python 3.12
+(necessário só nesse computador, não no do usuário final).
 
-## Riscos conhecidos do empacotamento (a confirmar no primeiro build)
-- `collect_submodules` e os hooks do PyInstaller para scikit-learn/scipy cobrem os imports usados; se algum faltar, o teste `--smoke` do CI falha e indica o módulo.
-- Antivírus/EDR corporativo pode bloquear executáveis não assinados. Assinatura de código (certificado da empresa) é recomendada antes da distribuição interna.
-- Tamanho estimado do pacote: 250–400 MB descompactado (numpy, scipy, pandas, scikit-learn, LightGBM, XGBoost, statsmodels).
+## Riscos conhecidos
+- Executável não assinado: antivírus/EDR corporativo pode bloquear ou exigir liberação. Recomenda-se assinar
+  `GPI.exe` com o certificado de código da empresa antes da distribuição interna.
+- IBGE (`servicodados.ibge.gov.br`) não respondeu a partir dos runners do GitHub (Windows e Ubuntu, nos EUA):
+  tempo esgotado em todas as tentativas. A causa provável é bloqueio de acesso a partir do exterior; precisa ser
+  confirmada numa rede brasileira (a página *Saúde das Fontes* mostra o resultado na primeira sincronização).
