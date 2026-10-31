@@ -281,6 +281,7 @@ class ComexStat(Connector):
 # =========================================================================== UN Comtrade
 class UnComtrade(Connector):
     id = "comtrade"
+    stage = 2          # depende das posições SH4 descobertas no Comex Stat (etapa 1)
     name = "UN Comtrade — importações de outros países vindas da China"
     reliability = "A"
     docs_url = "https://comtradedeveloper.un.org/"

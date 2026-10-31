@@ -176,6 +176,80 @@ MIGRATIONS = [
             PRIMARY KEY (provider, day)
         )""",
     ],
+    # v4 — catálogo canônico de produtos e inteligência de consumo (Fase 4). Só cria tabelas novas:
+    # nenhum dado das fases anteriores é alterado ou apagado.
+    [
+        """CREATE TABLE IF NOT EXISTS catalog_products (
+            product_id TEXT PRIMARY KEY,          -- ex.: carregador-usb-c (família) ou carregador-usb-c:65w (variante)
+            canonical TEXT NOT NULL,
+            name_pt TEXT, name_en TEXT, name_zh TEXT,
+            category TEXT NOT NULL,
+            family TEXT NOT NULL,
+            level TEXT NOT NULL,                  -- produto | variante
+            parent_id TEXT,
+            attributes TEXT,                      -- JSON
+            ncm_hint TEXT,                        -- SH4 apenas quando há fundamento técnico
+            wiki_en TEXT,
+            origin TEXT NOT NULL,                 -- semente | descoberto
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL,
+            evidence INTEGER NOT NULL DEFAULT 0
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_cat_family ON catalog_products(family)",
+        """CREATE TABLE IF NOT EXISTS product_aliases (
+            alias_norm TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            alias TEXT NOT NULL,
+            lang TEXT NOT NULL,
+            PRIMARY KEY (alias_norm, product_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS search_observations (
+            source TEXT NOT NULL,                 -- google_trends_rss | google_ads_kp | wikimedia | ...
+            country TEXT NOT NULL,                -- ISO 3166-1 (BR, US, CN) ou 'GLOBAL:<idioma>'
+            region TEXT NOT NULL DEFAULT '',      -- ISO 3166-2 quando a fonte fornece; vazio = país inteiro
+            term TEXT NOT NULL,
+            ref_date TEXT NOT NULL,
+            period TEXT NOT NULL,                 -- dia | semana | mes
+            metric TEXT NOT NULL,                 -- trafego_faixa | volume_mensal_aprox | interesse_relativo | visualizacoes
+            value DOUBLE NOT NULL,
+            value_high DOUBLE,                    -- limite superior quando a fonte informa faixa
+            unit TEXT NOT NULL,
+            lang TEXT,
+            product_id TEXT,
+            intent TEXT,
+            commercial INTEGER NOT NULL DEFAULT 0,
+            url TEXT,
+            extra TEXT,
+            collected_at TEXT NOT NULL,
+            PRIMARY KEY (source, country, region, term, ref_date, metric)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_sobs_prod ON search_observations(product_id, country, metric, ref_date)",
+        """CREATE TABLE IF NOT EXISTS discovery_candidates (
+            term_norm TEXT PRIMARY KEY,
+            term TEXT NOT NULL,
+            lang TEXT,
+            head TEXT,
+            family_hint TEXT,
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL,
+            occurrences INTEGER NOT NULL DEFAULT 0,
+            sources TEXT,                         -- JSON {fonte: n}
+            countries TEXT,                       -- JSON {país: n}
+            intents TEXT,                         -- JSON {intenção: n}
+            product_id TEXT,
+            status TEXT NOT NULL DEFAULT 'candidato'   -- candidato | promovido | ignorado
+        )""",
+        """CREATE TABLE IF NOT EXISTS source_metrics (
+            run_id INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            seconds DOUBLE NOT NULL,
+            jobs_ok INTEGER, jobs_failed INTEGER,
+            records INTEGER, records_per_s DOUBLE,
+            state TEXT,
+            PRIMARY KEY (run_id, source)
+        )""",
+    ],
 ]
 
 

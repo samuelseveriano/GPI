@@ -83,6 +83,7 @@ class Comparadores(Restricted):
 
 
 class MercadoLivre(Connector):
+    stage = 2
     """Ativado somente se a empresa configurar um access token oficial (OAuth)."""
     id, name, order = "mercadolivre", "Mercado Livre Brasil — tendências de busca", 80
     reliability = "B"

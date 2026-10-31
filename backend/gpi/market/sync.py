@@ -13,6 +13,11 @@ Gerenciador de sincronização autônoma.
   espera crescente (1 h, 2 h, 4 h … até 24 h).
 * Não bloqueia a interface: roda em uma thread; os dados anteriores continuam
   disponíveis e os resultados de análise só são substituídos ao final, após validação.
+* Concorrência controlada (Fase 4): os conectores são agrupados em etapas (`stage`). Na mesma
+  etapa, fontes independentes (hosts diferentes) rodam em paralelo, no máximo `sync_workers`
+  ao mesmo tempo; dentro de cada fonte os jobs são sequenciais, respeitando o intervalo mínimo e
+  as cotas do provedor. Entre etapas, uma análise rápida atualiza o painel progressivamente.
+* Métricas por fonte (tempo, registros/s, jobs) ficam em `source_metrics`.
 """
 from __future__ import annotations
 
@@ -20,7 +25,9 @@ import json
 import logging
 import math
 import threading
+import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -76,7 +83,8 @@ class SyncManager:
         self._thread = None
         self._stop = threading.Event()
         self.state = {"rodando": False, "fase": "ocioso", "atual": "", "feitos": 0, "total": 0,
-                      "erros": [], "inicio": None, "fim": None}
+                      "erros": [], "inicio": None, "fim": None, "ativos": []}
+        self.quick_analyzer = None        # análise leve entre etapas (painel progressivo)
 
     # ------------------------------------------------------------------ jobs
     def _job_row(self, key):
@@ -137,12 +145,35 @@ class SyncManager:
         try:
             ctx = self.context()
             self.state["fase"] = "coletando"
-            for c in self.connectors:
+            if hasattr(self.http, "reset_breakers"):
+                self.http.reset_breakers()
+            t_all = time.monotonic()
+            todo = [c for c in self.connectors if not only or c.id in only]
+            stages = sorted({getattr(c, "stage", 1) for c in todo})
+            workers = max(1, int(self.cfg.get("sync_workers", 4)))
+            for st in stages:
                 if self.http.cancel_event.is_set():
                     break
-                if only and c.id not in only:
-                    continue
-                summary["fontes"][c.id] = self._run_connector(c, ctx)
+                group = sorted([c for c in todo if getattr(c, "stage", 1) == st], key=lambda c: c.order)
+                if workers == 1 or len(group) == 1:
+                    for c in group:
+                        if self.http.cancel_event.is_set():
+                            break
+                        summary["fontes"][c.id] = self._timed(c, ctx, rid)
+                else:
+                    with ThreadPoolExecutor(max_workers=min(workers, len(group)), thread_name_prefix="gpi-src") as ex:
+                        futs = {c.id: ex.submit(self._timed, c, ctx, rid) for c in group}
+                        for cid, f in futs.items():
+                            summary["fontes"][cid] = f.result()
+                if self.quick_analyzer and st != stages[-1] and not only and not self.http.cancel_event.is_set():
+                    try:
+                        self.state["atual"] = "atualizando painel com os dados já coletados"
+                        self.quick_analyzer(self.store, self.state)
+                    except Exception:  # noqa: BLE001
+                        log.exception("análise rápida falhou (a sincronização continua)")
+            summary["desempenho"] = {"coleta_segundos": round(time.monotonic() - t_all, 2),
+                                     "trabalhadores": workers,
+                                     "hosts": getattr(self.http, "host_stats", {})}
             if self.analyzer and not self.http.cancel_event.is_set() and not only:
                 self.state.update(fase="analisando", atual="descoberta, previsões, clusters e ranking")
                 summary["analise"] = self.analyzer(self.store, self.state)
@@ -162,6 +193,32 @@ class SyncManager:
                         (now_iso(), final, json.dumps(summary, ensure_ascii=False, default=str), rid))
         self.state.update(rodando=False, fase=final, atual="", fim=now_iso())
         return summary
+
+    def _timed(self, c, ctx, rid) -> dict:
+        t0, started = time.monotonic(), now_iso()
+        with self._lock:
+            self.state["ativos"] = self.state.get("ativos", []) + [c.name]
+        try:
+            res = self._run_connector(c, ctx)
+        except Exception as e:  # noqa: BLE001 — uma fonte nunca derruba as demais
+            log.exception("conector %s falhou", c.id)
+            res = {"estado": "falhou", "ultimo_erro": f"erro interno: {e}", "jobs_ok": 0, "jobs_falhos": 1,
+                   "novas": 0, "revisadas": 0}
+            self.store.set_source_status(c.id, "falhou", res["ultimo_erro"])
+        finally:
+            with self._lock:
+                self.state["ativos"] = [n for n in self.state.get("ativos", []) if n != c.name]
+        secs = time.monotonic() - t0
+        recs = int(res.get("novas", 0)) + int(res.get("revisadas", 0)) + int(res.get("itens", 0))
+        res["segundos"] = round(secs, 2)
+        try:
+            self.db.execute("INSERT OR REPLACE INTO source_metrics (run_id, source, started_at, seconds, jobs_ok,"
+                            " jobs_failed, records, records_per_s, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (rid, c.id, started, secs, res.get("jobs_ok", 0), res.get("jobs_falhos", 0), recs,
+                             recs / secs if secs > 0 else None, res.get("estado")))
+        except Exception:  # noqa: BLE001 — banco anterior à v4 (testes antigos)
+            pass
+        return res
 
     def _run_connector(self, c, ctx) -> dict:
         res = {"jobs_ok": 0, "jobs_falhos": 0, "novas": 0, "revisadas": 0, "ultimo_erro": None}
