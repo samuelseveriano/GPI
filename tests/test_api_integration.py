@@ -125,3 +125,13 @@ def test_import_upload_and_delete(data_dir):
         assert code == 200 and s.req("/api/status")[1]["linhas"] == 0
     finally:
         s.stop()
+
+
+def test_forecast_rejects_wrong_types_with_400(data_dir):
+    """Parâmetro com tipo errado (ex.: lista no lugar do SKU) é erro do cliente (400), não 500."""
+    c = client(data_dir)
+    c.post("/api/demo")
+    for body in ({"sku": ["A", "B"], "horizon": 6}, {"horizon": 6},
+                 {"sku": "DEMO-001", "models": "naive"}, {"sku": "DEMO-001", "models": [1, 2]}):
+        r = c.post("/api/forecast", json=body)
+        assert r.status_code == 400, (body, r.status_code)

@@ -180,6 +180,11 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             h = int(b.get("horizon", 6))
             if not 1 <= h <= 104:
                 return err("horizonte deve estar entre 1 e 104 períodos")
+            if not isinstance(b.get("sku"), str) or not b["sku"]:
+                return err("'sku' deve ser um texto")
+            if b.get("models") is not None and not (isinstance(b["models"], list)
+                                                    and all(isinstance(x, str) for x in b["models"])):
+                return err("'models' deve ser uma lista de nomes de modelos")
             res = await run_in_threadpool(sv.forecast, db, b["sku"], b.get("freq", "M"), h, b.get("models"),
                               b.get("criterion", "wape"), int(b.get("n_origins", 6)),
                               bool(b.get("zero_fill", True)))
