@@ -361,9 +361,11 @@ def test_parallel_sources_faster_and_stages_ordered(tmp_path):
         db = Database(tmp_path / f"s{workers}.sqlite")
         conns = [Slow("a", 1, log=log), Slow("b", 1, log=log), Slow("c", 1, log=log), Slow("dep", 2, log=log)]
         sm = SyncManager(db, tmp_path, {"sync_workers": workers}, connectors=conns, http=TrendsHttp(), today_fn=lambda: TODAY)
-        t0 = time.monotonic()
         sm.run("teste")
-        return time.monotonic() - t0, log, db
+        # duração da etapa 1 medida pelos próprios conectores (exclui custos fixos de abertura do banco e da
+        # sincronização, que no runner do Windows chegam a ~1,5 s e distorciam a razão)
+        s1 = [t for c, k, t in log if c != "dep"]
+        return max(s1) - min(s1), log, db
     t_seq, _, _ = run(1)
     t_par, log, db = run(4)
     assert t_par < t_seq * 0.6                                        # 3 fontes independentes em paralelo
