@@ -5,4 +5,30 @@ build/
 .venv-build/
 __pycache__/
 *.pyc
-GPI-Windows-Portable.zip
+GPI-Windows-Portable*.zip
+GPI-Local-AI-Model-Pack*.zip
+# v0.7 — nunca versionar dados locais, credenciais, relatórios comerciais, documentos de fornecedores
+# ou modelos de IA (a varredura scripts/secret_scan.py também bloqueia esses tipos)
+*.sqlite
+*.sqlite3
+*.db
+*.duckdb
+*.gguf
+*.pfx
+*.p12
+*.pem
+*.key
+.env
+.env.*
+credentials*.json
+token*.json
+client_secret*.json
+/relatorios/
+relatorios_reais/
+
+anexos/
+fornecedores/
+/models/
+/logs/
+*.log
+gitleaks.json

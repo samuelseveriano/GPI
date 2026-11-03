@@ -1,0 +1,15 @@
+# Configuração do Gitleaks para o GPI: regras padrão + exceções para valores fictícios dos testes.
+title = "GPI"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores claramente fictícios usados em testes automatizados"
+regexTarget = "match"
+regexes = [
+  '''(?i)(TESTE|SEGREDO|FAKE|DUMMY|EXEMPLO|ABCDEFGH|0123456789)''',
+]
+paths = [
+  '''backend/gpi/reports/fonts/.*\.ttf''',
+]

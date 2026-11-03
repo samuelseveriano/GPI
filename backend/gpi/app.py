@@ -18,6 +18,8 @@ from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from .security import CSP, BodyLimit, public_url_problem, safe_cell
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
@@ -63,6 +65,10 @@ class HostGuard(BaseHTTPMiddleware):
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Content-Security-Policy"] = CSP
+        resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        resp.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
         resp.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api") else "no-cache"
         return resp
 
@@ -77,7 +83,7 @@ def to_csv(rows: list[dict], filename: str) -> Response:
         w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()), delimiter=";")
         w.writeheader()
         for r in rows:
-            w.writerow({k: (str(v).replace(".", ",") if isinstance(v, float) else v)
+            w.writerow({k: (str(v).replace(".", ",") if isinstance(v, float) else safe_cell(v))
                         for k, v in r.items()})
     return Response("﻿" + buf.getvalue(), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
@@ -94,11 +100,11 @@ def to_xlsx(rows: list[dict], filename: str, sheet="Dados", notes: list[str] | N
         for c in ws[1]:
             c.font = Font(bold=True)
         for r in rows:
-            ws.append([v if not isinstance(v, (list, dict)) else json.dumps(v) for v in r.values()])
+            ws.append([safe_cell(v) if not isinstance(v, (list, dict)) else safe_cell(json.dumps(v)) for v in r.values()])
     if notes:
         ws2 = wb.create_sheet("Notas")
         for n in notes:
-            ws2.append([n])
+            ws2.append([safe_cell(n)])
     buf = io.BytesIO()
     wb.save(buf)
     return Response(buf.getvalue(),
@@ -484,7 +490,8 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             feeds = []
             for f in vals["rss_feeds"][:50]:
                 u = str(f.get("url", "")).strip()
-                if urlsplit(u).scheme in ("http", "https") and urlsplit(u).netloc:
+                if urlsplit(u).scheme in ("http", "https") and urlsplit(u).netloc \
+                        and not public_url_problem(u, resolve=False):
                     feeds.append({"nome": str(f.get("nome") or urlsplit(u).netloc)[:80], "url": u,
                                   "idioma": f.get("idioma", "pt")})
             vals["rss_feeds"] = feeds
@@ -645,7 +652,10 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         *social_routes(db, sync, cfg),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
-    app = Starlette(routes=routes, middleware=[Middleware(HostGuard)])
+    app = Starlette(routes=routes, middleware=[
+        Middleware(BodyLimit, default=2 * 1024 * 1024,
+                   per_path={"/api/import": 50 * 1024 * 1024, "/api/compliance/anexos": 12 * 1024 * 1024}),
+        Middleware(HostGuard)])
     app.state.db = db
     app.state.sync = sync
     app.state.reports = reports

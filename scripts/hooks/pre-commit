@@ -1,0 +1,6 @@
+#!/bin/sh
+# Instalação (uma vez):  git config core.hooksPath scripts/hooks
+# Bloqueia commits com segredos ou arquivos que não devem ser versionados (bancos, relatórios, modelos, chaves).
+PY=python3
+command -v python3 >/dev/null 2>&1 || PY=python
+exec "$PY" scripts/secret_scan.py --staged

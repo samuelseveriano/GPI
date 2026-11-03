@@ -169,6 +169,10 @@ class RssFeeds(Connector):
 
     def run(self, job, ctx):
         f = job.params["feed"]
+        from ..security import public_url_problem
+        motivo = public_url_problem(f["url"])
+        if motivo:
+            raise FormatError(f"feed recusado por segurança: {motivo}")
         items = parse_feed(ctx.http.request_text(f["url"], ttl=6 * 3600, min_interval=1.0))
         rows = [{"item_id": it["id"] or it["url"], "kind": "artigo", "title": it["title"], "text": it["summary"],
                  "url": it["url"], "author": f["nome"], "published_at": it["date"], "lang": f.get("idioma"),

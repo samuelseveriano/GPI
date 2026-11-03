@@ -164,6 +164,9 @@ def setup_logging(data: Path, level: str):
         sh = logging.StreamHandler()
         sh.setFormatter(fmt)
         handlers.append(sh)
+    from .security import RedactFilter
+    for h in handlers:
+        h.addFilter(RedactFilter())          # sanitização automática de tokens/segredos em todos os logs
     root = logging.getLogger()
     root.setLevel(level)
     root.handlers = handlers
