@@ -48,7 +48,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 log = logging.getLogger("gpi.http")
@@ -102,6 +102,9 @@ class HttpConfig:
     connect_timeout: float = 8.0       # tempo máximo para DNS + TCP + TLS
     total_timeout: float = 150.0       # tempo máximo de uma operação, somando as novas tentativas
     per_host: int = 2                  # requisições simultâneas por host
+    # hosts com aceite de conexão comprovadamente lento (medido no CI): tempo de conexão próprio
+    connect_timeouts: dict = field(default_factory=lambda: {"api.gdeltproject.org": 25.0, "servicodados.ibge.gov.br": 15.0})
+    backoff_429: float = 15.0          # 429 sem Retry-After: espera 15 s, 30 s, 60 s (respeita o limite do servidor)
     max_attempts: int = 4
     backoff_base: float = 2.0
     backoff_max: float = 60.0
@@ -178,30 +181,31 @@ class _Transport:
 
     def _connect(self, scheme, host, port, timing):
         proxy = self._proxy_for(scheme, host)
-        t = time.monotonic()
+        ct = (self.cfg.connect_timeouts or {}).get(host, self.cfg.connect_timeout)
+        t = time.perf_counter()
         if proxy:
             pu = urllib.parse.urlsplit(proxy if "://" in proxy else "http://" + proxy)
             ph, pp = pu.hostname, pu.port or 8080
             socket.getaddrinfo(ph, pp)
-            timing["dns"] = time.monotonic() - t
+            timing["dns"] = time.perf_counter() - t
             auth = {}
             if pu.username:
                 tok = base64.b64encode(f"{urllib.parse.unquote(pu.username)}:{urllib.parse.unquote(pu.password or '')}".encode()).decode()
                 auth = {"Proxy-Authorization": f"Basic {tok}"}
             if scheme == "https":
-                c = http.client.HTTPSConnection(ph, pp, timeout=self.cfg.connect_timeout, context=self.ctx)
+                c = http.client.HTTPSConnection(ph, pp, timeout=ct, context=self.ctx)
                 c.set_tunnel(host, port, headers=auth)
             else:
-                c = http.client.HTTPConnection(ph, pp, timeout=self.cfg.connect_timeout)
+                c = http.client.HTTPConnection(ph, pp, timeout=ct)
                 c._gpi_proxy_auth = auth                              # noqa: SLF001 — HTTP simples via proxy
             c._gpi_via_proxy = scheme != "https"                      # noqa: SLF001
         else:
             socket.getaddrinfo(host, port)                          # DNS medido separadamente (fica no cache do SO)
-            timing["dns"] = time.monotonic() - t
-            c = (http.client.HTTPSConnection(host, port, timeout=self.cfg.connect_timeout, context=self.ctx)
-                 if scheme == "https" else http.client.HTTPConnection(host, port, timeout=self.cfg.connect_timeout))
+            timing["dns"] = time.perf_counter() - t
+            c = (http.client.HTTPSConnection(host, port, timeout=ct, context=self.ctx)
+                 if scheme == "https" else http.client.HTTPConnection(host, port, timeout=ct))
             c._gpi_via_proxy = False                                # noqa: SLF001
-        t = time.monotonic()
+        t = time.perf_counter()
         try:
             c.connect()
         except OSError as e:
@@ -209,9 +213,9 @@ class _Transport:
             if "Tunnel connection failed" in str(e):
                 raise urllib.error.URLError(str(e)) from e
             if isinstance(e, (TimeoutError, socket.timeout)):
-                raise TimeoutError(f"tempo de conexão esgotado ({self.cfg.connect_timeout:.0f} s) com {host}") from e
+                raise TimeoutError(f"tempo de conexão esgotado ({ct:.0f} s) com {host}") from e
             raise
-        timing["conexao"] = time.monotonic() - t
+        timing["conexao"] = time.perf_counter() - t
         return c
 
     def send(self, method, url, headers, data, read_timeout, timing):
@@ -235,10 +239,10 @@ class _Transport:
             try:
                 if c.sock:
                     c.sock.settimeout(read_timeout)
-                t = time.monotonic()
+                t = time.perf_counter()
                 c.request(method, target, body=data, headers=h)
                 r = c.getresponse()
-                timing["primeira_resposta"] = time.monotonic() - t
+                timing["primeira_resposta"] = time.perf_counter() - t
                 body = r.read()
                 if r.will_close:
                     c.close()
@@ -429,7 +433,7 @@ class HttpClient:
             self.stats["requests"] += 1
             hs["requisicoes"] += 1
             retry_after = None
-            t0 = time.monotonic()
+            t0 = time.perf_counter()
             timing = {}
             try:
                 with self._sem(host):
@@ -442,9 +446,9 @@ class HttpClient:
                     raise urllib.error.HTTPError(url, status, "", rh, io.BytesIO(raw))
                 enc, ctype = rh.get("Content-Encoding"), rh.get("Content-Type")
                 new_val = {"etag": rh.get("ETag"), "last_modified": rh.get("Last-Modified")}
-                hs["segundos"] += time.monotonic() - t0
+                hs["segundos"] += time.perf_counter() - t0
                 self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=status, req=True, tentativa=attempt,
-                           segundos=round(time.monotonic() - t0, 3), bytes=len(raw),
+                           segundos=round(time.perf_counter() - t0, 3), bytes=len(raw),
                            conexao="reaproveitada" if timing.get("reaproveitada") else "nova")
                 hs["bytes"] += len(raw)
                 if len(raw) > _max_bytes:
@@ -459,10 +463,10 @@ class HttpClient:
                 self._fails[host] = 0
                 return out
             except urllib.error.HTTPError as e:
-                hs["segundos"] += time.monotonic() - t0
+                hs["segundos"] += time.perf_counter() - t0
                 status = e.code
                 self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=status, req=True, erro=True,
-                           tentativa=attempt, segundos=round(time.monotonic() - t0, 3))
+                           tentativa=attempt, segundos=round(time.perf_counter() - t0, 3))
                 if status == 304 and stale is not None:
                     hs["revalidadas_304"] += 1
                     self._touch(key)                       # conteúdo inalterado: renova a validade local
@@ -502,9 +506,10 @@ class HttpClient:
             hs["erros"] += 1
             if timing.get("primeira_resposta") is None:
                 self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=None, req=True, erro=True,
-                           tentativa=attempt, motivo=str(last_err)[:200], segundos=round(time.monotonic() - t0, 3))
+                           tentativa=attempt, motivo=str(last_err)[:200], segundos=round(time.perf_counter() - t0, 3))
             if attempt < self.cfg.max_attempts:
-                delay = retry_after or min(self.cfg.backoff_max, self.cfg.backoff_base * 2 ** (attempt - 1))
+                base = self.cfg.backoff_429 if (last_err.kind == "limite" and retry_after is None) else self.cfg.backoff_base
+                delay = retry_after if retry_after is not None else min(self.cfg.backoff_max, base * 2 ** (attempt - 1))
                 delay *= 1 + random.random() * 0.25
                 if time.monotonic() - t_start + delay > self.cfg.total_timeout:
                     log.info("tempo total da operação esgotado para %s; sem novas tentativas", host)

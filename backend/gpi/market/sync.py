@@ -411,6 +411,8 @@ class SyncManager:
             only_cache = ss.get("requisicoes", 0) == 0 and ss.get("cache", 0) > 0
             estado = "em_cache" if only_cache else "concluido"
             motivo = "respostas reaproveitadas do cache local (dentro da validade)" if only_cache else None
+        elif e == "em dia" and (self.store.source_status().get(c.id) or {}).get("state") == "aguardando":
+            estado, motivo = "ignorado", "aguardando dados de outra fonte (dependência) — nada a planejar nesta execução"
         elif e == "em dia":
             estado, motivo = "atualizado", "dados considerados atualizados pela política de sincronização desta fonte"
         elif e == "restrita":

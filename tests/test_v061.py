@@ -45,6 +45,9 @@ class KA(BaseHTTPRequestHandler):
             body = b'{"erro": "limite"}'
             self.send_response(429)
             self.send_header("Retry-After", "0")
+        elif path == "/429sem":
+            body = b'{"erro": "limite"}'
+            self.send_response(429)
         elif path == "/401":
             body = b'{"error": {"code": 401, "status": "UNAUTHENTICATED", "message": "token ruim"}}'
             self.send_response(401)
@@ -97,6 +100,30 @@ def test_retry_after_429_and_events(tmp_path, ka):
     assert e.value.kind == "limite" and c.stats["retries"] == 2
     assert c.source_stats["x"]["retentativas"] == 2 and any(ev.get("espera") is not None for ev in events)
     assert "ABCDEF123456" not in json.dumps(events)
+
+
+def test_429_without_retry_after_backs_off_longer(tmp_path, ka):
+    sleeps = []
+    c = HttpClient(tmp_path, HttpConfig(min_interval=0, max_attempts=3, backoff_base=0.01), sleep=sleeps.append)
+    with pytest.raises(SourceError):
+        c.request_json(ka + "/429sem", ttl=0)
+    assert len(sleeps) == 2 and 15 <= sleeps[0] <= 19 and 30 <= sleeps[1] <= 38     # 15 s, 30 s (+ jitter), não 2 s/4 s
+
+
+def test_per_host_connect_timeout_override():
+    cfg = HttpConfig()
+    assert cfg.connect_timeout == 8 and cfg.connect_timeouts["api.gdeltproject.org"] == 25
+    assert cfg.timeout == 30 and cfg.total_timeout == 150
+
+
+def test_dependency_without_jobs_is_shown_as_ignored(tmp_path):
+    class Dep(Fast):
+        def plan(self, ctx):
+            return []                                      # ex.: UN Comtrade sem posições SH descobertas
+    sm, _ = _sm(tmp_path, [Dep("comtrade")])
+    sm.run("teste")
+    f = sm.snapshot()["fontes"]["comtrade"]
+    assert f["estado"] == "ignorado" and "dependência" in f["motivo"]
 
 
 def test_retry_after_formats_and_redaction():
