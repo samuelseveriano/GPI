@@ -90,7 +90,10 @@ def build(analysis: dict) -> dict:
     for g in groups[1:]:
         items += COND[g]
     extra = []
+    covered = {"Anatel": "radio" in groups, "Inmetro": bool({"eletrico", "bateria", "brinquedo", "medicao"} & set(groups))}
     for a in analysis.get("achados", []):
+        if covered.get(a.get("orgao")):
+            continue                                  # o grupo técnico correspondente já cobre esses documentos
         for d in a.get("documentos_solicitar", []):
             dup = any(d == it[2] for it in items) or "HS" in d or d.startswith(("Especificação técnica completa", "Especificações elétricas"))
             if d not in extra and not dup:
