@@ -1,0 +1,41 @@
+# Publica no GitHub Pages SOMENTE a pasta pages/ (página estática de retorno OAuth do Mercado Livre).
+# Não há segredos, build de dependências nem scripts de terceiros. Para ativar (uma vez, pelo dono do repositório):
+#   Settings → Pages → Build and deployment → Source: "GitHub Actions"; depois Actions → pages → Run workflow.
+# Endereço resultante: https://samuelseveriano.github.io/GPI/oauth/mercadolivre/
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["pages/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Conferir que a pasta não contém segredos
+        run: python3 scripts/secret_scan.py
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: pages
+      - id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

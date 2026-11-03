@@ -126,6 +126,9 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
         elif pid == "meta":
             from .integrations.meta import diagnose
             res = diagnose(sync.http, sync.creds, cfg)
+        elif pid == "mercadolivre":
+            from .integrations.mercadolivre import diagnose
+            res = diagnose(sync.http, sync.creds, cfg)
         else:
             ok, msg = integ.test_connection(pid, sync.http, sync.creds, cfg)
             p = integ.provider(pid) or {"conectores": []}

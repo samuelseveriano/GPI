@@ -45,12 +45,15 @@ PROVIDERS = [
      "campos": [{"nome": "client_id", "rotulo": "App ID", "secreto": False},
                 {"nome": "client_secret", "rotulo": "Secret Key", "secreto": True}],
      "descricao": "Tendências de busca do Mercado Livre Brasil (termos mais buscados, com histórico de cada coleta).",
-     "permissoes": "Login na página oficial do Mercado Livre (o GPI não vê sua senha), com PKCE. Somente leitura. "
-                   "No DevCenter, cadastre a URL de redirecionamento exibida abaixo; se o Mercado Livre não aceitar "
-                   "endereço http://127.0.0.1, a conexão OAuth não é possível nesta instalação.",
-     "como_obter": "developers.mercadolivre.com.br → Minhas aplicações → criar aplicação (ative PKCE).",
+     "permissoes": "Login na página oficial do Mercado Livre (o GPI não vê sua senha), com PKCE S256. Somente "
+                   "leitura. O Mercado Livre exige Redirect URI HTTPS: cadastre no DevCenter exatamente o endereço "
+                   "HTTPS exibido abaixo (página de retorno estática, sem segredos). O code_verifier e a Secret Key "
+                   "nunca saem deste computador.",
+     "como_obter": "developers.mercadolivre.com.br → Minhas aplicações → criar aplicação: Redirect URI = endereço "
+                   "HTTPS exibido abaixo; ative PKCE; escopos: leitura e acesso offline.",
      "link": "https://developers.mercadolivre.com.br/devcenter",
-     "documentacao": "https://developers.mercadolivre.com.br/pt_br/autenticacao-e-autorizacao",
+     "documentacao": "https://developers.mercadolivre.com.br/en_us/authentication-and-authorization",
+     "oauth_https_relay": True,
      "auth_url": "https://auth.mercadolivre.com.br/authorization",
      "token_url": "https://api.mercadolibre.com/oauth/token"},
     {"id": "comtrade", "nome": "UN Comtrade (chave gratuita opcional)", "tipo": "api_key", "conectores": ["comtrade"],
@@ -402,19 +405,9 @@ def reddit_token(http, client_id: str) -> dict:
 
 
 def ml_token(http, creds) -> str:
-    """Token de acesso do Mercado Livre, renovando com o refresh_token quando expirado."""
-    c = creds.get("mercadolivre")
-    if not c.get("access_token"):
-        raise SourceError("Mercado Livre não conectado: use 'Conectar' na Central de Integrações", "restrita")
-    if float(c.get("expires_at", 0)) > time.time() + 60:
-        return c["access_token"]
-    if not c.get("refresh_token"):
-        raise SourceError("token do Mercado Livre expirado; conecte novamente", "restrita")
-    r = http.request_json(provider("mercadolivre")["token_url"], "POST", form={
-        "grant_type": "refresh_token", "client_id": c.get("client_id", ""), "client_secret": c.get("client_secret", ""),
-        "refresh_token": c["refresh_token"]})
-    store_ml_token(creds, r)
-    return r["access_token"]
+    """Token de acesso do Mercado Livre (renovação com refresh token de uso único — ver mercadolivre.py)."""
+    from .mercadolivre import token
+    return token(http, creds)
 
 
 def store_oauth_token(creds, pid: str, r: dict):
@@ -429,8 +422,5 @@ def store_oauth_token(creds, pid: str, r: dict):
 
 
 def store_ml_token(creds, r: dict):
-    if not r.get("access_token"):
-        raise SourceError(f"Mercado Livre não emitiu token: {r.get('message') or r.get('error')}", "restrita")
-    creds.set("mercadolivre", {"access_token": r["access_token"], "refresh_token": r.get("refresh_token"),
-                               "expires_at": str(time.time() + float(r.get("expires_in", 21600))),
-                               "user_id": str(r.get("user_id", ""))})
+    from .mercadolivre import store
+    store(creds, r)

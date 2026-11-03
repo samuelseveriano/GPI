@@ -6,6 +6,7 @@ localhost/127.0.0.1 são recusadas (proteção contra DNS rebinding).
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 import urllib.parse
@@ -20,6 +21,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .security import CSP, BodyLimit, public_url_problem, safe_cell
+from .integrations import mercadolivre as ML
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
@@ -417,7 +419,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             item["estados"] = integration_state(p, item, sync.store.load_result(f"diag:{p['id']}"))
             item["diagnosticavel"] = p["tipo"] != "approval"
             if p["tipo"] == "oauth":
-                item["redirect_uri"] = redirect_uri(request)
+                item["redirect_uri"] = (ML.redirect_uri(cfg) if p.get("oauth_https_relay") else redirect_uri(request))
             if p["id"] == "rss":
                 from .connectors.content import RSS_DEFAULT
                 item["feeds"] = cfg.get("rss_feeds") or RSS_DEFAULT
@@ -524,6 +526,12 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             except SourceError as e:
                 return err(str(e))
             return JSONResponse({"url": url})
+        if p.get("oauth_https_relay"):
+            try:
+                r = ML.start(flows, sync.creds, cfg, request.url.port or 8765)
+            except SourceError as e:
+                return err(str(e))
+            return JSONResponse({"url": r["url"], "redirect_uri": r["redirect_uri"], "modo": "https_relay"})
         state, verifier = flows.start(p["id"], {"redirect_uri": redirect_uri(request)})
         url = authorize_url(p["auth_url"], c["client_id"], redirect_uri(request), state, verifier, p.get("scope"))
         if p.get("auth_extra"):
@@ -534,7 +542,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         q = request.query_params
         page = lambda title, msg: HTMLResponse(
             f"<!doctype html><meta charset=utf-8><title>GPI</title><body style='font-family:sans-serif;padding:40px'>"
-            f"<h2>{title}</h2><p>{msg}</p><p>Pode fechar esta janela e voltar ao GPI.</p></body>")
+            f"<h2>{html.escape(title)}</h2><p>{html.escape(str(msg))}</p><p>Pode fechar esta janela e voltar ao GPI.</p></body>")
         f = flows.consume(q.get("state", ""))
         if not f:
             return page("Conexão não concluída", "Pedido expirado ou inválido (proteção contra falsificação). Tente novamente.")
@@ -572,6 +580,33 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             log.warning("OAuth %s falhou: %s", p["id"], e)
             return page("Conexão não concluída", "Falha ao obter o token: " + str(e)[:300])
         return page("Conectado ✔", f"{p['nome']} conectado ao GPI. O token fica guardado com {sync.creds.protection}.")
+
+    # ------------------------------------------------------------ Mercado Livre (Redirect URI HTTPS, v0.7)
+    async def ml_return_page(_):
+        return FileResponse(frontend_dir / "oauth_retorno.html", headers={"Cache-Control": "no-store"})
+
+    async def ml_complete(request):
+        b = await body_json(request)
+        code, state = str(b.get("code") or ""), str(b.get("state") or "")
+        if b.get("colado"):
+            code, state2 = ML.parse_pasted(str(b["colado"]))
+            state = state2 or state
+        try:
+            r = await run_in_threadpool(ML.complete, sync.http, sync.creds, flows, code, state)
+        except SourceError as e:
+            log.warning("OAuth Mercado Livre não concluído: %s", e)
+            return err(str(e))
+        log.info("Mercado Livre conectado (usuário %s)", r.get("user_id"))
+        return JSONResponse({**r, "protecao": sync.creds.protection})
+
+    async def ml_redirect(request):
+        b = await body_json(request)
+        uri = str(b.get("redirect_uri") or "").strip() or ML.DEFAULT_REDIRECT
+        prob = ML.redirect_problem(uri)
+        if prob:
+            return err(prob)
+        save_user_settings({"ml_redirect_uri": uri})
+        return JSONResponse({"ok": True, "redirect_uri": uri})
 
     async def m_youtube(_):
         return JSONResponse(await run_in_threadpool(msv.youtube, sync.store))
@@ -619,6 +654,9 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/export/{kind}.{fmt}", export),
         Route("/api/backup", backup, methods=["POST"]),
         Route("/api/shutdown", shutdown, methods=["POST"]),
+        Route(ML.LOCAL_RETURN, ml_return_page),
+        Route("/api/oauth/mercadolivre/concluir", ml_complete, methods=["POST"]),
+        Route("/api/integrations/mercadolivre/redirect", ml_redirect, methods=["POST"]),
         Route("/api/sync/status", sync_status),
         Route("/api/sync/run", sync_run, methods=["POST"]),
         Route("/api/sync/cancel", sync_cancel, methods=["POST"]),

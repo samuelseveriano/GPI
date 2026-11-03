@@ -47,6 +47,11 @@ window.GPI_MARKET3 = function (H) {
     if (p.campos && Object.keys(p.credenciais).length) btn.push(`<button data-act="disconnect" data-pid="${p.id}">Desconectar</button>`);
     if (p.link) btn.push(`<a class="btn" href="${escH(p.link)}" target="_blank" rel="noopener">${p.tipo === 'approval' ? 'Solicitar acesso (site oficial)' : 'Obter credencial (site oficial)'}</a>`);
     const extra = p.id === 'rss' ? `<details><summary>Editar lista de feeds (${p.feeds.length})</summary><textarea id="feeds" rows="6" style="width:100%;font-family:var(--mono);font-size:12px">${p.feeds.map((f) => `${f.nome} | ${f.url} | ${f.idioma}`).join('\n')}</textarea><button class="small" data-act="feeds" data-pid="rss">Salvar feeds</button> <span class="muted small">Formato: nome | URL do feed | idioma (pt/en)</span></details>`
+      : p.oauth_https_relay ? `<details><summary>Redirect URI HTTPS e conclusão manual</summary>
+          <p class="small">O Mercado Livre exige HTTPS. Endereço cadastrado no DevCenter (deve ser idêntico): <input id="mlredir" value="${escH(p.redirect_uri || '')}" style="width:420px"> <button class="small" data-act="mlredir" data-pid="${p.id}">Salvar</button></p>
+          <p class="small muted">Se o navegador não voltar sozinho ao GPI depois do login, copie o texto exibido na página de retorno e cole aqui:</p>
+          <textarea id="mlcode" rows="2" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="code=…&amp;state=…"></textarea>
+          <button class="small" data-act="mlpaste" data-pid="${p.id}">Concluir com o código colado</button></details>`
       : p.id === 'youtube' ? `<p class="small">Limite diário de uso definido no GPI: <input id="ytq" type="number" value="${p.cota_diaria}" min="100" max="10000" style="width:90px"> unidades <button class="small" data-act="ytq" data-pid="youtube">Salvar</button></p>` : '';
     return `<div class="panel integ" id="integ-${p.id}"><div class="form" style="justify-content:space-between"><h2>${escH(p.nome)} <span class="badge">${TYPE[p.tipo]}</span> <span class="badge ${p.situacao === 'Conectado' || p.situacao === 'Disponível' ? 'ok' : p.situacao === 'Erro' ? 'bad' : ''}">${escH(p.situacao || (p.conectado ? 'Conectado' : 'não conectada'))}</span></h2></div>
       <p class="small">${escH(p.descricao)}</p><p class="small muted"><b>Permissões e regras:</b> ${escH(p.permissoes)}</p>
@@ -80,7 +85,13 @@ window.GPI_MARKET3 = function (H) {
         await del(`/api/integrations/${pid}`); pageIntegrations();
       } else if (a === 'oauth' || a === 'oauth-conta') {
         const r = await post(`/api/integrations/${pid}/oauth/start`, { modo: a === 'oauth-conta' ? 'conta' : 'anunciante' });
-        window.open(r.url, '_blank', 'noopener'); say('Conclua o login na janela do provedor e depois clique em "Testar conexão".', true);
+        window.open(r.url, '_blank', 'noopener');
+        say(r.modo === 'https_relay' ? 'Conclua o login na janela do Mercado Livre. A página HTTPS de retorno devolve o código a este GPI; se não voltar sozinha, use "Colar código".' : 'Conclua o login na janela do provedor e depois clique em "Testar conexão".', true);
+      } else if (a === 'mlredir') {
+        const r = await post('/api/integrations/mercadolivre/redirect', { redirect_uri: $('#mlredir').value.trim() }); say('Redirect URI salvo: ' + r.redirect_uri, true);
+      } else if (a === 'mlpaste') {
+        const r = await post('/api/oauth/mercadolivre/concluir', { colado: $('#mlcode').value.trim() });
+        $('#mlcode').value = ''; say('Mercado Livre conectado: ' + (r.apelido || r.user_id) + '.', true); setTimeout(pageIntegrations, 1200);
       } else if (a === 'optin' || a === 'optout') {
         await post(`/api/integrations/${pid}/settings`, { google_news_optin: a === 'optin' }); pageIntegrations();
       } else if (a === 'feeds') {
