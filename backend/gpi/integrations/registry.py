@@ -101,14 +101,6 @@ PROVIDERS = [
                    "Trending Now (RSS) e o Planejador do Google Ads.",
      "alternativas": "Trending Now (automático) · Planejador de palavras-chave do Google Ads (conexão assistida)",
      "link": "https://developers.google.com/search/blog/2025/07/trends-api"},
-    {"id": "china_search", "nome": "Busca na China (Baidu Index, 巨量算数, Alibaba, JD.com)", "tipo": "approval",
-     "conectores": ["baidu_index", "ocean_engine", "alibaba_insights", "jd_com"],
-     "descricao": "Interesse de busca de consumidores na China continental.",
-     "permissoes": "Nenhuma dessas fontes oferece API aberta a terceiros: exigem login chinês, contrato pago ou "
-                   "empresa registrada. O GPI não raspa nem contorna essas proteções. Visualizações da Wikipédia em "
-                   "chinês NÃO equivalem a buscas na China e não são apresentadas como tal.",
-     "alternativas": "Sinais de oferta (exportações chinesas via UN Comtrade/Comex Stat), claramente identificados",
-     "link": "https://index.baidu.com/"},
     {"id": "google_bigquery", "nome": "Google Trends no BigQuery (conjunto público)", "tipo": "oauth",
      "conectores": ["google_trends_bq"],
      "campos": [{"nome": "project_id", "rotulo": "ID do projeto Google Cloud (onde as consultas são contabilizadas)", "secreto": False},
@@ -190,17 +182,14 @@ PROVIDERS = [
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
     {"id": "shopee", "nome": "Shopee", "tipo": "approval", "conectores": ["shopee"],
      "descricao": "Produtos e preços.", "permissoes": "Open Platform exige parceiro aprovado.", "link": "https://open.shopee.com/"},
-    {"id": "china_marketplaces", "nome": "AliExpress / Alibaba / Taobao", "tipo": "approval",
-     "conectores": ["aliexpress", "alibaba", "taobao"], "descricao": "Fornecedores e preços na China.",
+    {"id": "china_marketplaces", "nome": "AliExpress / Taobao", "tipo": "approval",
+     "conectores": ["aliexpress", "taobao"], "descricao": "Fornecedores e preços na China.",
      "permissoes": "Plataformas abertas exigem app key aprovada (afiliados, dropshipping ou cadastro empresarial).",
      "link": "https://openservice.aliexpress.com/"},
     {"id": "trustpilot", "nome": "Trustpilot", "tipo": "approval", "conectores": ["trustpilot"],
      "descricao": "Avaliações de empresas.", "permissoes": "A API é oferecida a empresas clientes do Trustpilot "
      "(planos pagos); não há acesso público gratuito para coleta de avaliações de terceiros.",
      "link": "https://developers.trustpilot.com/"},
-    {"id": "reclame_aqui", "nome": "Reclame Aqui", "tipo": "approval", "conectores": ["reclame_aqui"],
-     "descricao": "Reclamações de consumidores no Brasil.", "permissoes": "Não há API pública; acesso a dados somente "
-     "por parceria comercial com o Reclame Aqui. O site não é raspado.", "link": "https://www.reclameaqui.com.br/"},
     {"id": "comparadores", "nome": "Comparadores de preço (Buscapé, Zoom, Google Shopping)", "tipo": "approval",
      "conectores": ["comparadores"], "descricao": "Preços praticados no varejo.",
      "permissoes": "Sem API pública para consulta de preços de terceiros; exige licença/parceria.",
@@ -212,11 +201,11 @@ CATEGORIAS = {"pesquisas": "Pesquisas", "marketplaces": "Marketplaces", "redes_s
               "dados_publicos": "Dados Públicos", "conteudo": "Notícias e Avaliações"}
 CATEGORIA_DE = {
     "google_trends_rss": ["pesquisas"], "google_ads": ["pesquisas"], "google_bigquery": ["pesquisas"], "google_trends": ["pesquisas"],
-    "msads": ["pesquisas"], "china_search": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
+    "msads": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
     "ebay": ["marketplaces"], "amazon": ["marketplaces"], "shopee": ["marketplaces"], "china_marketplaces": ["marketplaces"],
     "comparadores": ["marketplaces"], "tiktok": ["redes_sociais"], "meta": ["redes_sociais"], "youtube": ["redes_sociais"],
     "reddit": ["redes_sociais"], "publicas": ["dados_publicos"], "comtrade": ["dados_publicos"], "gdelt": ["dados_publicos"],
-    "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"], "reclame_aqui": ["conteudo"],
+    "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"],
 }
 NIVEL = {"auto": 1, "api_key": 2, "client_id": 2, "oauth": 2, "optin": 2, "approval": 3}
 NIVEL_NOME = {1: "Conexão automática", 2: "Conexão assistida", 3: "Acesso restrito"}

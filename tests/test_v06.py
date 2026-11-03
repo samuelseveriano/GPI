@@ -460,7 +460,7 @@ def test_migration_v6_preserves_existing_database(tmp_path):
     con.commit()
     con.close()
     db = Database(p)
-    assert db.schema_version() == len(MIGRATIONS) == 6
+    assert db.schema_version() == len(MIGRATIONS) >= 6                 # v0.7+ acrescenta migrações
     db.execute("INSERT INTO search_observations (source,country,region,term,ref_date,period,metric,value,unit,commercial,collected_at)"
                " VALUES ('x','BR','','t','2026-01-01','dia','m',1,'u',0,'n')")
     db.close()

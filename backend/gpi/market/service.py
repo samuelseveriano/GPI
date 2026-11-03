@@ -34,6 +34,22 @@ def sources(store: MarketStore, connectors, ctx_cfg: dict, creds=None) -> list[d
     return out
 
 
+def removed_sources(db) -> list[dict]:
+    """Fontes retiradas na v0.7 com a contagem dos dados históricos preservados (nada é apagado)."""
+    from ..connectors.registry import REMOVED_IN, REMOVED_SOURCES
+    out = []
+    for sid, (nome, motivo) in REMOVED_SOURCES.items():
+        n = 0
+        for t in ("search_observations", "market_series", "content_items"):
+            try:
+                n += int(db.query(f"SELECT COUNT(*) AS n FROM {t} WHERE source = ?", (sid,))[0]["n"])
+            except Exception:  # noqa: BLE001 — tabela ausente em bancos antigos
+                pass
+        out.append({"id": sid, "nome": nome, "motivo": motivo, "removida_na_versao": REMOVED_IN,
+                    "registros_historicos": n, "estado": "removida"})
+    return out
+
+
 def series_payload(store: MarketStore, sid: int) -> dict | None:
     meta = store.get_series(sid)
     if not meta:
@@ -262,7 +278,7 @@ def compare(store: MarketStore, keys: list[str]) -> dict:
             put("YouTube (vídeos · visualizações)", i, f"{y['videos']} vídeos · {y['visualizacoes_total']:,} visualizações".replace(",", "."),
                 "youtube", "B — dados públicos do YouTube, exibidos sem combinação")
         put("Score de oportunidade", i, o.get("score"), "GPI", f"cobertura {o.get('cobertura', 0):.0%}, confiança {o.get('confianca_rotulo', '—')}" if o else "—")
-        put("Possíveis fornecedores", i, "sem fonte autorizada (Alibaba/AliExpress exigem credenciais aprovadas)", conf="—")
+        put("Possíveis fornecedores", i, "sem fonte autorizada integrada — cadastre fornecedores em Fornecedores/Conformidade", conf="—")
     for vals in rows.values():                      # célula sem dado: informada como tal (nunca vazia)
         for i, v in enumerate(vals):
             if v is None:
@@ -281,5 +297,5 @@ def marketplaces(store: MarketStore, connectors, cfg, creds) -> dict:
             trends.append({"termo": s["product_name"], "posicao": float(v.iloc[-1]), "semanas": len(v),
                            "primeira": v.index[0], "id": s["id"]})
     trends.sort(key=lambda r: r["posicao"])
-    ids = ["mercadolivre", "amazon_br", "amazon_us", "shopee", "aliexpress", "alibaba", "taobao", "comparadores"]
+    ids = ["mercadolivre", "amazon_br", "amazon_us", "shopee", "aliexpress", "taobao", "comparadores"]
     return _clean({"tendencias_ml": trends[:50], "fontes": [src[i] for i in ids if i in src]})

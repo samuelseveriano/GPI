@@ -201,7 +201,8 @@ def test_integration_center_flow(tmp_path):
         ids = {p["id"]: p for p in lst}
         assert ids["publicas"]["tipo"] == "auto" and ids["youtube"]["tipo"] == "api_key"
         assert ids["mercadolivre"]["tipo"] == "oauth" and ids["mercadolivre"]["redirect_uri"].endswith("/oauth/callback")
-        assert ids["reclame_aqui"]["tipo"] == "approval" and ids["reclame_aqui"]["link"]
+        assert ids["china_marketplaces"]["tipo"] == "approval" and ids["china_marketplaces"]["link"]
+        assert "reclame_aqui" not in ids and "china_search" not in ids        # v0.7: fontes retiradas
         assert not ids["youtube"]["conectado"]
         # chave de API: salvar, testar (chamada simulada no formato real), mascarar
         assert s.req("/api/integrations/youtube/credentials", {"api_key": "AIzaTESTE1234567890", "outro": "x"})[0] == 200
@@ -354,7 +355,7 @@ def test_full_pipeline_content_sources(full):
     st = sm.store.source_status()
     for src in ("rss", "google_news", "youtube", "reddit"):
         assert st[src]["state"] == "funcional" and st[src]["records"] > 0, src
-    for src in ("trustpilot", "reclame_aqui", "comparadores", "amazon_br"):
+    for src in ("trustpilot", "shopee", "comparadores", "amazon_br"):
         assert st[src]["state"] == "restrita"
     assert "erro" not in s["analise"]["conteudo"] and s["analise"]["conteudo"]["analisados_nlp"] >= 0
 

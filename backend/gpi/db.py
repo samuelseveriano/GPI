@@ -310,6 +310,21 @@ MIGRATIONS = [
             PRIMARY KEY (platform, item)
         )""",
     ],
+    # 7 — v0.7: fontes retiradas das integrações ativas. Migração NÃO destrutiva: nenhum dado é apagado;
+    # jobs pendentes dessas fontes deixam de ser executados e o estado passa a "removida".
+    [
+        """CREATE TABLE IF NOT EXISTS removed_sources (
+            source TEXT PRIMARY KEY, nome TEXT NOT NULL, motivo TEXT NOT NULL, versao TEXT NOT NULL,
+            removida_em TEXT NOT NULL)""",
+        "INSERT OR IGNORE INTO removed_sources VALUES ('reclame_aqui', 'Reclame Aqui', 'sem API pública', '0.7', DATE('now'))",
+        "INSERT OR IGNORE INTO removed_sources VALUES ('baidu_index', 'Baidu Index', 'sem API pública', '0.7', DATE('now'))",
+        "INSERT OR IGNORE INTO removed_sources VALUES ('ocean_engine', 'Ocean Engine / Douyin', 'sem API aberta', '0.7', DATE('now'))",
+        "INSERT OR IGNORE INTO removed_sources VALUES ('alibaba', 'Alibaba.com', 'exige app key aprovada', '0.7', DATE('now'))",
+        "INSERT OR IGNORE INTO removed_sources VALUES ('alibaba_insights', 'Alibaba / 1688', 'ferramenta paga', '0.7', DATE('now'))",
+        "INSERT OR IGNORE INTO removed_sources VALUES ('jd_com', 'JD.com', 'exige empresa registrada na China', '0.7', DATE('now'))",
+        "UPDATE sync_jobs SET state = 'removida' WHERE source IN (SELECT source FROM removed_sources) AND state IN ('pending', 'failed', 'running')",
+        "UPDATE source_status SET state = 'removida', message = 'fonte descontinuada no GPI v0.7 (dados históricos preservados)' WHERE source IN (SELECT source FROM removed_sources)",
+    ],
 ]
 
 

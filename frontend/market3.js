@@ -114,7 +114,7 @@ window.GPI_MARKET3 = function (H) {
   async function pageReviews(key) {
     main.innerHTML = `<h1>Review Intelligence</h1><p class="sub">Opiniões de consumidores (Reddit, notícias e feeds) analisadas por NLP local: sentimento, aspectos e alvo da reclamação.</p><div id="rb">${loading()}</div>`;
     const d = await api('/api/market/reviews');
-    if (!d.total_opinioes) { $('#rb').innerHTML = `<div class="panel"><p>Nenhuma opinião analisada ainda. Os feeds RSS são coletados automaticamente; para discussões de consumidores, conecte o Reddit na <a href="#integracoes">Central de Integrações</a>.</p><p class="muted small">Trustpilot e Reclame Aqui não oferecem acesso público às avaliações; não são raspados.</p></div>`; return; }
+    if (!d.total_opinioes) { $('#rb').innerHTML = `<div class="panel"><p>Nenhuma opinião analisada ainda. Os feeds RSS são coletados automaticamente; para discussões de consumidores, conecte o Reddit na <a href="#integracoes">Central de Integrações</a>.</p><p class="muted small">Trustpilot não oferece acesso público às avaliações; não é raspado.</p></div>`; return; }
     const byk = Object.fromEntries(d.produtos.map((p) => [p.product_key, p]));
     const lst = (keys) => keys.map((k) => byk[k]).filter(Boolean);
     const bar = (p) => `<span class="sent"><i class="p" style="width:${100 * p.positivos / p.n}%"></i><i class="u" style="width:${100 * p.neutros / p.n}%"></i><i class="n" style="width:${100 * p.negativos / p.n}%"></i></span>`;
