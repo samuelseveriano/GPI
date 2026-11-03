@@ -140,6 +140,7 @@ jobs:
           @("MpCmdRun -Scan -ScanType 3 -File dist/GPI -DisableRemediation", "código de saída: $code (0 = nenhuma ameaça; 2 = ameaça encontrada)",
             "versão das definições: $($ver.AntivirusSignatureVersion) de $($ver.AntivirusSignatureLastUpdated)", "", $out) | Out-File -Encoding utf8 defender.txt
           Get-Content defender.txt
+          Write-Output "::notice title=defender::codigo $code (0 = nenhuma ameaca) | definicoes $($ver.AntivirusSignatureVersion) | $(( $out | Select-Object -Last 3) -join ' ')"
           if ($code -eq 2) { Write-Output "::error title=defender::O Defender acusou ameaça no pacote — investigar antes de publicar (ver defender.txt)"; exit 1 }
 
       - name: Testes do executável (A–H, cópia limpa sem Python no PATH)
@@ -172,7 +173,8 @@ jobs:
           Copy-Item dependencias.txt, selftest.json, defender.txt dist/GPI/relatorios/
           "0.5.0" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
           $sigtxt = if ($sig.Status -eq 'Valid') { "assinado: $($sig.SignerCertificate.Subject)" } else { "" }
-          python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.5.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
+          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.5.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
+          Write-Output "::notice title=seguranca::$sec | assinatura: $($sig.Status)"
           if ($LASTEXITCODE -ne 0) { Write-Output "::error title=seguranca::relatório de segurança encontrou problema (credencial embutida ou nível de execução elevado)"; exit 1 }
           $report | Out-File -Encoding utf8 relatorio_build.txt
           "### Build do GPI.exe" >> $env:GITHUB_STEP_SUMMARY
@@ -187,6 +189,7 @@ jobs:
           $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.5.zip -Algorithm SHA256)
           $h | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
+          Write-Output "::notice title=sha256::$((Get-Content SHA256SUMS.txt) -join ' | ')"
           Copy-Item dist/GPI/relatorios/seguranca.md seguranca.md
           "### Hashes SHA-256" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY; Get-Content SHA256SUMS.txt >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY
           Get-Content seguranca.md >> $env:GITHUB_STEP_SUMMARY
