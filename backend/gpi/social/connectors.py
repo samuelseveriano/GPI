@@ -183,8 +183,9 @@ class InstagramHashtags(Connector):
     stage = 2
 
     def available(self, ctx):
+        from ..integrations.meta import module_ok
         c = ctx.creds.get("meta") if ctx.creds else {}
-        return bool(c.get("access_token") and c.get("ig_user_id"))
+        return bool(module_ok(c, "instagram") and c.get("ig_user_id"))
 
     @property
     def restricted_reason(self):  # type: ignore[override]
@@ -265,8 +266,9 @@ class FacebookPages(Connector):
     stage = 2
 
     def available(self, ctx):
+        from ..integrations.meta import module_ok
         c = ctx.creds.get("meta") if ctx.creds else {}
-        return bool(c.get("access_token") and ctx.cfg.get("facebook_pages"))
+        return bool(module_ok(c, "facebook") and ctx.cfg.get("facebook_pages"))
 
     @property
     def restricted_reason(self):  # type: ignore[override]
@@ -323,8 +325,9 @@ class MetaAdLibrary(Connector):
     stage = 2
 
     def available(self, ctx):
+        from ..integrations.meta import module_ok
         c = ctx.creds.get("meta") if ctx.creds else {}
-        return bool(c.get("access_token") and ctx.cfg.get("meta_ads_enabled", False))
+        return bool(module_ok(c, "meta_ads") and ctx.cfg.get("meta_ads_enabled", False))
 
     @property
     def restricted_reason(self):  # type: ignore[override]
