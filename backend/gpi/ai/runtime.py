@@ -185,6 +185,7 @@ class LocalLLM:
                 return
             lim = limits(self.cfg)
             folder = find_pack(self.dirs)
+            folder = folder.resolve() if folder else None        # caminho absoluto: o processo roda com cwd na pasta
             if not folder:
                 raise RuntimeError("pacote de IA local não encontrado (copie o GPI-Local-AI-Model-Pack para a pasta 'ia')")
             v = verify_pack(folder, self._hash_cache)
