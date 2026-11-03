@@ -419,7 +419,7 @@ class SyncManager:
             estado, motivo = "requer_autorizacao", None
         elif e == "falhou":
             err = str(res.get("ultimo_erro") or "")
-            estado = "limite" if ("429" in err or "limite" in err.lower() or res.get("cota")) else "erro"
+            estado = "limite" if ("429" in err or "limite" in err.lower() or res.get("cota") or res.get("limite")) else "erro"
             motivo = err[:300]
         else:
             estado, motivo = "concluido", None
@@ -514,6 +514,9 @@ class SyncManager:
                     res["jobs_falhos"] += 1
                     res["ultimo_erro"] = str(e)
                     self.state["erros"].append(f"{c.name}: {e}")
+                    if e.kind == "limite" and "adiada" in str(e):
+                        res["limite"] = True
+                        break                         # limite do servidor: não insiste; os jobs voltam na próxima execução
                     if e.kind in ("tls", "restrita", "bloqueada") or (e.kind == "rede" and res["jobs_ok"] == 0
                                                           and res["jobs_falhos"] >= 2):
                         break                         # problema de acesso: não insiste nos demais jobs agora

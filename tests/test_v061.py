@@ -110,6 +110,21 @@ def test_429_without_retry_after_backs_off_longer(tmp_path, ka):
     assert len(sleeps) == 2 and 15 <= sleeps[0] <= 19 and 30 <= sleeps[1] <= 38     # 15 s, 30 s (+ jitter), não 2 s/4 s
 
 
+def test_rate_limit_wait_budget_defers_instead_of_hammering(tmp_path, ka):
+    sleeps = []
+    c = HttpClient(tmp_path, HttpConfig(min_interval=0, max_attempts=4, backoff_base=0.01, limit_wait_budget=25), sleep=sleeps.append)
+    with pytest.raises(SourceError) as e:
+        c.request_json(ka + "/429sem", ttl=0)
+    assert "adiada" in str(e.value) and e.value.kind == "limite" and len(sleeps) == 1     # 15 s cabe; 30 s estouraria 25 s
+    with pytest.raises(SourceError):
+        c.request_json(ka + "/429sem", ttl=0)
+    assert len(sleeps) == 1                                                                # orçamento do host esgotado
+    c.reset_breakers()
+    with pytest.raises(SourceError):
+        c.request_json(ka + "/429sem", ttl=0)
+    assert len(sleeps) == 2                                                                # nova sincronização: novo orçamento
+
+
 def test_per_host_connect_timeout_override():
     cfg = HttpConfig()
     assert cfg.connect_timeout == 8 and cfg.connect_timeouts["api.gdeltproject.org"] == 25

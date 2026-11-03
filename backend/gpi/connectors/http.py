@@ -105,6 +105,7 @@ class HttpConfig:
     # hosts com aceite de conexão comprovadamente lento (medido no CI): tempo de conexão próprio
     connect_timeouts: dict = field(default_factory=lambda: {"api.gdeltproject.org": 25.0, "servicodados.ibge.gov.br": 15.0})
     backoff_429: float = 15.0          # 429 sem Retry-After: espera 15 s, 30 s, 60 s (respeita o limite do servidor)
+    limit_wait_budget: float = 90.0    # espera máxima por limite (429) por host em uma sincronização; depois, adia a fonte
     max_attempts: int = 4
     backoff_base: float = 2.0
     backoff_max: float = 60.0
@@ -297,6 +298,8 @@ class HttpClient:
         with self._lock:
             self._fails.clear()
             self._open.clear()
+            for hs in self.host_stats.values():
+                hs["espera_limite_s"] = 0.0          # orçamento de espera por limite vale por sincronização
 
     def _hs(self, host) -> dict:
         with self._lock:
@@ -513,6 +516,11 @@ class HttpClient:
                 delay *= 1 + random.random() * 0.25
                 if time.monotonic() - t_start + delay > self.cfg.total_timeout:
                     log.info("tempo total da operação esgotado para %s; sem novas tentativas", host)
+                    break
+                if last_err.kind == "limite" and hs["espera_limite_s"] + delay > self.cfg.limit_wait_budget:
+                    last_err = SourceError(f"{last_err} — limite de requisições do servidor; coleta adiada para a próxima "
+                                           f"execução (espera acumulada {hs['espera_limite_s']:.0f} s)", "limite", True, 429,
+                                           body=last_err.body)
                     break
                 self.stats["retries"] += 1
                 hs["retentativas"] += 1
