@@ -13,7 +13,7 @@ on:
     inputs:
       llama_tag:
         description: "Tag da release oficial do llama.cpp"
-        default: "v0.8.0"
+        default: "b12050"
 
 permissions:
   contents: read
@@ -21,7 +21,7 @@ permissions:
 env:
   PYTHONIOENCODING: utf-8
   PYTHONUTF8: "1"
-  LLAMA_TAG: ${{ inputs.llama_tag || 'v0.8.0' }}
+  LLAMA_TAG: ${{ inputs.llama_tag || 'b12050' }}
 
 jobs:
   pacote:
