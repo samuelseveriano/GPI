@@ -8,13 +8,13 @@ são testados com respostas no formato documentado, mas **a integração não é
 
 | Fonte | Endpoint | Autenticação | Custo | Limites | Campos usados | Cobertura | Histórico | Resultado real | Restrições de uso e armazenamento |
 |---|---|---|---|---|---|---|---|---|---|
-| Google Trends — Trending Now | `trends.google.com/trending/rss?geo=` | nenhuma | grátis | uso moderado (1 consulta/país/sincronização) | termo, faixa de tráfego, data, notícias | BR, US (configurável) | só a lista atual; o GPI acumula a cada coleta | **validada** (v0.5: 20 termos, nenhum de produto) | atribuição "Fonte: Google Trends" |
+| Google Trends — Trending Now | `trends.google.com/trending/rss?geo=` | nenhuma | grátis | uso moderado (1 consulta/país/sincronização) | termo, faixa de tráfego, data, notícias | BR, US (configurável) | só a lista atual; o GPI acumula a cada coleta | **validada** (v0.6, 03/11/2026: 10 termos BR + 10 EUA, nenhum de produto) | atribuição "Fonte: Google Trends" |
 | Google Ads — Planejador (KeywordPlanIdeaService) | `googleads.googleapis.com/vNN/customers/{id}:generateKeywordIdeas` | OAuth 2.0 (escopo adwords) + developer token | grátis (conta Google Ads, sem anúncios) | nível **Explorer não acessa** o planejador; exige **Basic** (15.000 operações/dia) ou Standard | volume mensal aproximado (12 meses), concorrência, lances | por país/idioma | 12 meses por consulta; o GPI acumula | **não validada** (requer conta) | usar só para planejamento; volumes arredondados em faixas |
 | Google Trends no BigQuery | `bigquery.googleapis.com/.../queries` (conjunto `bigquery-public-data.google_trends`) | OAuth (bigquery.readonly) + projeto Google Cloud | camada gratuita 1 TB/mês; o GPI mede cada consulta (dry run) e bloqueia acima de 2 GB | cotas do projeto | top 25 e em alta por região, semana, score 0–100 | ~50 países + DMAs dos EUA | 5 anos de semanas | **não validada** (requer projeto) | índice relativo, não volume |
 | Microsoft Advertising — Ad Insight | SOAP `GetHistoricalSearchVolume` | OAuth Microsoft + developer token | grátis | cotas da conta | volume mensal de buscas no Bing | por país | até 24 meses | **não validada** e envelope SOAP não conferido com conta real | uso para planejamento |
 | Mercado Livre Trends | `api.mercadolibre.com/trends/MLB` | OAuth do app do usuário | grátis | limites do app | termo, posição, link | Brasil | lista atual; o GPI acumula | **não validada** (requer app) | posição ≠ volume |
 | eBay Browse | `api.ebay.com/buy/browse/v1/item_summary/search` | client credentials (app) | grátis | 5.000 chamadas/dia (padrão) | título, marca, preço, moeda, vendedor, condição | EUA | anúncios ativos | **não validada** (requer chave) | anúncios ≠ vendas |
-| GDELT DOC 2.0 | `api.gdeltproject.org/api/v2/doc/doc` | nenhuma | grátis | ~1 consulta/5 s (o GPI usa 6,5 s) | artigos por dia, manchetes | mundo | ~3 meses no modo timeline | **validada** (v0.5: 12 registros; HTTP 429 frequente a partir do GitHub) | repercussão ≠ consumo |
+| GDELT DOC 2.0 | `api.gdeltproject.org/api/v2/doc/doc` | nenhuma | grátis | ~1 consulta/5 s (o GPI usa 6,5 s) | artigos por dia, manchetes | mundo | ~3 meses no modo timeline | **validada** (v0.6: 48 registros; 2 consultas com HTTP 429 a partir do GitHub) | repercussão ≠ consumo |
 
 ## Redes sociais (v0.6)
 
@@ -31,11 +31,16 @@ são testados com respostas no formato documentado, mas **a integração não é
 
 | Fonte | Resultado real (CI) | Observação |
 |---|---|---|
-| Banco Central (PTAX) | validada | — |
-| Comex Stat | validada | 12 s entre chamadas (HTTP 429) |
-| UN Comtrade | validada (endpoint público, 1 mês por chamada) | chave gratuita opcional acelera 12× |
-| Wikimedia | validada | atenção, não buscas |
-| IBGE | **não validada**: sem resposta a partir dos EUA | confirmar numa rede brasileira |
+| Banco Central (PTAX) | validada (964 registros) | — |
+| Comex Stat | validada (58.764 registros; 1 coleta com HTTP 429) | 12 s entre chamadas |
+| UN Comtrade | validada (120 registros, endpoint público, 1 mês por chamada) | chave gratuita opcional acelera 12× |
+| Wikimedia | validada (687 registros) | atenção, não buscas |
+| Feeds RSS | validada (189 registros) | menções, não buscas |
+| IBGE | **não validada**: tempo esgotado a partir dos EUA | confirmar numa rede brasileira |
+
+Validação de 03/11/2026 (GitHub Actions, execução 41573879102). Com os dados reais coletados, o CI gerou 7 relatórios
+sem marca de demonstração (28 séries de interesse: Wikipédia, GDELT e menções em feeds) — artefato `validacao-conectores`,
+pasta `relatorios_reais/`.
 
 ## Fontes chinesas
 Baidu Index, 巨量算数 (Ocean Engine), Alibaba e JD.com não oferecem API aberta a terceiros. Ficam como **restritas**
