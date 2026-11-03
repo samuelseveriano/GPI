@@ -1,6 +1,17 @@
 """
 Cliente HTTP para coleta de fontes públicas (biblioteca padrão — sem dependências).
 
+v0.6.1:
+  * Conexões persistentes (keep-alive) reaproveitadas por host e por thread: uma conexão TCP/TLS
+    atende várias requisições, em vez de uma conexão nova por chamada.
+  * Tempo de conexão e tempo de leitura separados (connect_timeout / timeout) e tempo total por
+    operação (total_timeout), incluindo as novas tentativas.
+  * Métricas por host: DNS, conexão (TCP+TLS), tempo até a primeira resposta, tempo total, bytes,
+    tentativas, espera por limite (429/Retry-After) e conexões reaproveitadas.
+  * Concorrência máxima por host (semáforo) além do intervalo mínimo entre requisições.
+  * Retry-After em segundos ou data HTTP; erros permanentes (401/403/400/404) nunca são repetidos.
+  * Segredos (key, token, secret, code…) são removidos de URLs e mensagens de log e de erro.
+
   * Retry com backoff exponencial + jitter em 429, 5xx, timeouts e falhas de rede;
     respeita o cabeçalho Retry-After.
   * Rate limiting por host (intervalo mínimo entre requisições).
@@ -19,11 +30,17 @@ Cliente HTTP para coleta de fontes públicas (biblioteca padrão — sem depend�
 """
 from __future__ import annotations
 
+import base64
+import email.utils
 import gzip
 import hashlib
+import http.client
+import io
 import json
 import logging
 import random
+import re
+import socket
 import ssl
 import threading
 import time
@@ -36,22 +53,55 @@ from pathlib import Path
 
 log = logging.getLogger("gpi.http")
 
-USER_AGENT = "GPI-GlobalProductIntelligence/0.4 (uso analitico local; contato: configure 'contact' em config/gpi.json)"
+SECRET_PARAMS = re.compile(r"(?i)([?&](?:key|api_key|apikey|access_token|refresh_token|token|client_secret|secret|code|"
+                           r"auth_code|fb_exchange_token|password|senha)=)[^&#\s]*")
+SECRET_TEXT = re.compile(r"(?i)(bearer\s+|access[-_]token[\"':=\s]+|refresh[-_]token[\"':=\s]+|client[-_]secret[\"':=\s]+|"
+                         r"api[-_]?key[\"':=\s]+)[A-Za-z0-9._\-~+/=|]{6,}")
+
+
+def redact(text) -> str:
+    """Remove segredos de URLs e textos (parâmetros key/token/secret/code e cabeçalhos Bearer)."""
+    s = SECRET_PARAMS.sub(r"\1***", str(text))
+    return SECRET_TEXT.sub(r"\1***", s)
+
+
+def retry_after_seconds(value: str | None) -> float | None:
+    """Retry-After em segundos ("120") ou data HTTP ("Wed, 21 Oct 2026 07:28:00 GMT")."""
+    if not value:
+        return None
+    v = value.strip()
+    if v.isdigit():
+        return float(v)
+    try:
+        dt = email.utils.parsedate_to_datetime(v)
+        return max(0.0, dt.timestamp() - time.time())
+    except (TypeError, ValueError):
+        return None
+
+
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+USER_AGENT = "GPI-GlobalProductIntelligence/0.6 (uso analitico local; contato: configure 'contact' em config/gpi.json)"
 
 
 class SourceError(Exception):
     """Falha ao obter dados de uma fonte (rede, HTTP, formato)."""
 
-    def __init__(self, msg: str, kind: str = "erro", retryable: bool = False, status: int | None = None):
-        super().__init__(msg)
+    def __init__(self, msg: str, kind: str = "erro", retryable: bool = False, status: int | None = None,
+                 body: str | None = None):
+        super().__init__(redact(msg))
         self.kind = kind            # rede | http | tls | formato | restrita | limite
         self.retryable = retryable
         self.status = status
+        self.body = redact(body) if body else None     # corpo do erro (ex.: códigos do Google Ads), sem segredos
 
 
 @dataclass
 class HttpConfig:
-    timeout: float = 45.0
+    timeout: float = 30.0              # tempo máximo de leitura (sem dados chegando)
+    connect_timeout: float = 8.0       # tempo máximo para DNS + TCP + TLS
+    total_timeout: float = 150.0       # tempo máximo de uma operação, somando as novas tentativas
+    per_host: int = 2                  # requisições simultâneas por host
     max_attempts: int = 4
     backoff_base: float = 2.0
     backoff_max: float = 60.0
@@ -93,6 +143,125 @@ def parse_json_body(raw: bytes, ctype: str | None = None):
         raise SourceError(f"resposta não é JSON válido ({e})", "formato") from e
 
 
+class _Transport:
+    """Conexões HTTP/HTTPS persistentes por (thread, esquema, host, porta), com proxy (CONNECT para HTTPS),
+    tempos de DNS/conexão/primeira resposta medidos e erros convertidos nos tipos do urllib (HTTPError/URLError)
+    para preservar o tratamento já existente."""
+
+    def __init__(self, cfg: "HttpConfig"):
+        self.cfg = cfg
+        self.local = threading.local()
+        self.ctx = ssl.create_default_context(cafile=cfg.ca_bundle) if cfg.ca_bundle else ssl.create_default_context()
+
+    def _proxy_for(self, scheme, host):
+        if host in LOOPBACK:
+            return None
+        if self.cfg.proxy:
+            return self.cfg.proxy
+        envp = urllib.request.getproxies()
+        if urllib.request.proxy_bypass(host):
+            return None
+        return envp.get(scheme) or envp.get("all")
+
+    def _pool(self) -> dict:
+        if not hasattr(self.local, "conns"):
+            self.local.conns = {}
+        return self.local.conns
+
+    def close(self):
+        for c in list(self._pool().values()):
+            try:
+                c.close()
+            except Exception:  # noqa: BLE001
+                pass
+        self._pool().clear()
+
+    def _connect(self, scheme, host, port, timing):
+        proxy = self._proxy_for(scheme, host)
+        t = time.monotonic()
+        if proxy:
+            pu = urllib.parse.urlsplit(proxy if "://" in proxy else "http://" + proxy)
+            ph, pp = pu.hostname, pu.port or 8080
+            socket.getaddrinfo(ph, pp)
+            timing["dns"] = time.monotonic() - t
+            auth = {}
+            if pu.username:
+                tok = base64.b64encode(f"{urllib.parse.unquote(pu.username)}:{urllib.parse.unquote(pu.password or '')}".encode()).decode()
+                auth = {"Proxy-Authorization": f"Basic {tok}"}
+            if scheme == "https":
+                c = http.client.HTTPSConnection(ph, pp, timeout=self.cfg.connect_timeout, context=self.ctx)
+                c.set_tunnel(host, port, headers=auth)
+            else:
+                c = http.client.HTTPConnection(ph, pp, timeout=self.cfg.connect_timeout)
+                c._gpi_proxy_auth = auth                              # noqa: SLF001 — HTTP simples via proxy
+            c._gpi_via_proxy = scheme != "https"                      # noqa: SLF001
+        else:
+            socket.getaddrinfo(host, port)                          # DNS medido separadamente (fica no cache do SO)
+            timing["dns"] = time.monotonic() - t
+            c = (http.client.HTTPSConnection(host, port, timeout=self.cfg.connect_timeout, context=self.ctx)
+                 if scheme == "https" else http.client.HTTPConnection(host, port, timeout=self.cfg.connect_timeout))
+            c._gpi_via_proxy = False                                # noqa: SLF001
+        t = time.monotonic()
+        try:
+            c.connect()
+        except OSError as e:
+            c.close()
+            if "Tunnel connection failed" in str(e):
+                raise urllib.error.URLError(str(e)) from e
+            if isinstance(e, (TimeoutError, socket.timeout)):
+                raise TimeoutError(f"tempo de conexão esgotado ({self.cfg.connect_timeout:.0f} s) com {host}") from e
+            raise
+        timing["conexao"] = time.monotonic() - t
+        return c
+
+    def send(self, method, url, headers, data, read_timeout, timing):
+        u = urllib.parse.urlsplit(url)
+        scheme, host = u.scheme, u.hostname
+        port = u.port or (443 if scheme == "https" else 80)
+        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        key = (scheme, host, port)
+        pool = self._pool()
+        for attempt in (1, 2):
+            c = pool.get(key)
+            reused = c is not None
+            if c is None:
+                c = self._connect(scheme, host, port, timing)
+                pool[key] = c
+            timing["reaproveitada"] = reused
+            target = url if getattr(c, "_gpi_via_proxy", False) else path
+            h = dict(headers)
+            h.setdefault("Host", u.netloc)
+            h.update(getattr(c, "_gpi_proxy_auth", {}) or {})
+            try:
+                if c.sock:
+                    c.sock.settimeout(read_timeout)
+                t = time.monotonic()
+                c.request(method, target, body=data, headers=h)
+                r = c.getresponse()
+                timing["primeira_resposta"] = time.monotonic() - t
+                body = r.read()
+                if r.will_close:
+                    c.close()
+                    pool.pop(key, None)
+                return r.status, r.headers, body
+            except (http.client.RemoteDisconnected, BrokenPipeError, ConnectionResetError, http.client.CannotSendRequest,
+                    http.client.ResponseNotReady) as e:
+                c.close()
+                pool.pop(key, None)
+                if reused and attempt == 1:
+                    continue                                       # conexão ociosa fechada pelo servidor: reconecta
+                raise ConnectionError(str(e)) from e
+            except (TimeoutError, socket.timeout) as e:
+                c.close()
+                pool.pop(key, None)
+                raise TimeoutError(f"tempo de leitura esgotado ({read_timeout:.0f} s)") from e
+            except Exception:
+                c.close()
+                pool.pop(key, None)
+                raise
+        raise ConnectionError("conexão encerrada")
+
+
 class HttpClient:
     def __init__(self, cache_dir: Path, cfg: HttpConfig | None = None, sleep=time.sleep):
         self.cfg = cfg or HttpConfig()
@@ -110,10 +279,15 @@ class HttpClient:
         self.opener = urllib.request.build_opener(*handlers)
         self.ua = USER_AGENT if not self.cfg.contact else USER_AGENT.replace(
             "configure 'contact' em config/gpi.json", self.cfg.contact)
+        self.transport = _Transport(self.cfg)
+        self._sems: dict[str, threading.BoundedSemaphore] = {}
+        self.on_event = None                      # callback de log estruturado (definido pela sincronização)
+        self.ctx_local = threading.local()        # fonte/job atual da thread (para métricas e logs)
         self.stats = {"requests": 0, "cache_hits": 0, "retries": 0}
         self.host_stats: dict[str, dict] = {}
         self._fails: dict[str, int] = {}          # falhas transitórias consecutivas por host
         self._open: dict[str, str] = {}           # hosts com disjuntor aberto → motivo
+        self.source_stats: dict[str, dict] = {}   # por fonte (thread da sincronização): requisições, cache, espera
 
     def reset_breakers(self):
         with self._lock:
@@ -123,7 +297,33 @@ class HttpClient:
     def _hs(self, host) -> dict:
         with self._lock:
             return self.host_stats.setdefault(host, {"requisicoes": 0, "cache": 0, "revalidadas_304": 0, "bytes": 0,
-                                                     "segundos": 0.0, "erros": 0, "retentativas": 0})
+                                                     "segundos": 0.0, "erros": 0, "retentativas": 0, "dns_s": 0.0,
+                                                     "conexao_s": 0.0, "primeira_resposta_s": 0.0, "conexoes_novas": 0,
+                                                     "conexoes_reaproveitadas": 0, "espera_limite_s": 0.0})
+
+    def _sem(self, host) -> threading.BoundedSemaphore:
+        with self._lock:
+            if host not in self._sems:
+                self._sems[host] = threading.BoundedSemaphore(max(1, int(self.cfg.per_host)))
+            return self._sems[host]
+
+    def _emit(self, **ev):
+        """Evento estruturado (sem segredos) para o log da execução e para o painel de sincronização."""
+        cur = getattr(self.ctx_local, "cur", None) or {}
+        src = cur.get("fonte")
+        if src:
+            with self._lock:
+                st = self.source_stats.setdefault(src, {"requisicoes": 0, "cache": 0, "erros": 0, "retentativas": 0,
+                                                        "espera_s": 0.0})
+                for k, f in (("requisicoes", "req"), ("cache", "cache"), ("erros", "erro"), ("retentativas", "retry")):
+                    if ev.get(f):
+                        st[k] += 1
+                st["espera_s"] += ev.get("espera", 0.0)
+        if self.on_event:
+            try:
+                self.on_event({**cur, **{k: v for k, v in ev.items() if k not in ("req", "cache", "retry")}})
+            except Exception:  # noqa: BLE001
+                pass
 
     # ------------------------------------------------------------------ cache
     def _ckey(self, method, url, body):
@@ -201,6 +401,7 @@ class HttpClient:
         cached = self._cache_get(key, ttl)
         if cached is not None:
             self.stats["cache_hits"] += 1
+            self._emit(endpoint=redact(url.split("?")[0]), cache=True, status="cache")
             return cached
         host = urllib.parse.urlsplit(url).netloc
         hs = self._hs(host)
@@ -220,21 +421,31 @@ class HttpClient:
             h["Content-Type"] = "application/x-www-form-urlencoded" if form is not None else "application/json"
         h.update(headers or {})
         last_err = None
+        t_start = time.monotonic()
         for attempt in range(1, self.cfg.max_attempts + 1):
             if self.cancel_event.is_set():
                 raise SourceError("sincronização cancelada", "cancelada")
             self._wait_turn(host, self.cfg.min_interval if min_interval is None else min_interval)
-            req = urllib.request.Request(url, data=data, method=method, headers=h)
             self.stats["requests"] += 1
             hs["requisicoes"] += 1
             retry_after = None
             t0 = time.monotonic()
+            timing = {}
             try:
-                with self.opener.open(req, timeout=timeout or self.cfg.timeout) as r:
-                    raw = r.read(_max_bytes + 1)
-                    enc, ctype = r.headers.get("Content-Encoding"), r.headers.get("Content-Type")
-                    new_val = {"etag": r.headers.get("ETag"), "last_modified": r.headers.get("Last-Modified")}
+                with self._sem(host):
+                    status, rh, raw = self.transport.send(method, url, h, data, timeout or self.cfg.timeout, timing)
+                hs["dns_s"] += timing.get("dns", 0.0)
+                hs["conexao_s"] += timing.get("conexao", 0.0)
+                hs["primeira_resposta_s"] += timing.get("primeira_resposta", 0.0)
+                hs["conexoes_reaproveitadas" if timing.get("reaproveitada") else "conexoes_novas"] += 1
+                if status >= 400 or status == 304:
+                    raise urllib.error.HTTPError(url, status, "", rh, io.BytesIO(raw))
+                enc, ctype = rh.get("Content-Encoding"), rh.get("Content-Type")
+                new_val = {"etag": rh.get("ETag"), "last_modified": rh.get("Last-Modified")}
                 hs["segundos"] += time.monotonic() - t0
+                self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=status, req=True, tentativa=attempt,
+                           segundos=round(time.monotonic() - t0, 3), bytes=len(raw),
+                           conexao="reaproveitada" if timing.get("reaproveitada") else "nova")
                 hs["bytes"] += len(raw)
                 if len(raw) > _max_bytes:
                     raise SourceError("resposta maior que o limite permitido", "formato")
@@ -250,27 +461,29 @@ class HttpClient:
             except urllib.error.HTTPError as e:
                 hs["segundos"] += time.monotonic() - t0
                 status = e.code
+                self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=status, req=True, erro=True,
+                           tentativa=attempt, segundos=round(time.monotonic() - t0, 3))
                 if status == 304 and stale is not None:
                     hs["revalidadas_304"] += 1
                     self._touch(key)                       # conteúdo inalterado: renova a validade local
                     self._fails[host] = 0
                     return stale
                 try:
-                    detail = e.read()[:300].decode("utf-8", "replace")
+                    full = decode_body(e.read(), (e.headers or {}).get("Content-Encoding")).decode("utf-8", "replace")
                 except Exception:  # noqa: BLE001
-                    detail = ""
+                    full = ""
+                detail = full[:300]
                 if status in (401, 403):
-                    raise SourceError(f"acesso negado (HTTP {status}); a fonte exige credenciais "
-                                      f"ou o acesso foi bloqueado pela rede", "restrita", status=status)
+                    raise SourceError(f"acesso negado (HTTP {status}); a fonte exige credenciais, permissão "
+                                      f"ou o acesso foi bloqueado pela rede", "restrita", status=status, body=full[:4000])
                 if status == 404:
-                    raise SourceError(f"recurso não encontrado (HTTP 404) {detail}", "http", status=404)
+                    raise SourceError(f"recurso não encontrado (HTTP 404) {detail}", "http", status=404, body=full[:4000])
                 if status == 429 or status >= 500:
-                    ra = e.headers.get("Retry-After") if e.headers else None
-                    retry_after = float(ra) if ra and ra.isdigit() else None
+                    retry_after = retry_after_seconds(e.headers.get("Retry-After") if e.headers else None)
                     last_err = SourceError(f"HTTP {status}: {detail}", "limite" if status == 429 else "http",
-                                           True, status)
+                                           True, status, body=full[:4000])
                 else:
-                    raise SourceError(f"HTTP {status}: {detail}", "http", status=status)
+                    raise SourceError(f"HTTP {status}: {detail}", "http", status=status, body=full[:4000])
             except ssl.SSLError as e:
                 raise SourceError(f"certificado TLS não verificado ({e.__class__.__name__}). Peça à TI "
                                   f"a cadeia de certificados e configure 'ca_bundle' em config/gpi.json", "tls")
@@ -287,11 +500,20 @@ class HttpClient:
             except (TimeoutError, ConnectionError, OSError) as e:
                 last_err = SourceError(f"falha de rede: {e}", "rede", True)
             hs["erros"] += 1
+            if timing.get("primeira_resposta") is None:
+                self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=None, req=True, erro=True,
+                           tentativa=attempt, motivo=str(last_err)[:200], segundos=round(time.monotonic() - t0, 3))
             if attempt < self.cfg.max_attempts:
-                self.stats["retries"] += 1
-                hs["retentativas"] += 1
                 delay = retry_after or min(self.cfg.backoff_max, self.cfg.backoff_base * 2 ** (attempt - 1))
                 delay *= 1 + random.random() * 0.25
+                if time.monotonic() - t_start + delay > self.cfg.total_timeout:
+                    log.info("tempo total da operação esgotado para %s; sem novas tentativas", host)
+                    break
+                self.stats["retries"] += 1
+                hs["retentativas"] += 1
+                if last_err.kind == "limite":
+                    hs["espera_limite_s"] += delay
+                self._emit(endpoint=redact(url.split("?")[0]), retry=True, espera=delay, motivo=str(last_err)[:200])
                 log.info("tentativa %d falhou para %s (%s); nova tentativa em %.1fs", attempt, host, last_err, delay)
                 self._sleep(delay)
         err = last_err or SourceError("falha desconhecida", "rede", True)
