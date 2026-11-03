@@ -99,7 +99,7 @@ window.GPI_V05 = function (H, PAGES) {
     $('#cfg').innerHTML = `<div class="panel"><table class="small"><tbody>${d.campos.map((f) => {
       const v = d.valores[f.chave];
       const inp = f.tipo === 'bool' ? `<input type="checkbox" data-c="${f.chave}" ${v ? 'checked' : ''}>`
-        : `<input data-c="${f.chave}" value="${escH(Array.isArray(v) ? v.join(', ') : (v ?? ''))}" style="width:140px">${f.min != null ? ` <span class="muted">(${f.min}–${f.max})</span>` : ''}`;
+        : `<input data-c="${f.chave}" value="${escH(Array.isArray(v) ? v.join(', ') : (v ?? ''))}" style="width:${f.tipo === 'tuple' || f.tipo === 'list' ? 280 : 140}px">${f.min != null ? ` <span class="muted">(${f.min}–${f.max})</span>` : ''}`;
       return `<tr><td style="width:55%">${escH(f.descricao)}<br><code class="muted">${escH(f.chave)}</code></td><td>${inp}</td></tr>`; }).join('')}</tbody></table>
       <p><button class="primary" id="csave">Salvar</button> <span id="cmsg" class="small"></span></p>
       <p class="small muted">Alguns ajustes valem a partir da próxima sincronização. Sistema e diagnóstico: <a href="#sistema">página Sistema</a>.</p></div>`;

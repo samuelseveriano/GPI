@@ -148,6 +148,41 @@ PROVIDERS = [
      "descricao": "Repercussão dos produtos na imprensa mundial (artigos por mês). Conectado automaticamente.",
      "permissoes": "API pública e gratuita do GDELT Project; o GPI respeita o intervalo de 5 s entre consultas.",
      "link": "https://www.gdeltproject.org/"},
+    {"id": "tiktok", "nome": "TikTok API for Business — Discovery", "tipo": "oauth", "oauth_especial": "tiktok",
+     "conectores": ["tiktok"],
+     "campos": [{"nome": "client_id", "rotulo": "App ID (portal TikTok API for Business)", "secreto": False},
+                {"nome": "client_secret", "rotulo": "Secret do app", "secreto": True},
+                {"nome": "auth_url", "rotulo": "URL de autorização de anunciante (copiada do portal, opcional)", "secreto": False},
+                {"nome": "auth_url_conta", "rotulo": "URL de autorização de conta TikTok (copiada do portal, opcional)", "secreto": False},
+                {"nome": "access_token", "rotulo": "OU: token de acesso de longo prazo gerado no portal", "secreto": True},
+                {"nome": "advertiser_id", "rotulo": "Advertiser ID (hashtags populares)", "secreto": False},
+                {"nome": "business_id", "rotulo": "Business ID / open_id da conta TikTok (termos de busca em alta)", "secreto": False}],
+     "descricao": "Hashtags populares por país (com visualizações e publicações), 20 termos de busca em alta no TikTok e "
+                  "termos recomendados por produto — recursos oficiais de descoberta (Discovery API).",
+     "permissoes": "Login nas páginas oficiais da TikTok (o GPI não pede sua senha). Exige conta TikTok for Business e app "
+                   "aprovado com acesso à Discovery API. A TikTok Research API NÃO é usada: é restrita a pesquisa acadêmica. "
+                   "Posição e visualizações medem atenção na plataforma — não são compras.",
+     "como_obter": "1) business-api.tiktok.com → My Apps → criar app (Marketing API) e solicitar os escopos de Discovery. "
+                   "2) Cadastre a URL de redirecionamento exibida abaixo. 3) Copie o App ID, o Secret e a URL de autorização "
+                   "do app. 4) Clique em Conectar (anunciante) e/ou Conectar conta TikTok. Se o portal exigir URL https, gere "
+                   "um token de longo prazo no portal e informe-o com o Advertiser ID/Business ID.",
+     "link": "https://business-api.tiktok.com/portal/apps", "documentacao": "https://business-api.tiktok.com/portal/docs"},
+    {"id": "meta", "nome": "Meta — Instagram, Facebook e Biblioteca de Anúncios", "tipo": "oauth", "oauth_especial": "meta",
+     "conectores": ["instagram", "facebook", "meta_ads"],
+     "campos": [{"nome": "client_id", "rotulo": "App ID (Meta for Developers)", "secreto": False},
+                {"nome": "client_secret", "rotulo": "App Secret", "secreto": True},
+                {"nome": "ig_user_id", "rotulo": "ID da conta profissional do Instagram (preenchido ao conectar)", "secreto": False}],
+     "descricao": "Central Meta: um login compartilhado para três conectores independentes — hashtags do Instagram, "
+                  "páginas comerciais do Facebook e Biblioteca de Anúncios (UE).",
+     "permissoes": "Login do Facebook na página oficial da Meta com as permissões instagram_basic, pages_show_list, "
+                   "pages_read_engagement e ads_read (somente leitura). Hashtags exigem o recurso Instagram Public Content "
+                   "Access; páginas públicas de terceiros exigem Page Public Content Access; a Biblioteca de Anúncios exige "
+                   "identidade verificada. Cada recurso depende da revisão do app pela Meta. O token de longo prazo vale ~60 dias.",
+     "como_obter": "developers.facebook.com → Meus apps → criar app (tipo Empresa) → adicionar 'Login do Facebook' e "
+                   "'Instagram Graph API' → cadastrar a URL de redirecionamento exibida abaixo → solicitar os recursos na "
+                   "revisão do app → informar App ID e App Secret → Conectar.",
+     "link": "https://developers.facebook.com/apps/", "documentacao": "https://developers.facebook.com/docs/instagram-platform",
+     "scope": "instagram_basic,pages_show_list,pages_read_engagement,ads_read,business_management"},
     {"id": "amazon", "nome": "Amazon Brasil / EUA", "tipo": "approval", "conectores": ["amazon_br", "amazon_us"],
      "descricao": "Preços e rankings de produtos.", "permissoes": "Product Advertising API: exige conta aprovada no "
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
@@ -171,11 +206,91 @@ PROVIDERS = [
 ]
 
 
+CATEGORIAS = {"pesquisas": "Pesquisas", "marketplaces": "Marketplaces", "redes_sociais": "Redes Sociais",
+              "dados_publicos": "Dados Públicos", "conteudo": "Notícias e Avaliações"}
+CATEGORIA_DE = {
+    "google_trends_rss": ["pesquisas"], "google_ads": ["pesquisas"], "google_bigquery": ["pesquisas"], "google_trends": ["pesquisas"],
+    "msads": ["pesquisas"], "china_search": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
+    "ebay": ["marketplaces"], "amazon": ["marketplaces"], "shopee": ["marketplaces"], "china_marketplaces": ["marketplaces"],
+    "comparadores": ["marketplaces"], "tiktok": ["redes_sociais"], "meta": ["redes_sociais"], "youtube": ["redes_sociais"],
+    "reddit": ["redes_sociais"], "publicas": ["dados_publicos"], "comtrade": ["dados_publicos"], "gdelt": ["dados_publicos"],
+    "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"], "reclame_aqui": ["conteudo"],
+}
 NIVEL = {"auto": 1, "api_key": 2, "client_id": 2, "oauth": 2, "optin": 2, "approval": 3}
 NIVEL_NOME = {1: "Conexão automática", 2: "Conexão assistida", 3: "Acesso restrito"}
 for _p in PROVIDERS:
     _p["nivel"] = NIVEL[_p["tipo"]]
     _p["nivel_nome"] = NIVEL_NOME[_p["nivel"]]
+    _p["categorias"] = CATEGORIA_DE.get(_p["id"], ["conteudo"])
+
+TT_HOSTS = ("business-api.tiktok.com", "ads.tiktok.com", "www.tiktok.com", "open.tiktokapis.com")
+
+
+def tiktok_authorize_url(c: dict, mode: str, redirect_uri: str, state: str) -> str:
+    """Usa a URL de autorização copiada do portal da TikTok (não inventa endereço) e só aceita hosts da TikTok."""
+    import urllib.parse as up
+    base = (c.get("auth_url_conta") if mode == "conta" else c.get("auth_url")) or ""
+    u = up.urlsplit(base)
+    if u.scheme != "https" or u.hostname not in TT_HOSTS:
+        raise SourceError("informe a URL de autorização copiada do portal TikTok API for Business (https://business-api.tiktok.com/...)",
+                          "restrita")
+    q = dict(up.parse_qsl(u.query))
+    q.update({"state": state, "redirect_uri": redirect_uri})
+    q.setdefault("app_id" if mode != "conta" else "client_key", c.get("client_id", ""))
+    return up.urlunsplit((u.scheme, u.netloc, u.path, up.urlencode(q), ""))
+
+
+def tiktok_exchange(http, creds, code: str, mode: str, redirect_uri: str) -> dict:
+    c = creds.get("tiktok")
+    if mode == "conta":
+        r = http.request_json("https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/token/", "POST",
+                              {"client_id": c.get("client_id"), "client_secret": c.get("client_secret"), "grant_type": "authorization_code",
+                               "auth_code": code, "redirect_uri": redirect_uri}, ttl=0)
+    else:
+        r = http.request_json("https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/", "POST",
+                              {"app_id": c.get("client_id"), "secret": c.get("client_secret"), "auth_code": code}, ttl=0)
+    if not isinstance(r, dict) or r.get("code") != 0:
+        raise SourceError(f"TikTok não emitiu token: {(r or {}).get('message') if isinstance(r, dict) else r}", "restrita")
+    d = r.get("data") or {}
+    if mode == "conta":
+        vals = {"access_token": d.get("access_token"), "business_id": d.get("open_id"), "refresh_token": d.get("refresh_token")}
+    else:
+        adv = d.get("advertiser_ids") or []
+        vals = {"access_token": d.get("access_token"), "advertiser_id": str(adv[0]) if adv else c.get("advertiser_id", "")}
+    creds.set("tiktok", {k: v for k, v in vals.items() if v})
+    return vals
+
+
+def meta_authorize_url(c: dict, ver: str, redirect_uri: str, state: str) -> str:
+    import urllib.parse as up
+    return f"https://www.facebook.com/{ver}/dialog/oauth?" + up.urlencode({
+        "client_id": c.get("client_id", ""), "redirect_uri": redirect_uri, "state": state, "response_type": "code",
+        "scope": provider("meta")["scope"]})
+
+
+def meta_exchange(http, creds, code: str, redirect_uri: str, ver: str) -> dict:
+    """Código → token curto → token de longo prazo (~60 dias) → detecta a conta profissional do Instagram."""
+    import urllib.parse as up
+    c = creds.get("meta")
+    g = f"https://graph.facebook.com/{ver}/"
+    r = http.request_json(g + "oauth/access_token?" + up.urlencode({"client_id": c.get("client_id"), "redirect_uri": redirect_uri,
+                                                                      "client_secret": c.get("client_secret"), "code": code}), ttl=0)
+    if not r.get("access_token"):
+        raise SourceError(f"Meta não emitiu token: {(r.get('error') or {}).get('message', r)}", "restrita")
+    ll = http.request_json(g + "oauth/access_token?" + up.urlencode({"grant_type": "fb_exchange_token", "client_id": c.get("client_id"),
+                                                                       "client_secret": c.get("client_secret"),
+                                                                       "fb_exchange_token": r["access_token"]}), ttl=0)
+    tok = ll.get("access_token") or r["access_token"]
+    vals = {"access_token": tok, "expires_at": str(time.time() + float(ll.get("expires_in", r.get("expires_in", 3600))))}
+    try:
+        acc = http.request_json(g + "me/accounts?" + up.urlencode({"fields": "name,instagram_business_account", "access_token": tok}), ttl=0)
+        ig = next((a["instagram_business_account"]["id"] for a in acc.get("data", []) if a.get("instagram_business_account")), None)
+        if ig and not c.get("ig_user_id"):
+            vals["ig_user_id"] = ig
+    except SourceError:
+        pass
+    creds.set("meta", vals)
+    return vals
 
 
 def provider(pid: str) -> dict | None:
@@ -268,6 +383,38 @@ def test_connection(pid: str, http, creds, cfg: dict) -> tuple[bool, str]:
             items = parse_feed(http.request_text(
                 "https://news.google.com/rss/search?q=eletr%C3%B4nicos&hl=pt-BR&gl=BR&ceid=BR:pt-419", ttl=0))
             return True, f"{len(items)} notícias retornadas"
+        if pid == "tiktok":
+            c = creds.get("tiktok")
+            if not c.get("access_token"):
+                return False, "conecte pelo OAuth ou informe o token de acesso gerado no portal"
+            from ..social.connectors import TT_API, _tt_check
+            msgs = []
+            if c.get("advertiser_id"):
+                d = _tt_check(http.request_json(TT_API + "discovery/trending_list/?advertiser_id=" + c["advertiser_id"] +
+                                                "&discovery_type=HASHTAG&country_code=BR&date_range=7DAY", ttl=0,
+                                                headers={"Access-Token": c["access_token"]}))
+                msgs.append(f"{len(d.get('list') or [])} hashtags populares (BR)")
+            if c.get("business_id"):
+                d = _tt_check(http.request_json(TT_API + cfg.get("tiktok_search_path", "discovery/search/") + "?business_id=" +
+                                                c["business_id"], ttl=0, headers={"Access-Token": c["access_token"]}))
+                msgs.append(f"{len(d.get('search_keywords') or [])} termos de busca em alta")
+            return (bool(msgs), "; ".join(msgs) or "informe o Advertiser ID ou o Business ID")
+        if pid == "meta":
+            c = creds.get("meta")
+            if not c.get("access_token"):
+                return False, "use 'Conectar' para entrar com a conta Meta"
+            import urllib.parse as up
+            g = f"https://graph.facebook.com/{cfg.get('meta_graph_version', 'v23.0')}/"
+            me = http.request_json(g + "me?" + up.urlencode({"fields": "id,name", "access_token": c["access_token"]}), ttl=0)
+            if me.get("error"):
+                return False, f"Meta: {me['error'].get('message')}"
+            msg = f"token válido ({me.get('name', me.get('id'))})"
+            if c.get("ig_user_id"):
+                ig = http.request_json(g + c["ig_user_id"] + "?" + up.urlencode({"fields": "username", "access_token": c["access_token"]}), ttl=0)
+                msg += f"; Instagram: {ig.get('username') or (ig.get('error') or {}).get('message')}"
+            else:
+                msg += "; nenhuma conta profissional do Instagram vinculada"
+            return True, msg
         if pid == "publicas":
             r = http.request_json("https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/Moedas?$format=json", ttl=0)
             return (True, f"Banco Central respondeu ({len(r.get('value', []))} moedas)") if "value" in r else (False, "resposta inesperada")

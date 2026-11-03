@@ -19,7 +19,12 @@ binaries, datas = [], [
     (os.path.join(ROOT, "frontend"), "frontend"),
     (os.path.join(ROOT, "config"), "config"),
     (os.path.join(ROOT, "docs"), "docs"),
+    (os.path.join(ROOT, "backend", "gpi", "reports", "fonts"), os.path.join("gpi", "reports", "fonts")),   # DejaVu (PDF)
 ]
+# v0.6: ReportLab (PDF dos relatórios) — módulos carregados dinamicamente e dados (fontes padrão, mapas CID)
+hidden += collect_submodules("reportlab", filter=lambda n: ".test" not in n)
+datas += collect_data_files("reportlab")
+binaries += collect_dynamic_libs("reportlab")
 # Bibliotecas opcionais: incluídas somente se instaladas no ambiente de build (sem módulos de teste)
 for opt in ("lightgbm", "xgboost", "catboost"):
     try:

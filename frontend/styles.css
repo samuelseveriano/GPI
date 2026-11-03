@@ -195,3 +195,18 @@ body.side-mini .grp.flyout .grp-in a { padding-left: 16px; }
 .empty b { color: var(--ink); }
 @media (max-width: 1400px) { :root { --side-w: 256px; } .topbar { padding: 8px 18px; } }
 @media (prefers-reduced-motion: reduce) { :root { --t: 0ms; } }
+
+/* ---------------------------------------------------------------- v0.6: relatórios e exportação */
+.g3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rcard h2 { font-size: 15px; margin: 0 0 6px; }
+.rcard { display: flex; flex-direction: column; }
+.rcard .form { margin-top: auto; }
+.export-bar { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.export-bar button, .export-bar select { padding: 5px 10px; font-size: 12.5px; }
+.export-bar select { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--ink); }
+.repnote { font-size: 12.5px; background: var(--warn-bg); color: var(--warn-ink); border-radius: 999px; padding: 4px 10px; text-decoration: none; white-space: nowrap; }
+td.wrap { white-space: normal; max-width: 320px; }
+@media (max-width: 1400px) { .export-bar button { padding: 4px 8px; } }
+.export-bar[hidden], .repnote[hidden] { display: none; }
+.rcard .form button { padding: 6px 11px; }

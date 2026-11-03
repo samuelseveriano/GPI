@@ -27,12 +27,33 @@ SETTINGS = {
     "ml_global_enabled": (bool, None, None, "Treinar o modelo global multi-série (LightGBM/XGBoost/CatBoost) após a sincronização"),
     "ml_tuning_trials": (int, 0, 100, "Tentativas de otimização de hiperparâmetros (Optuna); 0 desliga"),
     "ml_tuning_seconds": (int, 10, 1800, "Tempo máximo da otimização de hiperparâmetros (segundos)"),
+    # v0.6 — relatórios e redes sociais
+    "auto_report_weekly": (bool, None, None, "Gerar relatório semanal automaticamente (executivo em PDF e Excel, após a sincronização; "
+                                             "se o GPI estiver fechado, gera na próxima abertura). Salvo só neste computador."),
+    "tiktok_countries": (list, None, None, "Países das hashtags populares do TikTok (códigos ISO, ex.: BR, US)"),
+    "tiktok_account_country": (str, None, None, "País da conta TikTok for Business (ex.: BR) — os termos de busca em alta são da região da conta; vazio = não informado"),
+    "tiktok_max_products": (int, 0, 100, "Produtos consultados nos termos recomendados do TikTok por semana"),
+    "instagram_max_hashtags": (int, 0, 30, "Hashtags do Instagram consultadas por 7 dias (a Meta permite no máximo 30 por conta)"),
+    "facebook_pages": (tuple, None, None, "Páginas do Facebook a acompanhar (IDs ou nomes de usuário, separados por vírgula) — páginas que você administra ou, com aprovação da Meta, páginas públicas"),
+    "meta_ads_enabled": (bool, None, None, "Consultar a Biblioteca de Anúncios da Meta (exige identidade verificada; só anúncios comerciais da UE)"),
+    "meta_ads_countries": (list, None, None, "Países da UE consultados na Biblioteca de Anúncios (ex.: DE, FR, ES, IT, PT)"),
+    "youtube_em_indices": (bool, None, None, "Usar estatísticas do YouTube nos índices sociais combinados — marque só se o projeto Google aceitou o caso de uso 'Analytics & Reporting' da política de métricas derivadas"),
+    "retencao_dias_tiktok": (int, 1, 1095, "Retenção dos dados do TikTok (dias)"),
+    "retencao_dias_instagram": (int, 1, 1095, "Retenção dos dados do Instagram (dias)"),
+    "retencao_dias_facebook": (int, 1, 1095, "Retenção dos dados do Facebook (dias)"),
+    "retencao_dias_meta_ads": (int, 1, 1095, "Retenção dos dados da Biblioteca de Anúncios (dias)"),
+    "retencao_dias_youtube": (int, 1, 1095, "Retenção das estatísticas do YouTube (dias; a política permite até 36 meses)"),
 }
 
 
 DEFAULTS = {"auto_sync": True, "sync_workers": 4, "trends_geos": ["BR", "US"], "catalog_max_products": 5000,
             "catalog_max_candidates": 20000, "kp_max_products": 200, "trend_forecast_max": 20, "gdelt_max_products": 30,
-            "ebay_max_products": 30, "bq_max_gb": 2.0, "ml_global_enabled": True, "ml_tuning_trials": 15, "ml_tuning_seconds": 120}
+            "ebay_max_products": 30, "bq_max_gb": 2.0, "ml_global_enabled": True, "ml_tuning_trials": 15, "ml_tuning_seconds": 120,
+            "auto_report_weekly": False, "tiktok_countries": ["BR", "US"], "tiktok_account_country": "", "tiktok_max_products": 20,
+            "instagram_max_hashtags": 25, "facebook_pages": [], "meta_ads_enabled": False,
+            "meta_ads_countries": ["DE", "FR", "ES", "IT", "PT"], "youtube_em_indices": False,
+            "retencao_dias_tiktok": 90, "retencao_dias_instagram": 90, "retencao_dias_facebook": 90, "retencao_dias_meta_ads": 90,
+            "retencao_dias_youtube": 1095}
 
 
 def routes(db, sync, cfg, save_settings=None) -> list[Route]:
@@ -241,6 +262,10 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
                         v = bool(v)
                     elif typ is list:
                         v = [str(x).strip().upper()[:2] for x in (v if isinstance(v, list) else str(v).split(",")) if str(x).strip()]
+                    elif typ is tuple:
+                        v = [str(x).strip()[:120] for x in (v if isinstance(v, list) else str(v).split(",")) if str(x).strip()][:20]
+                    elif typ is str:
+                        v = str(v).strip().upper()[:2]
                     else:
                         v = typ(v)
                         if (lo is not None and v < lo) or (hi is not None and v > hi):

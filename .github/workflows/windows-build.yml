@@ -33,7 +33,7 @@ jobs:
       - name: Instalar dependências (inclui statsmodels, LightGBM e XGBoost)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-optional.txt pytest
+          pip install -r requirements.txt -r requirements-optional.txt -r requirements-dev.txt
       - name: Executar pytest
         shell: pwsh
         run: |
@@ -66,7 +66,7 @@ jobs:
         continue-on-error: true      # APIs externas fora do ar não impedem o build — mas não são declaradas validadas
         timeout-minutes: 25
         run: |
-          python scripts/validate_connectors.py validacao_conectores.json --comparar 2>&1 | tee val.log
+          python scripts/validate_connectors.py validacao_conectores.json --comparar --relatorios=relatorios_reais 2>&1 | tee val.log
           { echo "### Conectores (coleta real)"; echo '```'; cat val.log | cut -c1-180; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=validacao-conectores::$(tail -n 30 val.log | cut -c1-200 | sed ':a;N;$!ba;s/\n/%0A/g')"
       - uses: actions/upload-artifact@v5
@@ -76,6 +76,7 @@ jobs:
           path: |
             validacao_conectores.json
             val.log
+            relatorios_reais/
           if-no-files-found: warn
           retention-days: 30
 
@@ -171,9 +172,9 @@ jobs:
           New-Item -ItemType Directory -Force dist/GPI/relatorios | Out-Null
           $report | Out-File -Encoding utf8 dist/GPI/relatorios/relatorio_build.txt
           Copy-Item dependencias.txt, selftest.json, defender.txt dist/GPI/relatorios/
-          "0.5.0" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
+          "0.6.0" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
           $sigtxt = if ($sig.Status -eq 'Valid') { "assinado: $($sig.SignerCertificate.Subject)" } else { "" }
-          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.5.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
+          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.6.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
           Write-Output "::notice title=seguranca::$sec | assinatura: $($sig.Status)"
           if ($LASTEXITCODE -ne 0) { Write-Output "::error title=seguranca::relatório de segurança encontrou problema (credencial embutida ou nível de execução elevado)"; exit 1 }
           $report | Out-File -Encoding utf8 relatorio_build.txt
@@ -182,11 +183,11 @@ jobs:
           $report >> $env:GITHUB_STEP_SUMMARY
           '```' >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Gerar GPI-Windows-Portable-v0.5.zip e hashes SHA-256
+      - name: Gerar GPI-Windows-Portable-v0.6.zip e hashes SHA-256
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.5.zip
-          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.5.zip -Algorithm SHA256)
+          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.6.zip
+          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.6.zip -Algorithm SHA256)
           $h | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
           Write-Output "::notice title=sha256::$((Get-Content SHA256SUMS.txt) -join ' | ')"
@@ -194,16 +195,16 @@ jobs:
           "### Hashes SHA-256" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY; Get-Content SHA256SUMS.txt >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY
           Get-Content seguranca.md >> $env:GITHUB_STEP_SUMMARY
           # integridade do ZIP: extrair numa pasta nova e conferir o hash do executável
-          Expand-Archive GPI-Windows-Portable-v0.5.zip -DestinationPath zipcheck -Force
+          Expand-Archive GPI-Windows-Portable-v0.6.zip -DestinationPath zipcheck -Force
           if ((Get-FileHash zipcheck/GPI/GPI.exe).Hash -ne (Get-FileHash dist/GPI/GPI.exe).Hash) { Write-Output "::error title=zip::GPI.exe no ZIP difere do compilado"; exit 1 }
           $ok = (Start-Process zipcheck/GPI/GPI.exe -ArgumentList "--check" -Wait -PassThru).ExitCode
           if ($ok -ne 0) { Write-Output "::error title=zip::verificação de integridade do pacote extraído falhou ($ok)"; exit 1 }
 
       - uses: actions/upload-artifact@v5
         with:
-          name: GPI-Windows-Portable-v0.5
+          name: GPI-Windows-Portable-v0.6
           path: |
-            GPI-Windows-Portable-v0.5.zip
+            GPI-Windows-Portable-v0.6.zip
             SHA256SUMS.txt
             seguranca.md
             relatorio_build.txt
@@ -221,6 +222,7 @@ jobs:
             dependencias.txt
             smoke_resultados.txt
             selftest.json
+            exemplo_relatorio_exe.pdf
             ${{ runner.temp }}/gpi-smoke-data/logs/
           if-no-files-found: ignore
           retention-days: 30

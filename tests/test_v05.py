@@ -341,7 +341,7 @@ def test_settings_search_models_and_migration_v5(tmp_path):
             assert srv.req(path)[0] == 200, path
         assert srv.req("/api/import/simulate", {"parametros": {"fob_usd": 1}})[1]["status"] == "dados insuficientes"
         db = srv.app.state.db
-        assert db.schema_version() == len(MIGRATIONS) == 5
+        assert db.schema_version() == len(MIGRATIONS) >= 5                  # v0.6+ acrescenta migrações
         for t in ("market_listings", "model_registry", "drift_events"):
             assert db.query(f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] == 0
     finally:
@@ -352,13 +352,13 @@ def test_sidebar_structure_accessibility_and_routes():
     html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
     import re
     groups = re.findall(r'<button type="button" class="grp-h" id="(grp-[a-z]+-h)" aria-expanded="false" aria-controls="(grp-[a-z]+)"', html)
-    assert len(groups) == 7 and all(f'id="{c}"' in html for _, c in groups)
+    assert len(groups) >= 7 and all(f'id="{c}"' in html for _, c in groups)
     for label in ("Visão Geral", "Inteligência de Consumo", "Inteligência de Mercado", "Machine Learning", "Comércio Exterior",
                   "Vendas Próprias", "Fontes e Sistema"):
         assert label in html
     hrefs = re.findall(r'<a href="#([^"]+)" data-tip', html)
     assert len(hrefs) == len(set(hrefs))                                       # sem duplicar páginas
-    js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js"))
+    js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js", "v06.js"))
     for h in hrefs:
         assert f"'{h.split('/')[0]}'" in js or f"{h.split('/')[0]}:" in js or f"'{h.split('/')[0]}':" in js, h
     css = (ROOT / "frontend" / "styles.css").read_text(encoding="utf-8")
@@ -369,11 +369,12 @@ def test_sidebar_structure_accessibility_and_routes():
 
 def test_windows_packaging_metadata():
     vi = (ROOT / "packaging" / "version_info.txt").read_text(encoding="utf-8")
-    assert "0.5.0" in vi and "Global Product Intelligence" in vi and "Market Research and Demand Forecasting" in vi
+    from gpi import __version__
+    assert __version__ in vi and "Global Product Intelligence" in vi and "Market Research and Demand Forecasting" in vi
     assert "StringStruct('CompanyName'" not in vi                                 # sem identidade de editor não comprovada
     assert (ROOT / "packaging" / "gpi.ico").exists()
     spec = (ROOT / "packaging" / "gpi.spec").read_text(encoding="utf-8")
     assert "upx=False" in spec and "uac_admin" not in spec.replace("uac_admin=False", "") and 'icon=' in spec
     wf = (ROOT / ".github" / "workflows" / "windows-build.yml").read_text(encoding="utf-8")
-    assert "MpCmdRun" in wf and "Get-FileHash" in wf and "GPI-Windows-Portable-v0.5.zip" in wf
+    assert "MpCmdRun" in wf and "Get-FileHash" in wf and f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf
     assert "SIGNING_ENABLED" in wf                                               # assinatura opcional, só com secrets configurados

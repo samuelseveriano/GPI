@@ -270,6 +270,46 @@ MIGRATIONS = [
             detail TEXT, created_at TEXT NOT NULL, PRIMARY KEY (series_id, detector, ref_date)
         )""",
     ],
+    # v6 — Centro de Relatórios e inteligência de redes sociais (v0.6). Só tabelas novas.
+    [
+        """CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY,
+            run_id TEXT NOT NULL,                 -- identificador da execução (auditoria/reprodução)
+            tipo TEXT NOT NULL, formato TEXT NOT NULL, titulo TEXT,
+            filtros TEXT, periodo TEXT, pais TEXT,
+            created_at TEXT NOT NULL,
+            path TEXT, snapshot_path TEXT, size INTEGER,
+            status TEXT NOT NULL,                 -- gerado | erro | excluido
+            erro TEXT,
+            versao_software TEXT, versao_dados TEXT, modelos TEXT, fontes TEXT, parametros TEXT,
+            demo INTEGER NOT NULL DEFAULT 0,
+            origem TEXT NOT NULL DEFAULT 'manual', -- manual | pagina | automatico | reproducao
+            origem_id INTEGER,                    -- relatório reproduzido (quando houver)
+            visto INTEGER NOT NULL DEFAULT 1      -- relatórios automáticos começam como não vistos (notificação)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_reports_tipo ON reports(tipo, created_at)",
+        """CREATE TABLE IF NOT EXISTS social_observations (
+            platform TEXT NOT NULL,               -- tiktok | instagram | facebook | meta_ads | youtube | reddit
+            country TEXT NOT NULL,                -- ISO 3166-1, ou 'CONTA' quando a API não informa o país
+            item_type TEXT NOT NULL,              -- hashtag | palavra_chave | pagina | anuncios | videos
+            item TEXT NOT NULL,                   -- hashtag, palavra-chave ou consulta
+            ref_date TEXT NOT NULL,
+            period TEXT NOT NULL,                 -- dia | 7d | 30d | 120d | mes
+            metric TEXT NOT NULL,                 -- posicao | visualizacoes | publicacoes | curtidas | comentarios | ...
+            value DOUBLE NOT NULL,
+            unit TEXT NOT NULL,
+            product_id TEXT, intent TEXT, commercial INTEGER NOT NULL DEFAULT 0,
+            url TEXT, extra TEXT,
+            collected_at TEXT NOT NULL,
+            retain_until TEXT,                    -- prazo de retenção definido pela política da fonte
+            PRIMARY KEY (platform, country, item_type, item, ref_date, period, metric)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_social_prod ON social_observations(product_id, platform, metric, ref_date)",
+        """CREATE TABLE IF NOT EXISTS social_quota (
+            platform TEXT NOT NULL, item TEXT NOT NULL, first_used TEXT NOT NULL,
+            PRIMARY KEY (platform, item)
+        )""",
+    ],
 ]
 
 

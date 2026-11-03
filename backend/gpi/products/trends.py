@@ -58,7 +58,9 @@ PAGE_OF = {"BR": "BR", "US": "US", "CN": "CN", "GLOBAL:pt": "BR", "GLOBAL:en": "
 SOURCE_NAMES = {"ml_trends": "Mercado Livre Trends", "google_trends_bq": "Google Trends (BigQuery)", "gdelt": "GDELT",
                 "msads_kp": "Microsoft Advertising", "ebay": "eBay",
                 "google_ads_kp": "Google Ads (Planejador)", "google_trends_rss": "Google Trends — Trending Now",
-                "wikimedia": "Wikimedia", "rss": "Feeds RSS", "google_news": "Google Notícias", "reddit": "Reddit"}
+                "wikimedia": "Wikimedia", "rss": "Feeds RSS", "google_news": "Google Notícias", "reddit": "Reddit",
+                "tiktok": "TikTok", "instagram": "Instagram", "facebook": "Facebook", "meta_ads": "Biblioteca de Anúncios da Meta",
+                "youtube": "YouTube"}
 WIKI_LANG = {"Wikipédia em português": "GLOBAL:pt", "Wikipédia em inglês": "GLOBAL:en", "Wikipédia em chinês": "GLOBAL:zh"}
 
 

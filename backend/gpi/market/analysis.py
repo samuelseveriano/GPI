@@ -35,8 +35,11 @@ def make_analyzer(cfg: dict | None = None):
         step("oportunidades", lambda: _intel(store))
         step("previsoes", lambda: _forecasts(store, cfg, state))
         step("consumo", lambda: _consumer(store, cfg, state, forecasts=True))
+        step("social", lambda: _social(store, cfg))
+        step("oportunidades3", lambda: _opportunity3(store))
         if cfg.get("ml_global_enabled", False):
             step("ml_avancado", lambda: _advanced(store, cfg, state))
+        step("ml_social", lambda: _ml_social(store))
         out["segundos"] = round(time.time() - t0, 1)
         return out
 
@@ -59,6 +62,29 @@ def _advanced(store, cfg, state):
             store.db.execute("INSERT OR IGNORE INTO drift_events (series_id, detector, ref_date, direction, detail, created_at)"
                              " VALUES (?, ?, ?, ?, ?, ?)", (e["serie"], e["detector"], e["data"], e["direcao"], e.get("nome"), now))
     return {"grupos": len(res["grupos"]), "mudancas": len(res["drift"]), "segundos": res["segundos"]}
+
+
+def _social(store, cfg):
+    """Social Product Intelligence (v0.6): retenção, séries por plataforma, Social Trend Score, radar."""
+    from ..social import analysis as social
+    res = social.analyze(store.db, cfg, consumer=store.load_result("consumer") or {})
+    store.save_result("social", res)
+    return {"series": len(res["series"]), "produtos": len(res["scores"]), "removidas_retencao": res["retencao"]["removidas"]}
+
+
+def _opportunity3(store):
+    from ..products import opportunity3
+    res = opportunity3.build(store.load_result("consumer") or {}, store.load_result("social"), store.load_result("reviews2"),
+                             store.load_result("competition"), store.db)
+    store.save_result("opportunity3", res)
+    return {"produtos": len(res["produtos"])}
+
+
+def _ml_social(store):
+    from ..forecasting import social_ablation
+    res = social_ablation.run(store.load_result("consumer") or {}, store.load_result("social") or {})
+    store.save_result("ml_social", res)
+    return {"grupos": len(res["grupos"])}
 
 
 def _consumer(store, cfg, state, forecasts: bool):

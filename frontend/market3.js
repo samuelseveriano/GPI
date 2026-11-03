@@ -10,12 +10,24 @@ window.GPI_MARKET3 = function (H) {
   /* ------------------------------------------------------------ CENTRAL DE INTEGRAÇÕES */
   async function pageIntegrations() {
     main.innerHTML = `<h1>Central de Integrações</h1><p class="sub">Conecte fontes de dados sem editar arquivos. Fontes públicas já estão conectadas; as demais pedem uma chave, um login oficial ou aprovação do provedor.</p><div id="ib">${loading()}</div>`;
-    const list = await api('/api/integrations');
-    const grp = (t) => list.filter((p) => t.includes(p.tipo));
-    $('#ib').innerHTML = `<div class="banner info small">Credenciais ficam guardadas neste computador: <b>${escH(list[0].protecao)}</b>. O GPI nunca pede senha de marketplaces e não usa raspagem de sites.</div>
-      <h2>Conectadas automaticamente</h2>${grp(['auto']).map(card).join('')}
-      <h2 style="margin-top:22px">Exigem chave, login ou aceite</h2>${grp(['api_key', 'client_id', 'oauth', 'optin']).map(card).join('')}
-      <h2 style="margin-top:22px">Exigem aprovação ou contrato do provedor</h2><div class="grid g2">${grp(['approval']).map(card).join('')}</div>`;
+    const d = await api('/api/integrations?v=6');
+    const list = d.integracoes, cats = d.categorias;
+    const SIT = { 'Conectado': 'ok', 'Disponível': 'ok', 'Erro': 'bad', 'Restrito': '', 'Requer chave': 'lbl', 'Requer autorização': 'lbl' };
+    const counts = {};
+    list.forEach((p) => { counts[p.situacao] = (counts[p.situacao] || 0) + 1; });
+    const sections = Object.entries(cats).map(([cid, nome]) => {
+      const items = list.filter((p) => p.categorias[0] === cid);
+      const also = list.filter((p) => p.categorias.indexOf(cid) > 0);
+      return `<h2 style="margin-top:22px">${escH(nome.toUpperCase())}</h2>
+        <table class="small"><thead><tr><th>Integração</th><th>Situação</th><th>Última sincronização</th><th>Conectores</th></tr></thead><tbody>
+        ${[...items, ...also].map((p) => `<tr><td><a href="#integ-${p.id}" data-jump="${p.id}">${escH(p.nome)}</a></td><td><span class="badge ${SIT[p.situacao] || ''}">${escH(p.situacao)}</span></td>
+          <td>${p.ultima_sincronizacao ? escH(p.ultima_sincronizacao.replace('T', ' ').slice(0, 16)) : '—'}</td><td>${p.conectores.map((c) => escH(c.nome)).join(', ')}</td></tr>`).join('')}</tbody></table>
+        ${items.map(card).join('')}`;
+    }).join('');
+    $('#ib').innerHTML = `<div class="banner info small">Credenciais ficam guardadas neste computador: <b>${escH(list[0].protecao)}</b> — nunca em relatórios, logs ou arquivos exportados. O GPI não pede senhas de redes sociais ou marketplaces e não usa raspagem de sites.</div>
+      <div class="kpis">${['Conectado', 'Disponível', 'Requer chave', 'Requer autorização', 'Restrito', 'Erro'].map((k) => `<div class="kpi"><span>${k}</span><b>${counts[k] || 0}</b></div>`).join('')}</div>
+      ${sections}`;
+    main.querySelectorAll('[data-jump]').forEach((a) => a.onclick = (e) => { e.preventDefault(); document.getElementById('integ-' + a.dataset.jump)?.scrollIntoView({ behavior: 'smooth' }); });
     main.querySelectorAll('[data-act]').forEach((b) => b.onclick = () => act(b.dataset.act, b.dataset.pid, b));
   }
 
@@ -28,14 +40,15 @@ window.GPI_MARKET3 = function (H) {
       <td class="small">${c.cobertura && c.cobertura[0] ? c.cobertura[0].slice(0, 7) + ' a ' + (c.cobertura[1] || '').slice(0, 7) : '—'}</td><td class="small wrap">${escH(c.mensagem || '')}</td></tr>`).join('');
     const btn = [];
     if (p.campos) btn.push(`<button class="primary" data-act="save" data-pid="${p.id}">${p.tipo === 'oauth' ? 'Salvar dados do aplicativo' : 'Conectar'}</button>`);
-    if (p.tipo === 'oauth') btn.push(`<button class="primary" data-act="oauth" data-pid="${p.id}">Entrar com ${escH(p.nome)}</button>`);
+    if (p.tipo === 'oauth') btn.push(`<button class="primary" data-act="oauth" data-pid="${p.id}">${p.id === 'tiktok' ? 'Conectar (anunciante)' : p.id === 'meta' ? 'Conectar com a Meta' : 'Entrar com ' + escH(p.nome)}</button>`);
+    if (p.id === 'tiktok') btn.push(`<button class="primary" data-act="oauth-conta" data-pid="${p.id}">Conectar conta TikTok</button>`);
     if (p.tipo === 'optin') btn.push(p.optin ? `<button data-act="optout" data-pid="${p.id}">Desativar</button>` : `<button class="primary" data-act="optin" data-pid="${p.id}">Aceito os termos — ativar</button>`);
     if (p.tipo !== 'approval') btn.push(`<button data-act="test" data-pid="${p.id}">Testar conexão</button>`, `<button data-act="sync" data-pid="${p.id}">Sincronizar</button>`);
     if (p.campos && Object.keys(p.credenciais).length) btn.push(`<button data-act="disconnect" data-pid="${p.id}">Desconectar</button>`);
     if (p.link) btn.push(`<a class="btn" href="${escH(p.link)}" target="_blank" rel="noopener">${p.tipo === 'approval' ? 'Solicitar acesso (site oficial)' : 'Obter credencial (site oficial)'}</a>`);
     const extra = p.id === 'rss' ? `<details><summary>Editar lista de feeds (${p.feeds.length})</summary><textarea id="feeds" rows="6" style="width:100%;font-family:var(--mono);font-size:12px">${p.feeds.map((f) => `${f.nome} | ${f.url} | ${f.idioma}`).join('\n')}</textarea><button class="small" data-act="feeds" data-pid="rss">Salvar feeds</button> <span class="muted small">Formato: nome | URL do feed | idioma (pt/en)</span></details>`
       : p.id === 'youtube' ? `<p class="small">Limite diário de uso definido no GPI: <input id="ytq" type="number" value="${p.cota_diaria}" min="100" max="10000" style="width:90px"> unidades <button class="small" data-act="ytq" data-pid="youtube">Salvar</button></p>` : '';
-    return `<div class="panel integ"><div class="form" style="justify-content:space-between"><h2>${escH(p.nome)} <span class="badge">${TYPE[p.tipo]}</span> ${p.conectado ? '<span class="badge ok">conectada</span>' : p.tipo === 'approval' ? '<span class="badge">indisponível sem aprovação</span>' : '<span class="badge">não conectada</span>'}</h2></div>
+    return `<div class="panel integ" id="integ-${p.id}"><div class="form" style="justify-content:space-between"><h2>${escH(p.nome)} <span class="badge">${TYPE[p.tipo]}</span> <span class="badge ${p.situacao === 'Conectado' || p.situacao === 'Disponível' ? 'ok' : p.situacao === 'Erro' ? 'bad' : ''}">${escH(p.situacao || (p.conectado ? 'Conectado' : 'não conectada'))}</span></h2></div>
       <p class="small">${escH(p.descricao)}</p><p class="small muted"><b>Permissões e regras:</b> ${escH(p.permissoes)}</p>
       ${p.como_obter ? `<p class="small muted"><b>Como obter:</b> ${escH(p.como_obter)}</p>` : ''}
       ${p.redirect_uri ? `<p class="small">URL de redirecionamento a cadastrar no provedor: <code>${escH(p.redirect_uri)}</code></p>` : ''}
@@ -65,8 +78,8 @@ window.GPI_MARKET3 = function (H) {
       } else if (a === 'disconnect') {
         if (!confirm('Remover as credenciais desta integração deste computador?')) return;
         await del(`/api/integrations/${pid}`); pageIntegrations();
-      } else if (a === 'oauth') {
-        const r = await post(`/api/integrations/${pid}/oauth/start`, {});
+      } else if (a === 'oauth' || a === 'oauth-conta') {
+        const r = await post(`/api/integrations/${pid}/oauth/start`, { modo: a === 'oauth-conta' ? 'conta' : 'anunciante' });
         window.open(r.url, '_blank', 'noopener'); say('Conclua o login na janela do provedor e depois clique em "Testar conexão".', true);
       } else if (a === 'optin' || a === 'optout') {
         await post(`/api/integrations/${pid}/settings`, { google_news_optin: a === 'optin' }); pageIntegrations();

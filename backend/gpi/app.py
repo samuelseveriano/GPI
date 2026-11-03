@@ -30,9 +30,13 @@ from .importer import ImportErrorGPI, import_file
 from .market import service as msv
 from .market.analysis import make_analyzer
 from .products.api import routes as consumer_routes
+from .reports.api import routes as report_routes
+from .reports.service import ReportService
+from .social.api import routes as social_routes
 from .market.sync import SyncManager
 from .integrations import registry as integ
 from .integrations.oauth import PendingFlows, authorize_url
+from .connectors.http import SourceError
 from starlette.responses import HTMLResponse
 
 log = logging.getLogger("gpi")
@@ -106,10 +110,21 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
     data_dir.mkdir(parents=True, exist_ok=True)
     ext = ".duckdb" if dbmod.ENGINE == "duckdb" else ".sqlite"
     db = dbmod.Database(data_dir / f"gpi{ext}")
-    analyzer = make_analyzer(cfg)
+    base_analyzer = make_analyzer(cfg)
+    reports = ReportService(db, data_dir, cfg)
+
+    def analyzer(store, state):
+        out = base_analyzer(store, state)
+        try:                                   # relatório semanal automático (desligado por padrão)
+            state["atual"] = "relatório semanal"
+            out["relatorio_semanal"] = reports.run_weekly()
+        except Exception as e:  # noqa: BLE001 — falha no relatório não invalida a sincronização
+            log.exception("falha no relatório semanal automático")
+            out["relatorio_semanal"] = {"erro": str(e)}
+        return out
     sync = SyncManager(db, data_dir, cfg, connectors=connectors, http=sync_http,
                        analyzer=analyzer, today_fn=today_fn)
-    sync.quick_analyzer = getattr(analyzer, "quick", None)
+    sync.quick_analyzer = getattr(base_analyzer, "quick", None)
     def _seed():
         import time as _t
         t0 = _t.monotonic()
@@ -119,6 +134,11 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             log.info("catálogo de produtos pronto em %.1f s (%d novos)", _t.monotonic() - t0, n)
         except Exception:  # noqa: BLE001
             log.exception("falha ao preparar o catálogo de produtos")
+        try:                                   # relatório semanal que ficou pendente com o GPI fechado
+            if not sync.state.get("rodando"):
+                reports.run_weekly()
+        except Exception:  # noqa: BLE001
+            log.exception("falha ao gerar o relatório semanal pendente")
     import threading as _th
     _th.Thread(target=_seed, daemon=True, name="gpi-catalogo").start()
     if start_sync:
@@ -370,9 +390,20 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
                                "registros": s0.get("records", 0), "mensagem": s0.get("message"),
                                "cobertura": [s0.get("coverage_start"), s0.get("coverage_end")]})
             conectado = any(x["disponivel"] for x in states)
+            if p["tipo"] == "approval":
+                situacao = "Restrito"
+            elif conectado and any(x["estado"] == "erro" for x in states if x["disponivel"]):
+                situacao = "Erro"
+            elif conectado:
+                situacao = "Conectado" if p["tipo"] != "auto" else "Disponível"
+            elif p["tipo"] in ("api_key", "client_id"):
+                situacao = "Requer chave"
+            else:
+                situacao = "Requer autorização"
+            ultima = max((x["ultima_coleta"] for x in states if x.get("ultima_coleta")), default=None)
             item = {**{k: v for k, v in p.items() if k not in ("auth_url", "token_url")}, "conectores": states,
                     "conectado": conectado, "credenciais": sync.creds.masked(p["id"]),
-                    "protecao": sync.creds.protection}
+                    "protecao": sync.creds.protection, "situacao": situacao, "ultima_sincronizacao": ultima}
             if p["tipo"] == "oauth":
                 item["redirect_uri"] = redirect_uri(request)
             if p["id"] == "rss":
@@ -384,7 +415,8 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             if p["id"] == "youtube":
                 item["cota_diaria"] = cfg.get("youtube_daily_units", 3000)
             out.append(item)
-        return JSONResponse(sv._clean(out))
+        return JSONResponse(sv._clean({"categorias": integ.CATEGORIAS, "integracoes": out}) if request.query_params.get("v") == "6"
+                            else sv._clean(out))
 
     async def integ_credentials(request):
         p = integ.provider(request.path_params["pid"])
@@ -443,6 +475,18 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         c = sync.creds.get(p["id"])
         if not c.get("client_id"):
             return err("informe primeiro o App ID (client_id)")
+        if p.get("oauth_especial"):
+            b = await body_json(request)
+            mode = "conta" if b.get("modo") == "conta" else "anunciante"
+            state, _ = flows.start(p["id"], {"redirect_uri": redirect_uri(request), "modo": mode})
+            try:
+                if p["id"] == "tiktok":
+                    url = integ.tiktok_authorize_url(c, mode, redirect_uri(request), state)
+                else:
+                    url = integ.meta_authorize_url(c, cfg.get("meta_graph_version", "v23.0"), redirect_uri(request), state)
+            except SourceError as e:
+                return err(str(e))
+            return JSONResponse({"url": url})
         state, verifier = flows.start(p["id"], {"redirect_uri": redirect_uri(request)})
         url = authorize_url(p["auth_url"], c["client_id"], redirect_uri(request), state, verifier, p.get("scope"))
         if p.get("auth_extra"):
@@ -461,6 +505,18 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             return page("Conexão recusada", "O provedor informou: " + str(q.get("error"))[:200])
         p = integ.provider(f["provider"])
         c = sync.creds.get(p["id"])
+        if p.get("oauth_especial"):
+            code = q.get("code") or q.get("auth_code") or ""
+            try:
+                if p["id"] == "tiktok":
+                    await run_in_threadpool(integ.tiktok_exchange, sync.http, sync.creds, code, f.get("modo"), f["redirect_uri"])
+                else:
+                    await run_in_threadpool(integ.meta_exchange, sync.http, sync.creds, code, f["redirect_uri"],
+                                            cfg.get("meta_graph_version", "v23.0"))
+            except Exception as e:  # noqa: BLE001
+                log.warning("OAuth %s falhou: %s", p["id"], e)
+                return page("Conexão não concluída", "Falha ao obter o token: " + str(e)[:300])
+            return page("Conectado ✔", f"{p['nome']} conectado ao GPI. O token fica guardado com {sync.creds.protection}.")
         try:
             form = {"grant_type": "authorization_code", "client_id": c.get("client_id", ""), "code": q.get("code", ""),
                     "redirect_uri": f["redirect_uri"], "code_verifier": f["verifier"]}
@@ -549,9 +605,12 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/marketplaces", m_marketplaces),
         Route("/api/market/models", m_models),
         *consumer_routes(db, sync, cfg, save_user_settings),
+        *report_routes(reports),
+        *social_routes(db, sync, cfg),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
     app = Starlette(routes=routes, middleware=[Middleware(HostGuard)])
     app.state.db = db
     app.state.sync = sync
+    app.state.reports = reports
     return app

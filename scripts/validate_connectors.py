@@ -36,7 +36,7 @@ def collect(workers: int) -> tuple[dict, float, Database, SyncManager]:
     return summary, time.monotonic() - t0, db, sm
 
 
-def main(out: str, compare: bool):
+def main(out: str, compare: bool, reports_dir: str | None = None):
     runs = {}
     if compare:
         s1, t1, _, _ = collect(1)
@@ -69,6 +69,8 @@ def main(out: str, compare: bool):
     ok = [k for k, v in report["fontes"].items() if v["validada"]]
     bad = [k for k, v in report["fontes"].items() if v["estado"] == "falhou"]
     print(f"validadas: {', '.join(ok)} | falharam: {', '.join(bad) or 'nenhuma'}")
+    if reports_dir:
+        real_reports(db, sm, Path(reports_dir))
     for k, v in report["fontes"].items():
         if v["estado"] == "restrita":
             continue
@@ -76,6 +78,31 @@ def main(out: str, compare: bool):
               f"{v['segundos'] if v['segundos'] is not None else '-'}s {v['mensagem'] or ''}"[:200])
 
 
+def real_reports(db, sm, out: Path):
+    """v0.6: roda a análise completa sobre os dados REAIS recém-coletados e gera relatórios de exemplo
+    (sem dados demonstrativos: não recebem a marca DEMONSTRAÇÃO)."""
+    import shutil
+    from gpi.market.analysis import make_analyzer
+    from gpi.reports.service import ReportService
+    t0 = time.monotonic()
+    state = {"atual": "", "erros": []}
+    res = make_analyzer({"ml_global_enabled": False})(sm.store, state)
+    svc = ReportService(db, out.parent / "gpi-relatorios-reais", {})
+    out.mkdir(parents=True, exist_ok=True)
+    made = []
+    for tipo, fmt, f in (("executivo", "pdf", {}), ("executivo", "xlsx", {}), ("radar_global", "xlsx", {}), ("radar_global", "pdf", {}),
+                         ("mais_pesquisados", "pdf", {}), ("tendencias_pais", "pdf", {"pais": "BR"}), ("social", "pdf", {})):
+        r = svc.generate(tipo, fmt, f)
+        p = svc.file(r["id"]) if r["status"] == "gerado" else None
+        if p:
+            shutil.copy2(p, out / p.name)
+        made.append(f"{tipo}.{fmt}:{r['status']}{'(DEMO)' if r['demo'] else ''}")
+    series = len((sm.store.load_result("consumer") or {}).get("series", []))
+    print(f"relatorios reais: {series} séries de interesse; {', '.join(made)}; análise com erros: {state['erros'][:3]}; "
+          f"{time.monotonic() - t0:.0f} s")
+
+
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    main(args[0] if args else "validacao_conectores.json", "--comparar" in sys.argv)
+    rd = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--relatorios=")), None)
+    main(args[0] if args else "validacao_conectores.json", "--comparar" in sys.argv, rd)
