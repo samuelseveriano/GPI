@@ -175,18 +175,22 @@ class HttpClient:
 
     # ------------------------------------------------------------------ request
     def request_text(self, url: str, headers: dict | None = None, ttl: float | None = None,
-                     min_interval: float | None = None, max_bytes: int = 5_000_000, timeout: float | None = None) -> str:
-        """GET de conteúdo textual (ex.: RSS/XML). Cacheado como {"_text": ...}."""
-        out = self.request_json(url, headers={"Accept": "application/rss+xml, application/xml, text/xml, */*",
-                                              **(headers or {})}, ttl=ttl, min_interval=min_interval,
-                                _raw=True, _max_bytes=max_bytes, timeout=timeout)
+                     min_interval: float | None = None, max_bytes: int = 5_000_000, timeout: float | None = None,
+                     method: str = "GET", data: bytes | None = None) -> str:
+        """Conteúdo textual (RSS/XML, ou POST SOAP com `data`). Cacheado como {"_text": ...}."""
+        out = self.request_json(url, method, headers={"Accept": "application/rss+xml, application/xml, text/xml, */*",
+                                                      **(headers or {})}, ttl=ttl, min_interval=min_interval,
+                                _raw=True, _max_bytes=max_bytes, timeout=timeout, _body=data)
         return out["_text"]
 
     def request_json(self, url: str, method: str = "GET", body: dict | None = None,
                      headers: dict | None = None, ttl: float | None = None,
                      min_interval: float | None = None, form: dict | None = None,
-                     _raw: bool = False, _max_bytes: int = 50_000_000, timeout: float | None = None):
-        if form is not None:
+                     _raw: bool = False, _max_bytes: int = 50_000_000, timeout: float | None = None,
+                     _body: bytes | None = None):
+        if _body is not None:
+            data = _body
+        elif form is not None:
             data = urllib.parse.urlencode(form).encode()
         else:
             data = json.dumps(body).encode() if body is not None else None
@@ -212,7 +216,7 @@ class HttpClient:
                     h["If-None-Match"] = validators["etag"]
                 if validators.get("last_modified"):
                     h["If-Modified-Since"] = validators["last_modified"]
-        if data is not None:
+        if data is not None and _body is None:
             h["Content-Type"] = "application/x-www-form-urlencoded" if form is not None else "application/json"
         h.update(headers or {})
         last_err = None

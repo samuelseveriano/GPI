@@ -67,7 +67,7 @@ def test_persistence_after_reopen(tmp_path):
     d.close()
     d2 = Database(tmp_path / "p.sqlite")
     assert d2.query("SELECT COUNT(*) AS n FROM sales")[0]["n"] == 1
-    assert d2.schema_version() == 4
+    assert d2.schema_version() == 5
     d2.close()
 
 

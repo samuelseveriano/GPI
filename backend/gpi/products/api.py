@@ -54,7 +54,7 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
         series = r["series"]
         best = {}
         for s in series:                         # por produto: o sinal mais forte (busca > atenção > menções)
-            rank = {"busca": 0, "atencao": 1, "popularidade": 2}[METRICS[s["metric"]]["tipo"]]
+            rank = {"busca": 0, "busca_ranking": 1, "atencao": 2, "popularidade": 3}[METRICS[s["metric"]]["tipo"]]
             cur = best.get(s["product_id"])
             if cur is None or (rank, -(s["ind"].get("n") or 0)) < cur[0]:
                 best[s["product_id"]] = ((rank, -(s["ind"].get("n") or 0)), s)
@@ -91,7 +91,7 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
         if cc not in r["paises"]:
             return j({"erro": "país não suportado"}, 404)
         page = r["paises"][cc]
-        aux = [s for s in r["series"] if s["page"] == cc and METRICS[s["metric"]]["tipo"] != "busca"]
+        aux = [s for s in r["series"] if s["page"] == cc and METRICS[s["metric"]]["tipo"] not in ("busca", "busca_ranking")]
         return j({**page, "auxiliares": aux[:60], "metricas": METRICS})
 
     async def product(request):

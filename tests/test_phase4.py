@@ -391,7 +391,7 @@ def test_migration_from_phase3_database_preserves_data(tmp_path):
     con.commit()
     con.close()
     db = Database(path)
-    assert db.schema_version() == 4
+    assert db.schema_version() == len(MIGRATIONS)
     assert db.query("SELECT COUNT(*) AS n FROM market_obs")[0]["n"] == 12
     assert db.query("SELECT COUNT(*) AS n FROM catalog_products")[0]["n"] == 0
     Catalog(db).ensure_seeded()

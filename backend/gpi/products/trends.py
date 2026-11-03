@@ -36,11 +36,28 @@ METRICS = {
                       "mede": "Visualizações de artigos da Wikipédia no idioma — atenção, NÃO são pesquisas", "tipo": "atencao", "peso_conf": 0.6},
     "mencoes": {"rotulo": "Menções em notícias e discussões", "unidade": "itens/mês",
                 "mede": "Manchetes e discussões que citam o produto — popularidade, NÃO são pesquisas", "tipo": "popularidade", "peso_conf": 0.4},
+    "volume_bing": {"rotulo": "Volume de buscas no Bing", "unidade": "buscas/mês (Microsoft Advertising)",
+                    "mede": "Pesquisas no Bing por mês (Ad Insight)", "tipo": "busca", "peso_conf": 0.9},
+    "posicao_tendencia": {"rotulo": "Lista de mais buscados (Mercado Livre)", "unidade": "pontos de posição (51 − posição), por dia",
+                          "mede": "Presença e posição na lista de termos mais buscados do Mercado Livre — ranking, NÃO volume",
+                          "tipo": "busca_ranking", "peso_conf": 0.8},
+    "score_trends": {"rotulo": "Top 25 do Google (BigQuery)", "unidade": "índice 0–100 (máximo entre regiões), por semana",
+                     "mede": "Interesse relativo dos termos no top 25 do Google por região — relativo à região e semana, NÃO volume",
+                     "tipo": "busca_ranking", "peso_conf": 0.8},
+    "score_trends_rising": {"rotulo": "Em alta no Google (BigQuery)", "unidade": "índice 0–100 (máximo entre regiões), por semana",
+                            "mede": "Termos em alta (maior crescimento) no Google por região — relativo, NÃO volume",
+                            "tipo": "busca_ranking", "peso_conf": 0.8},
+    "noticias_gdelt": {"rotulo": "Repercussão na imprensa (GDELT)", "unidade": "artigos/mês",
+                       "mede": "Artigos de notícias no mundo que citam o produto — repercussão, NÃO consumo",
+                       "tipo": "popularidade", "peso_conf": 0.4},
 }
 COUNTRY_NAMES = {"BR": "Brasil", "US": "Estados Unidos", "CN": "China", "GLOBAL:pt": "Leitores em português (global)",
-                 "GLOBAL:en": "Leitores em inglês (global)", "GLOBAL:zh": "Leitores em chinês (global — não é a China continental)"}
-PAGE_OF = {"BR": "BR", "US": "US", "CN": "CN", "GLOBAL:pt": "BR", "GLOBAL:en": "US", "GLOBAL:zh": "CN"}
-SOURCE_NAMES = {"google_ads_kp": "Google Ads (Planejador)", "google_trends_rss": "Google Trends — Trending Now",
+                 "GLOBAL:en": "Leitores em inglês (global)", "GLOBAL:zh": "Leitores em chinês (global — não é a China continental)",
+                 "GLOBAL:news": "Imprensa mundial (GDELT)"}
+PAGE_OF = {"BR": "BR", "US": "US", "CN": "CN", "GLOBAL:pt": "BR", "GLOBAL:en": "US", "GLOBAL:zh": "CN", "GLOBAL:news": "GLOBAL"}
+SOURCE_NAMES = {"ml_trends": "Mercado Livre Trends", "google_trends_bq": "Google Trends (BigQuery)", "gdelt": "GDELT",
+                "msads_kp": "Microsoft Advertising", "ebay": "eBay",
+                "google_ads_kp": "Google Ads (Planejador)", "google_trends_rss": "Google Trends — Trending Now",
                 "wikimedia": "Wikimedia", "rss": "Feeds RSS", "google_news": "Google Notícias", "reddit": "Reddit"}
 WIKI_LANG = {"Wikipédia em português": "GLOBAL:pt", "Wikipédia em inglês": "GLOBAL:en", "Wikipédia em chinês": "GLOBAL:zh"}
 
@@ -88,11 +105,11 @@ def family(pid: str | None) -> str | None:
 def build_series(db, catalog: Catalog) -> list[dict]:
     series: dict[tuple, dict] = {}
 
-    def add(pid, country, source, metric, period, d, v, msid=None):
+    def add(pid, country, source, metric, period, d, v, msid=None, mode="sum"):
         k = (pid, country, source, metric, period)
         s = series.setdefault(k, {"product_id": pid, "country": country, "page": PAGE_OF.get(country, country),
                                   "source": source, "metric": metric, "period": period, "pts": defaultdict(float)})
-        s["pts"][d] += v
+        s["pts"][d] = max(s["pts"][d], v) if mode == "max" else s["pts"][d] + v
         if msid:
             s["market_series_id"] = msid
 
@@ -103,8 +120,12 @@ def build_series(db, catalog: Catalog) -> list[dict]:
             add(fam, r["country"], r["source"], r["metric"], "mes", r["ref_date"][:7] + "-01", r["value"])
         elif r["metric"] == "trafego_faixa" and r["commercial"]:
             add(fam, r["country"], r["source"], r["metric"], "dia", r["ref_date"], r["value"])
-        elif r["metric"] == "mencoes":
+        elif r["metric"] in ("mencoes", "noticias_gdelt", "volume_bing"):
             add(fam, r["country"], r["source"], r["metric"], "mes", r["ref_date"][:7] + "-01", r["value"])
+        elif r["metric"] == "posicao_tendencia" and r["commercial"]:
+            add(fam, r["country"], r["source"], r["metric"], "dia", r["ref_date"], max(0.0, 51 - r["value"]), mode="max")
+        elif r["metric"] in ("score_trends", "score_trends_rising") and r["commercial"]:
+            add(fam, r["country"], r["source"], r["metric"], "dia", r["ref_date"], r["value"], mode="max")
     # Wikipédia: séries mensais já coletadas (Fase 2), ligadas ao catálogo pelo título do artigo
     wmap = {concept_key(p["wiki_en"]): p["product_id"] for p in catalog.products("produto") if p.get("wiki_en")}
     for s in db.query("SELECT id, product_key, country FROM market_series WHERE source = 'wikimedia'"):
@@ -422,7 +443,8 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
                  "descobertos": sum(1 for p in prods.values() if p["origin"] == "descoberto"),
                  "emergentes": len({s["product_id"] for s in series if s["ind"].get("classe") == "emergente"}),
                  "tendencias": len({s["product_id"] for s in series if s["ind"].get("classe") not in ("estável", "sem dados")}),
-                 "paises_com_buscas": sorted({PAGE_OF.get(s["country"]) for s in series if METRICS[s["metric"]]["tipo"] == "busca"}),
+                 "paises_com_buscas": sorted({PAGE_OF.get(s["country"]) for s in series if METRICS[s["metric"]]["tipo"] in ("busca", "busca_ranking")
+                                              and PAGE_OF.get(s["country"]) in ("BR", "US", "CN")}),
                  "fontes_com_dados": sorted({s["source"] for s in series})},
         "intencao_modelo": intent_default_model().info,
     }
@@ -514,7 +536,7 @@ def product_scores(pid, lst, prod, fc, comps, db) -> dict:
 
 def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict:
     mine = [s for s in series if s["page"] == cc]
-    search = [s for s in mine if METRICS[s["metric"]]["tipo"] == "busca"]
+    search = [s for s in mine if METRICS[s["metric"]]["tipo"] in ("busca", "busca_ranking")]
 
     def item(s, val, extra=None):
         return {"product_id": s["product_id"], "nome": s["nome"], "categoria": s["categoria"], "pais": s["pais_nome"],
@@ -523,8 +545,9 @@ def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict
                 "periodo": f"{s['ind'].get('primeiro')} a {s['ind'].get('ultimo')}",
                 "score": (scores.get(s["product_id"]) or {}).get("opportunity_score"), **(extra or {})}
 
-    vol = [s for s in search if s["metric"] == "volume_mensal_aprox"]
+    vol = [s for s in search if s["metric"] in ("volume_mensal_aprox", "volume_bing")]
     trn = [s for s in search if s["metric"] == "trafego_faixa"]
+    lists = [s for s in mine if METRICS[s["metric"]]["tipo"] == "busca_ranking"]
     rk = {}
     rk["mais_pesquisados"] = {
         "mede": "Média dos últimos 3 meses de buscas por mês (Google Ads, aproximado). Ranking de volume absoluto.",
@@ -536,6 +559,13 @@ def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict
         "itens": sorted([item(s, s["ind"].get("soma_30d"), {"dias_em_alta": s["ind"].get("dias_em_alta_30d")})
                          for s in trn if s["ind"].get("soma_30d")], key=lambda x: -x["valor"])[:50],
         "limitacao": None if trn else "Nenhum termo de produto apareceu nas buscas em alta deste país no período coletado."}
+    rk["listas_de_busca"] = {
+        "mede": ("Presença em listas oficiais de mais buscados (Mercado Livre; top 25 e em alta do Google no BigQuery): soma da "
+                 "pontuação de posição/índice nos últimos 30 dias. Ranking relativo — NÃO é volume de buscas."),
+        "itens": sorted([item(s, s["ind"].get("soma_30d"), {"dias_em_alta": s["ind"].get("dias_em_alta_30d")}) for s in lists
+                         if s["ind"].get("soma_30d")], key=lambda x: -x["valor"])[:50],
+        "limitacao": None if lists else ("Nenhuma lista de mais buscados conectada para este país (Mercado Livre Trends para o "
+                                         "Brasil; Google Trends no BigQuery para Brasil e EUA — Central de Integrações).")}
     grow = [s for s in mine if s["ind"].get("crescimento") is not None and (s["ind"].get("n", 0) >= 6 or s["period"] == "dia")]
     rk["maior_crescimento"] = {"mede": "Variação do último trimestre sobre o mesmo trimestre do ano anterior (ou sobre o trimestre anterior quando "
                                        "há menos de 15 meses; 30 dias sobre os 30 anteriores nas buscas em alta), por métrica.",

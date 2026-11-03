@@ -462,10 +462,13 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         p = integ.provider(f["provider"])
         c = sync.creds.get(p["id"])
         try:
-            r = await run_in_threadpool(sync.http.request_json, p["token_url"], "POST", None, None, 0, None, {
-                "grant_type": "authorization_code", "client_id": c.get("client_id", ""),
-                "client_secret": c.get("client_secret", ""), "code": q.get("code", ""),
-                "redirect_uri": f["redirect_uri"], "code_verifier": f["verifier"]})
+            form = {"grant_type": "authorization_code", "client_id": c.get("client_id", ""), "code": q.get("code", ""),
+                    "redirect_uri": f["redirect_uri"], "code_verifier": f["verifier"]}
+            if c.get("client_secret"):           # clientes públicos (ex.: Microsoft) não enviam segredo
+                form["client_secret"] = c["client_secret"]
+            if p["id"] == "msads":
+                form["scope"] = p["scope"]
+            r = await run_in_threadpool(sync.http.request_json, p["token_url"], "POST", None, None, 0, None, form)
             integ.store_oauth_token(sync.creds, p["id"], r)
         except Exception as e:  # noqa: BLE001
             log.warning("OAuth %s falhou: %s", p["id"], e)

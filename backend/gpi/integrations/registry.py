@@ -41,10 +41,10 @@ PROVIDERS = [
                    "para uso não comercial; uso comercial exige contrato com o Reddit.",
      "como_obter": "reddit.com/prefs/apps → 'create app' → tipo 'installed app' → copie o ID abaixo do nome.",
      "link": "https://www.reddit.com/prefs/apps", "documentacao": "https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki"},
-    {"id": "mercadolivre", "nome": "Mercado Livre", "tipo": "oauth", "conectores": ["mercadolivre"],
+    {"id": "mercadolivre", "nome": "Mercado Livre", "tipo": "oauth", "conectores": ["mercadolivre", "ml_trends"],
      "campos": [{"nome": "client_id", "rotulo": "App ID", "secreto": False},
                 {"nome": "client_secret", "rotulo": "Secret Key", "secreto": True}],
-     "descricao": "Tendências de busca do Mercado Livre Brasil.",
+     "descricao": "Tendências de busca do Mercado Livre Brasil (termos mais buscados, com histórico de cada coleta).",
      "permissoes": "Login na página oficial do Mercado Livre (o GPI não vê sua senha), com PKCE. Somente leitura. "
                    "No DevCenter, cadastre a URL de redirecionamento exibida abaixo; se o Mercado Livre não aceitar "
                    "endereço http://127.0.0.1, a conexão OAuth não é possível nesta instalação.",
@@ -101,17 +101,53 @@ PROVIDERS = [
                    "Trending Now (RSS) e o Planejador do Google Ads.",
      "alternativas": "Trending Now (automático) · Planejador de palavras-chave do Google Ads (conexão assistida)",
      "link": "https://developers.google.com/search/blog/2025/07/trends-api"},
-    {"id": "china_search", "nome": "Busca na China (Baidu Index, 巨量算数, Alibaba)", "tipo": "approval",
-     "conectores": ["baidu_index", "ocean_engine", "alibaba_insights"],
+    {"id": "china_search", "nome": "Busca na China (Baidu Index, 巨量算数, Alibaba, JD.com)", "tipo": "approval",
+     "conectores": ["baidu_index", "ocean_engine", "alibaba_insights", "jd_com"],
      "descricao": "Interesse de busca de consumidores na China continental.",
      "permissoes": "Nenhuma dessas fontes oferece API aberta a terceiros: exigem login chinês, contrato pago ou "
                    "empresa registrada. O GPI não raspa nem contorna essas proteções. Visualizações da Wikipédia em "
                    "chinês NÃO equivalem a buscas na China e não são apresentadas como tal.",
      "alternativas": "Sinais de oferta (exportações chinesas via UN Comtrade/Comex Stat), claramente identificados",
      "link": "https://index.baidu.com/"},
-    {"id": "msads", "nome": "Microsoft Advertising — Keyword Planner", "tipo": "approval", "conectores": ["msads_kp"],
-     "descricao": "Volumes de busca no Bing.", "permissoes": "Exige conta e developer token Microsoft Advertising; "
-     "não implementado nesta fase.", "link": "https://learn.microsoft.com/advertising/guides/get-started"},
+    {"id": "google_bigquery", "nome": "Google Trends no BigQuery (conjunto público)", "tipo": "oauth",
+     "conectores": ["google_trends_bq"],
+     "campos": [{"nome": "project_id", "rotulo": "ID do projeto Google Cloud (onde as consultas são contabilizadas)", "secreto": False},
+                {"nome": "client_id", "rotulo": "OAuth Client ID (tipo 'App para computador')", "secreto": False},
+                {"nome": "client_secret", "rotulo": "OAuth Client secret", "secreto": True}],
+     "descricao": "Top 25 e em alta por país, região (ISO 3166-2) e área de mercado nos EUA, com histórico semanal de interesse relativo.",
+     "permissoes": "Escopo somente leitura do BigQuery. As consultas usam o projeto informado: a camada gratuita do "
+                   "BigQuery cobre 1 TB de consultas por mês; o GPI mede cada consulta antes (dry run) e não executa as que "
+                   "passarem do limite definido em Configurações (padrão 2 GB). O GPI não ativa serviços pagos.",
+     "como_obter": "console.cloud.google.com: crie um projeto, ative a 'BigQuery API' e crie credenciais OAuth do tipo "
+                   "'App para computador'. Informe os dados e clique em Entrar.",
+     "link": "https://console.cloud.google.com/bigquery", "documentacao": "https://cloud.google.com/blog/products/data-analytics/international-google-trends-datasets-in-bigquery",
+     "auth_url": "https://accounts.google.com/o/oauth2/v2/auth", "token_url": "https://oauth2.googleapis.com/token",
+     "scope": "https://www.googleapis.com/auth/bigquery.readonly", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
+    {"id": "ebay", "nome": "eBay — Browse API", "tipo": "api_key", "conectores": ["ebay"],
+     "campos": [{"nome": "client_id", "rotulo": "App ID (Client ID) de produção", "secreto": False},
+                {"nome": "client_secret", "rotulo": "Cert ID (Client Secret) de produção", "secreto": True}],
+     "descricao": "Anúncios ativos, preços e marcas por produto no eBay EUA — base da análise de concorrência.",
+     "permissoes": "Token de aplicativo (sem login de usuário) com o escopo público de leitura. Quantidade de anúncios não é venda.",
+     "como_obter": "developer.ebay.com → criar conta → Application Keys → criar keyset de Production → copie App ID e Cert ID.",
+     "link": "https://developer.ebay.com/my/keys", "documentacao": "https://developer.ebay.com/api-docs/buy/browse/overview.html"},
+    {"id": "msads", "nome": "Microsoft Advertising — volume de buscas no Bing", "tipo": "oauth", "conectores": ["msads_kp"],
+     "campos": [{"nome": "developer_token", "rotulo": "Developer token", "secreto": True},
+                {"nome": "customer_id", "rotulo": "Customer ID", "secreto": False},
+                {"nome": "account_id", "rotulo": "Account ID", "secreto": False},
+                {"nome": "client_id", "rotulo": "Application (client) ID do registro no Microsoft Entra", "secreto": False}],
+     "descricao": "Volume mensal de buscas no Bing por palavra-chave (Brasil e EUA).",
+     "permissoes": "Login na página oficial da Microsoft com o escopo msads.manage; o GPI usa apenas a consulta de volume "
+                   "histórico (nenhuma campanha é criada). Implementado segundo a documentação; ainda não validado com conta real.",
+     "como_obter": "ads.microsoft.com: crie a conta → Developer Portal: solicite o developer token → portal do Azure: registre "
+                   "um aplicativo (cliente público, redirecionamento http://127.0.0.1) → informe os IDs e clique em Entrar.",
+     "link": "https://developers.ads.microsoft.com/", "documentacao": "https://learn.microsoft.com/advertising/ad-insight-service/gethistoricalsearchvolume",
+     "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+     "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+     "scope": "https://ads.microsoft.com/msads.manage offline_access"},
+    {"id": "gdelt", "nome": "GDELT — notícias globais", "tipo": "auto", "conectores": ["gdelt"],
+     "descricao": "Repercussão dos produtos na imprensa mundial (artigos por mês). Conectado automaticamente.",
+     "permissoes": "API pública e gratuita do GDELT Project; o GPI respeita o intervalo de 5 s entre consultas.",
+     "link": "https://www.gdeltproject.org/"},
     {"id": "amazon", "nome": "Amazon Brasil / EUA", "tipo": "approval", "conectores": ["amazon_br", "amazon_us"],
      "descricao": "Preços e rankings de produtos.", "permissoes": "Product Advertising API: exige conta aprovada no "
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
@@ -183,6 +219,28 @@ def test_connection(pid: str, http, creds, cfg: dict) -> tuple[bool, str]:
             n = len(r.get("results", []))
             return (n > 0, f"API respondeu ({creds.get('google_ads').get('api_version')}): {n} ideias de palavras-chave"
                     if n else "a API respondeu sem ideias (verifique o nível de acesso do developer token)")
+        if pid == "ebay":
+            from ..connectors.sources5 import EbayBrowse, ebay_token, parse_ebay
+            tok = ebay_token(http, creds)
+            r = http.request_json(EbayBrowse.URL + "?q=air+fryer&limit=3", ttl=0,
+                                  headers={"Authorization": f"Bearer {tok}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"})
+            return True, f"token obtido; {len(parse_ebay(r))} anúncio(s) retornado(s) para 'air fryer'"
+        if pid == "google_bigquery":
+            from ..connectors.sources5 import google_token
+            tok = google_token(http, creds, "google_bigquery")
+            c = creds.get("google_bigquery")
+            r = http.request_json(f"https://bigquery.googleapis.com/bigquery/v2/projects/{c.get('project_id')}/queries", "POST",
+                                  {"query": "SELECT 1", "useLegacySql": False, "dryRun": True}, ttl=0,
+                                  headers={"Authorization": f"Bearer {tok}"})
+            return True, f"projeto {c.get('project_id')} aceitou consultas (teste sem custo: dry run)"
+        if pid == "gdelt":
+            from ..connectors.sources5 import Gdelt, parse_gdelt_timeline
+            pts = parse_gdelt_timeline(http.request_json(Gdelt.URL + '?query=%22air%20fryer%22&mode=timelinevolraw&format=json&timespan=1m', ttl=0))
+            return True, f"GDELT respondeu ({len(pts)} dias)"
+        if pid == "msads":
+            from ..connectors.sources5 import ms_token
+            ms_token(http, creds)
+            return True, "token Microsoft obtido (a consulta de volume é validada na primeira sincronização)"
         if pid == "comtrade":
             key = creds.get("comtrade").get("api_key")
             if not key:

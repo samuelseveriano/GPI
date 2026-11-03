@@ -251,6 +251,25 @@ MIGRATIONS = [
             PRIMARY KEY (run_id, source)
         )""",
     ],
+    # v5 — anúncios de marketplaces (concorrência), registro de modelos e eventos de mudança (v0.5)
+    [
+        """CREATE TABLE IF NOT EXISTS market_listings (
+            source TEXT NOT NULL, item_id TEXT NOT NULL, day TEXT NOT NULL,
+            product_id TEXT, query TEXT, title TEXT, brand TEXT, model TEXT, category TEXT,
+            price DOUBLE, currency TEXT, original_price DOUBLE, country TEXT, seller TEXT,
+            condition TEXT, url TEXT, extra TEXT, collected_at TEXT NOT NULL,
+            PRIMARY KEY (source, item_id, day)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_listings_prod ON market_listings(product_id, day)",
+        """CREATE TABLE IF NOT EXISTS model_registry (
+            model_id TEXT PRIMARY KEY, kind TEXT NOT NULL, created_at TEXT NOT NULL,
+            data_hash TEXT, params TEXT, metrics TEXT, path TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS drift_events (
+            series_id TEXT NOT NULL, detector TEXT NOT NULL, ref_date TEXT NOT NULL, direction TEXT,
+            detail TEXT, created_at TEXT NOT NULL, PRIMARY KEY (series_id, detector, ref_date)
+        )""",
+    ],
 ]
 
 

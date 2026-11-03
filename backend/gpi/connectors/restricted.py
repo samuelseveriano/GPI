@@ -85,6 +85,13 @@ class AlibabaInsights(Restricted):
                          "para vendedores cadastrados; as APIs abertas exigem empresa registrada e aprovação.")
 
 
+class JdCom(Restricted):
+    id, name, order = "jd_com", "JD.com (京东) — China", 97
+    docs_url = "https://open.jd.com/"
+    restricted_reason = ("A plataforma aberta do JD exige empresa registrada na China e aprovação de aplicativo; não há "
+                         "dados de busca de consumidores abertos a terceiros. Não é raspado.")
+
+
 class MicrosoftAdsKeywords(Restricted):
     id, name, order = "msads_kp", "Microsoft Advertising — Keyword Planner", 99
     docs_url = "https://learn.microsoft.com/advertising/guides/get-started"

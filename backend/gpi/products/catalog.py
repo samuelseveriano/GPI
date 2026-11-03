@@ -161,9 +161,12 @@ class Catalog:
                 strong: bool = False, lang: str | None = None) -> str | None:
         """Registra um termo observado numa fonte. Devolve o product_id (família ou variante) se o
         termo corresponde a um produto catalogado ou recém-promovido; None caso contrário."""
+        from . import discovery
         a = nlp.analyze(term, lang)
         if not a["produto"]:
-            return None
+            a = discovery.analyze(term, lang, self._aliases())
+            if not a["produto"]:
+                return None
         p, ts = a["produto"], now_iso()
         norm = nlp._norm(a["texto"]) if a["idioma"] != "zh" else a["texto"].lower()
         fam = p["chave"]
@@ -198,6 +201,12 @@ class Catalog:
             if not promote:
                 return None
             return self._upsert_from_analysis(a, "semente" if exists else "descoberto", 1, a["idioma"])
+
+    def _aliases(self) -> list[tuple[str, str]]:
+        if not hasattr(self, "_alias_cache"):
+            self._alias_cache = [(r["alias"], r["product_id"]) for r in self.db.query(
+                "SELECT alias, product_id FROM product_aliases WHERE lang <> 'zh' LIMIT 20000")]
+        return self._alias_cache
 
     def _count(self, table: str) -> int:
         return int(self.db.query(f"SELECT COUNT(*) AS n FROM {table}")[0]["n"])
