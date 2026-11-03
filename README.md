@@ -1,4 +1,4 @@
-# GPI — Global Product Intelligence · v0.5
+# GPI — Global Product Intelligence · v0.6
 
 Plataforma **local e autônoma** de inteligência de produtos: coleta dados de fontes públicas e
 autorizadas, analisa opiniões de consumidores, acompanha o YouTube, compara produtos, gera
@@ -7,12 +7,13 @@ página *Metodologia* e são verificadas por testes.
 
 - **Usuário final:** veja `MANUAL.md` (abrir com dois cliques em `GPI.exe`).
 - **TI:** `docs/TI.md` (rede, arquivos, segurança). **Build do executável:** `docs/BUILD.md`.
-- **Integrações e o que foi validado:** `docs/INTEGRACOES.md`.
+- **Integrações e o que foi validado:** `docs/INTEGRACOES.md` e `docs/FONTES_V06.md` (relatório técnico por fonte).
+- **Relatórios Excel/PDF:** `docs/RELATORIOS.md`. **Plano da v0.6:** `docs/PLANO_V06.md`.
 
 > **Executável Windows:** o `GPI-Windows-Portable.zip` é gerado e testado pelo GitHub Actions
-> (aba *Actions → windows-build → Artifacts*). O `GPI.exe` passa pelos testes A–H numa cópia
+> (aba *Actions → windows-build → Artifacts*). O `GPI.exe` passa pelos testes A–I numa cópia
 > sem Python instalado: inicialização, servidor, interface, modelos de ML dentro do pacote,
-> persistência, encerramento, integridade. Veja `docs/BUILD.md`.
+> persistência, exportação de relatórios XLSX/PDF, encerramento, integridade. Veja `docs/BUILD.md`.
 
 ## Executar
 
@@ -20,6 +21,32 @@ página *Metodologia* e são verificadas por testes.
 - **Desenvolvimento:** `pip install -r requirements.txt` (opcional: `-r requirements-optional.txt`) e
   `Start_GPI.bat` (Windows) ou `./start_gpi.sh` (Linux/macOS). Dados em `data/`.
 - **Testes:** `pip install -r requirements-dev.txt` e `python -m pytest tests`.
+
+## Versão 0.6 — o que foi implementado
+
+Pergunta que orienta a versão: *quais produtos específicos estão ganhando procura no Brasil e em outros mercados e,
+entre eles, quais merecem ser investigados para importação da China?*
+
+- **Centro de Relatórios** (`backend/gpi/reports/`): 8 tipos (Radar Global, Mais Pesquisados/Interesse Relativo,
+  Tendências por País, Social Media Intelligence, Previsões e ML, Oportunidades de Importação, Análise do Produto,
+  Executivo) em **Excel, PDF e CSV**, gerados localmente (openpyxl + ReportLab). Filtros impressos no documento,
+  natureza de cada dado (observado/estimado/projeção/derivado), histórico com snapshot para reprodução, exclusão
+  com confirmação, exportação por página e relatório semanal automático opcional (desligado por padrão).
+- **Tendências nas Redes Sociais** (`backend/gpi/social/`): TikTok API for Business (Discovery: hashtags populares
+  por país, termos de busca em alta, termos recomendados), Instagram (hashtags, Graph API), Facebook (páginas
+  informadas pelo usuário) e Biblioteca de Anúncios da Meta (anúncios ativos na UE) — todos com OAuth assistido e
+  **não validados sem conta do usuário**; YouTube e Reddit (fase 3) integrados à análise. Retenção por fonte,
+  cota de 30 hashtags/7 dias do Instagram, só agregados guardados.
+- **Social Trend Score, Viral Product Radar e Search vs. Social**: normalização dentro de cada plataforma, seis
+  classes do radar, indicadores separados de busca, social e marketplace com consistência de direção entre fontes.
+- **Product Opportunity Engine 3.0**: nove dimensões (busca, social, marketplace, persistência, concorrência,
+  risco de qualidade, cobertura, previsão, prontidão) e prioridade de investigação — sem probabilidade de sucesso,
+  margem ou recomendação de compra.
+- **ML com × sem sinais sociais**: backtesting de origem móvel sem vazamento; os sinais só são usados com ganho
+  fora da amostra (≥ 2% de WAPE e ≥ 75% das origens).
+- **Menu v0.6** (9 grupos, com Redes Sociais e Relatórios) e **Central de Integrações** por categoria
+  (Pesquisas, Marketplaces, Redes Sociais, Dados Públicos) com situação de cada conector.
+- **Pacote**: `GPI-Windows-Portable-v0.6.zip`; smoke test do executável gera e confere XLSX e PDF.
 
 ## Versão 0.5 — o que foi implementado
 

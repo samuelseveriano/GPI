@@ -1,4 +1,4 @@
-# Segurança e distribuição do GPI.exe (v0.5)
+# Segurança e distribuição do GPI.exe (v0.6)
 
 ## O que o pacote faz — e não faz
 * Abre um servidor **somente em 127.0.0.1** (porta 8765 ou a próxima livre) e o navegador padrão.
@@ -9,6 +9,17 @@
   relatório `relatorios/seguranca.md`, gerado a cada build). Cada fonte consultada fica registrada em *Saúde das Fontes*.
 * Empacotamento PyInstaller **one-folder** (sem extração em pasta temporária), **sem UPX, sem ofuscação, sem técnicas
   de evasão**. Módulos de teste e bibliotecas não usadas são excluídos; o relatório confirma.
+
+## Redes sociais, privacidade e relatórios (v0.6)
+* Somente APIs oficiais com autorização do usuário (OAuth nas páginas da TikTok e da Meta); o GPI nunca pede senha de
+  rede social. Não há raspagem, endpoints privados nem contorno de autenticação. A TikTok Research API não é usada.
+* Só **agregados** são guardados (posições, contagens, medianas de engajamento) e o link público de referência. Textos
+  de publicações e nomes de usuários não são armazenados (o texto de páginas do Facebook é lido para identificar o produto
+  e descartado). Prazos de retenção por fonte (padrão 90 dias para TikTok e Meta, 36 meses para estatísticas do YouTube),
+  configuráveis; os dados vencidos são apagados a cada análise.
+* Relatórios exportam apenas agregados e links permitidos; tokens e credenciais nunca entram em relatórios, snapshots,
+  logs ou arquivos exportados (filtro adicional remove qualquer campo com nome de credencial).
+* Relatórios são salvos só neste computador; o relatório semanal automático é opcional e nada é enviado para fora.
 
 ## Verificações automáticas em cada build (GitHub Actions)
 1. Testes do executável numa cópia sem Python no PATH (inicialização, servidor, interface, modelos — incluindo os

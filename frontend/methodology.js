@@ -304,5 +304,17 @@ ${F('\\varepsilon_{cut} = \\sqrt{\\frac{1}{2m} \\ln\\frac{4n}{\\delta}}, \\quad 
 <p><b>Viabilidade de importação</b>: custo nacionalizado com ICMS “por dentro”; Monte Carlo com distribuições triangulares (mín, base, máx) informadas pelo usuário; pedido ótimo:</p>
 ${F('Q^{*} = \\arg\\max_{Q \\ge MOQ, Q \\cdot c \\le B} \; \\frac{1}{N}\\sum_{k} \\left[ \\min(Q, D_{k}) \\, p_{k} - Q \\, c_{k} \\right]')}
 <p class="muted">Código: <code>backend/gpi/forecasting/advanced.py</code>, <code>products/discovery.py</code>, <code>market/viability.py</code>, <code>market/reviews2.py</code></p></div>
+<div class="panel" id="m-v06"><h2>24. Versão 0.6: redes sociais, oportunidades 3.0 e relatórios</h2>
+<p><b>Normalização por plataforma.</b> Para cada plataforma p e métrica m, o crescimento g de cada produto vira o seu percentil entre os produtos daquela mesma plataforma e métrica (empates recebem a média). Curtidas, visualizações e publicações nunca são somadas entre plataformas.</p>
+${F('\\pi_{i}^{(p,m)} = \\frac{\\text{posto}(g_{i}^{(p,m)})}{N^{(p,m)} - 1}')}
+<p><b>Social Trend Score</b> (0–100, exploratório): média ponderada dos componentes disponíveis, renormalizada pela cobertura — crescimento (média, entre plataformas, do maior percentil de cada uma) 35%, persistência 20%, engajamento relativo (percentil do nível) 15%, diversidade de plataformas 15%, intenção comercial 15%.</p>
+${F('STS_{i} = 100 \\cdot \\frac{\\sum_{k \\in K_{i}} w_{k} c_{i,k}}{\\sum_{k \\in K_{i}} w_{k}}')}
+<p><b>Viral Product Radar</b>: emergente = primeira observação recente; viralização recente = mais que dobrou em 7 dias ou anomalia no último período, com persistência &lt; 50%; sustentado = crescimento &gt; 15% com persistência ≥ 50%; saturação = desaceleração perto do máximo; declínio = queda &gt; 15%; demais = estável. Crescimento em uma única plataforma é sinalizado.</p>
+<p><b>Search vs. Social</b>: Search Growth, Social Growth e Marketplace Signals ficam separados. A consistência compara só a direção (s ∈ {−1, 0, +1}, zona neutra de ±5%) entre os tipos de fonte; com ≥ 8 meses comuns, também a correlação de Spearman.</p>
+${F('CSC_{i} = \\frac{2}{k(k-1)} \\sum_{a<b} s_{a} s_{b}')}
+<p><b>Opportunity Engine 3.0</b>: busca 25%, social 10%, marketplace 15%, persistência 15%, (100 − concorrência) 10%, (100 − risco de qualidade) 10%, previsão 5%, prontidão 10%; dimensões sem dados não entram. Prioridade "Evidência insuficiente" se cobertura &lt; 40 ou menos de duas dimensões de demanda; "Alta" exige índice ≥ 65 e dois tipos de fonte independentes em alta.</p>
+<p><b>Sinais sociais no ML</b>: mesmo modelo global, com e sem defasagens sociais (t−1, t−2); origem móvel, 1 passo à frente. Adoção só se o WAPE cair ≥ 2% no total e em ≥ 75% das origens.</p>
+<p><b>Relatórios</b>: cada tabela declara a natureza do dado (observado, estimado, projeção, derivado); recortes de período recalculam os indicadores mensais só com os meses do recorte; um snapshot dos dados acompanha cada arquivo para reprodução.</p>
+<p class="muted">Código: <code>backend/gpi/social/</code>, <code>products/opportunity3.py</code>, <code>forecasting/social_ablation.py</code>, <code>reports/</code></p></div>
 </div>`;
 };
