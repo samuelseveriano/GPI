@@ -210,3 +210,26 @@ td.wrap { white-space: normal; max-width: 320px; }
 @media (max-width: 1400px) { .export-bar button { padding: 4px 8px; } }
 .export-bar[hidden], .repnote[hidden] { display: none; }
 .rcard .form button { padding: 6px 11px; }
+
+/* ---------------------------------------------------------------- v0.6.1: sincronização e integrações */
+#syncbar .prog { min-width: 160px; }
+.prog.indet i { width: 35%; animation: indet 1.4s linear infinite; }
+@keyframes indet { from { margin-left: -35%; } to { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .prog.indet i { animation: none; width: 100%; opacity: .5; } }
+.syncpanel { position: fixed; top: 0; right: 0; width: min(560px, 96vw); height: 100vh; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  box-shadow: -8px 0 24px rgb(0 0 0 / .12); z-index: 60; padding: 14px 18px; }
+.syncpanel[hidden] { display: none; }
+.sp-head { display: flex; justify-content: space-between; align-items: center; }
+.sp-head h2 { margin: 0; }
+.sp-grp { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 4px; }
+.sp-src { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+.sp-src summary { cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sp-name { font-weight: 600; min-width: 170px; }
+.badge.st-executando { background: color-mix(in srgb, var(--c1) 15%, transparent); color: var(--c1); }
+.badge.st-limite, .badge.st-erro { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.chain { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; padding: 0; margin: 6px 0; font-size: 12px; }
+.chain li { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+.chain li.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.wizard { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+.wizard h3 { margin: 0 0 6px; font-size: 14px; }
+table.diag td { vertical-align: top; }

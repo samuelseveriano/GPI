@@ -416,6 +416,7 @@
   Object.assign(PAGES, window.GPI_CONSUMER({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }));
   Object.assign(PAGES, window.GPI_V05({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
   Object.assign(PAGES, window.GPI_V06({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
+  Object.assign(PAGES, window.GPI_V061({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
 
 
   async function refresh() {

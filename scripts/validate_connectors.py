@@ -63,6 +63,15 @@ def main(out: str, compare: bool, reports_dir: str | None = None):
     # resumo primeiro (as anotações do GitHub são truncadas em ~4 KB)
     for mode, r in runs.items():
         print(f"desempenho {mode}: {r['segundos']} s")
+    hosts = getattr(sm.http, "host_stats", {}) or {}
+    report["metricas_http"] = hosts
+    for h, m in sorted(hosts.items(), key=lambda kv: -kv[1].get("segundos", 0))[:12]:
+        n = max(1, m.get("requisicoes", 0))
+        print(f"host {h[:34]:34s} req={m.get('requisicoes', 0):4d} total={m.get('segundos', 0):6.1f}s "
+              f"dns={1000 * m.get('dns_s', 0) / n:5.0f}ms conexao={1000 * m.get('conexao_s', 0) / n:5.0f}ms "
+              f"1a_resp={1000 * m.get('primeira_resposta_s', 0) / n:6.0f}ms reaproveitadas={m.get('conexoes_reaproveitadas', 0)} "
+              f"erros={m.get('erros', 0)} espera_429={m.get('espera_limite_s', 0):.0f}s")
+    Path(out).write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     for t_ in trends:
         print(f"google_trends {t_['country']}: {t_['termos']} termos em alta, {t_['com_produto']} com produto, "
               f"{t_['comerciais']} comerciais")

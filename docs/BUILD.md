@@ -1,4 +1,4 @@
-# Build do GPI para Windows — GPI v0.6
+# Build do GPI para Windows — GPI v0.6.1
 
 O executável é gerado e testado automaticamente pelo GitHub Actions
 (`.github/workflows/windows-build.yml`) a cada push na branch `main`, ou manualmente em
@@ -36,6 +36,7 @@ com o Python removido do PATH e sem variáveis PYTHON\***:
 | F — Encerramento | `--stop` encerra o processo, remove `gpi.run.json` e libera a porta 8765 |
 | G — Integridade | altera um arquivo do pacote e confirma que o GPI recusa abrir (código 4) |
 | I — Relatórios | gera o Relatório Executivo em XLSX e PDF pelo executável, confere os cabeçalhos dos arquivos (PK / %PDF) e, após reabrir, confere que os 2 relatórios continuam no histórico |
+| J — Painel e integrações (v0.6.1) | painel de sincronização responde, Google Ads sem campo de developer token, estados das integrações, YouTube e exportação de diagnóstico |
 | H — Distribuição limpa | todos os testes acima rodam na cópia sem Python no PATH |
 
 Em caso de falha, a etapa mostra a anotação `smoke`/`smoke-excecao` com a linha e o final do `gpi.log`,

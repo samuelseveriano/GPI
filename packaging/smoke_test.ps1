@@ -153,6 +153,18 @@ foreach ($fmt in "xlsx", "pdf") {
 }
 if ($fmt -eq "pdf") { Copy-Item $out (Join-Path (Split-Path $Report) "exemplo_relatorio_exe.pdf") -Force }
 
+Note "J) Painel de sincronização, integrações e YouTube (v0.6.1)"
+$pn = Invoke-RestMethod -Uri "$base/api/sync/panel" -NoProxy -TimeoutSec 30
+if (-not $pn.titulo) { Fail "painel de sincronização sem título" }
+$ints = Invoke-RestMethod -Uri "$base/api/integrations?v=6" -NoProxy -TimeoutSec 30
+$ga = @($ints.integracoes | Where-Object { $_.id -eq "google_ads" })[0]
+if (@($ga.campos | Where-Object { $_.nome -eq "developer_token" }).Count -ne 0) { Fail "Google Ads ainda pede developer token" }
+if (-not $ga.estados.nivel) { Fail "integração sem estado (configurado/autenticado/…)" }
+$yt = Invoke-RestMethod -Uri "$base/api/youtube/status" -NoProxy -TimeoutSec 30
+$diag = Invoke-WebRequest -Uri "$base/api/diagnostics/export" -UseBasicParsing -NoProxy -TimeoutSec 60
+if ($diag.StatusCode -ne 200 -or $diag.Content -notmatch "versao_gpi") { Fail "exportação de diagnóstico falhou" }
+Note "   painel: $($pn.titulo) · Google Ads sem developer token · YouTube: $($yt.videos_armazenados) vídeos · diagnóstico exportado"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -179,4 +191,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–I)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–J)"

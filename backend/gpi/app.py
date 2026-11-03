@@ -33,10 +33,12 @@ from .products.api import routes as consumer_routes
 from .reports.api import routes as report_routes
 from .reports.service import ReportService
 from .social.api import routes as social_routes
+from .sync_api import integration_state, routes as v061_routes
 from .market.sync import SyncManager
 from .integrations import registry as integ
 from .integrations.oauth import PendingFlows, authorize_url
 from .connectors.http import SourceError
+from .connectors.http import redact as redact_text
 from starlette.responses import HTMLResponse
 
 log = logging.getLogger("gpi")
@@ -122,6 +124,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             log.exception("falha no relatório semanal automático")
             out["relatorio_semanal"] = {"erro": str(e)}
         return out
+    analyzer.steps = getattr(base_analyzer, "steps", 10)
     sync = SyncManager(db, data_dir, cfg, connectors=connectors, http=sync_http,
                        analyzer=analyzer, today_fn=today_fn)
     sync.quick_analyzer = getattr(base_analyzer, "quick", None)
@@ -301,8 +304,9 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
     # ------------------------------------------------------------ inteligência de mercado (Fase 2)
     async def sync_status(_):
         runs = db.query("SELECT id, started_at, finished_at, trigger, state FROM sync_runs ORDER BY id DESC LIMIT 10")
-        return JSONResponse({**sync.state, "ultimas": runs, "devida": sync.due(),
-                             "auto_sync": cfg.get("auto_sync", True)})
+        snap = sync.snapshot()
+        return JSONResponse({**snap, "ultimas": runs, "devida": sync.due(), "auto_sync": cfg.get("auto_sync", True),
+                             "fontes_com_falha": sync.failed_sources()})
 
     async def sync_run(_):
         return JSONResponse({"iniciada": sync.start("manual")})
@@ -404,6 +408,8 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             item = {**{k: v for k, v in p.items() if k not in ("auth_url", "token_url")}, "conectores": states,
                     "conectado": conectado, "credenciais": sync.creds.masked(p["id"]),
                     "protecao": sync.creds.protection, "situacao": situacao, "ultima_sincronizacao": ultima}
+            item["estados"] = integration_state(p, item, sync.store.load_result(f"diag:{p['id']}"))
+            item["diagnosticavel"] = p["tipo"] != "approval"
             if p["tipo"] == "oauth":
                 item["redirect_uri"] = redirect_uri(request)
             if p["id"] == "rss":
@@ -434,12 +440,31 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         log.info("credenciais atualizadas para %s (campos: %s)", p["id"], ", ".join(values))
         return JSONResponse({"ok": True, "credenciais": sync.creds.masked(p["id"])})
 
+    def _revoke(pid):
+        """Revoga a autorização no provedor antes de apagar as credenciais locais (melhor esforço)."""
+        p = integ.provider(pid) or {}
+        c = sync.creds.get(pid)
+        try:
+            if p.get("revoke_url") and (c.get("refresh_token") or c.get("access_token")):
+                sync.http.request_json(p["revoke_url"], "POST", form={"token": c.get("refresh_token") or c.get("access_token")}, ttl=0)
+                return "autorização revogada no Google"
+            if pid == "meta" and c.get("access_token"):
+                sync.http.request_json(f"https://graph.facebook.com/{cfg.get('meta_graph_version', 'v23.0')}/me/permissions?"
+                                       + urllib.parse.urlencode({"access_token": c["access_token"]}), "DELETE", ttl=0)
+                return "permissões revogadas na Meta"
+        except Exception as e:  # noqa: BLE001
+            log.warning("revogação de %s não confirmada: %s", pid, redact_text(str(e)))
+            return "credenciais apagadas; a revogação no provedor não foi confirmada (revogue também na conta, se quiser)"
+        return None
+
     async def integ_delete(request):
         pid = request.path_params["pid"]
+        rev = await run_in_threadpool(_revoke, pid)
         sync.creds.delete(pid)
+        sync.store.save_result(f"diag:{pid}", {"em": None, "resultado": {}})
         if pid == "google_news":
             save_user_settings({"google_news_optin": False})
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": True, "revogacao": rev})
 
     async def integ_test(request):
         pid = request.path_params["pid"]
@@ -477,13 +502,18 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             return err("informe primeiro o App ID (client_id)")
         if p.get("oauth_especial"):
             b = await body_json(request)
-            mode = "conta" if b.get("modo") == "conta" else "anunciante"
+            if p["id"] == "meta":
+                from .integrations.meta import MODULES
+                mode = b.get("modulo") if b.get("modulo") in MODULES else "basico"
+            else:
+                mode = "conta" if b.get("modo") == "conta" else "anunciante"
             state, _ = flows.start(p["id"], {"redirect_uri": redirect_uri(request), "modo": mode})
             try:
                 if p["id"] == "tiktok":
                     url = integ.tiktok_authorize_url(c, mode, redirect_uri(request), state)
                 else:
-                    url = integ.meta_authorize_url(c, cfg.get("meta_graph_version", "v23.0"), redirect_uri(request), state)
+                    url = integ.meta_authorize_url(c, cfg.get("meta_graph_version", "v23.0"), redirect_uri(request), state,
+                                                   mode, rerequest=bool(c.get("escopos")))
             except SourceError as e:
                 return err(str(e))
             return JSONResponse({"url": url})
@@ -501,6 +531,11 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         f = flows.consume(q.get("state", ""))
         if not f:
             return page("Conexão não concluída", "Pedido expirado ou inválido (proteção contra falsificação). Tente novamente.")
+        if f["provider"] == "meta":
+            from .integrations.meta import callback_error
+            msg = callback_error(q)
+            if msg:
+                return page("Conexão Meta não concluída", msg)
         if q.get("error"):
             return page("Conexão recusada", "O provedor informou: " + str(q.get("error"))[:200])
         p = integ.provider(f["provider"])
@@ -512,7 +547,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
                     await run_in_threadpool(integ.tiktok_exchange, sync.http, sync.creds, code, f.get("modo"), f["redirect_uri"])
                 else:
                     await run_in_threadpool(integ.meta_exchange, sync.http, sync.creds, code, f["redirect_uri"],
-                                            cfg.get("meta_graph_version", "v23.0"))
+                                            cfg.get("meta_graph_version", "v23.0"), f.get("modo") or "basico")
             except Exception as e:  # noqa: BLE001
                 log.warning("OAuth %s falhou: %s", p["id"], e)
                 return page("Conexão não concluída", "Falha ao obter o token: " + str(e)[:300])
@@ -605,6 +640,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/marketplaces", m_marketplaces),
         Route("/api/market/models", m_models),
         *consumer_routes(db, sync, cfg, save_user_settings),
+        *v061_routes(db, sync, cfg, data_dir, save_user_settings),
         *report_routes(reports),
         *social_routes(db, sync, cfg),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),

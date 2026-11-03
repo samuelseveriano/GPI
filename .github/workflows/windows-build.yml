@@ -172,9 +172,9 @@ jobs:
           New-Item -ItemType Directory -Force dist/GPI/relatorios | Out-Null
           $report | Out-File -Encoding utf8 dist/GPI/relatorios/relatorio_build.txt
           Copy-Item dependencias.txt, selftest.json, defender.txt dist/GPI/relatorios/
-          "0.6.0" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
+          "0.6.1" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
           $sigtxt = if ($sig.Status -eq 'Valid') { "assinado: $($sig.SignerCertificate.Subject)" } else { "" }
-          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.6.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
+          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.6.1.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
           Write-Output "::notice title=seguranca::$sec | assinatura: $($sig.Status)"
           if ($LASTEXITCODE -ne 0) { Write-Output "::error title=seguranca::relatório de segurança encontrou problema (credencial embutida ou nível de execução elevado)"; exit 1 }
           $report | Out-File -Encoding utf8 relatorio_build.txt
@@ -183,11 +183,11 @@ jobs:
           $report >> $env:GITHUB_STEP_SUMMARY
           '```' >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Gerar GPI-Windows-Portable-v0.6.zip e hashes SHA-256
+      - name: Gerar GPI-Windows-Portable-v0.6.1.zip e hashes SHA-256
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.6.zip
-          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.6.zip -Algorithm SHA256)
+          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.6.1.zip
+          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.6.1.zip -Algorithm SHA256)
           $h | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
           Write-Output "::notice title=sha256::$((Get-Content SHA256SUMS.txt) -join ' | ')"
@@ -195,16 +195,16 @@ jobs:
           "### Hashes SHA-256" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY; Get-Content SHA256SUMS.txt >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY
           Get-Content seguranca.md >> $env:GITHUB_STEP_SUMMARY
           # integridade do ZIP: extrair numa pasta nova e conferir o hash do executável
-          Expand-Archive GPI-Windows-Portable-v0.6.zip -DestinationPath zipcheck -Force
+          Expand-Archive GPI-Windows-Portable-v0.6.1.zip -DestinationPath zipcheck -Force
           if ((Get-FileHash zipcheck/GPI/GPI.exe).Hash -ne (Get-FileHash dist/GPI/GPI.exe).Hash) { Write-Output "::error title=zip::GPI.exe no ZIP difere do compilado"; exit 1 }
           $ok = (Start-Process zipcheck/GPI/GPI.exe -ArgumentList "--check" -Wait -PassThru).ExitCode
           if ($ok -ne 0) { Write-Output "::error title=zip::verificação de integridade do pacote extraído falhou ($ok)"; exit 1 }
 
       - uses: actions/upload-artifact@v5
         with:
-          name: GPI-Windows-Portable-v0.6
+          name: GPI-Windows-Portable-v0.6.1
           path: |
-            GPI-Windows-Portable-v0.6.zip
+            GPI-Windows-Portable-v0.6.1.zip
             SHA256SUMS.txt
             seguranca.md
             relatorio_build.txt
