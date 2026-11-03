@@ -325,6 +325,44 @@ MIGRATIONS = [
         "UPDATE sync_jobs SET state = 'removida' WHERE source IN (SELECT source FROM removed_sources) AND state IN ('pending', 'failed', 'running')",
         "UPDATE source_status SET state = 'removida', message = 'fonte descontinuada no GPI v0.7 (dados históricos preservados)' WHERE source IN (SELECT source FROM removed_sources)",
     ],
+    # 8 — v0.7: Conformidade de Importação (base regulatória, NCM, homologações, análises, fornecedores, IA local)
+    [
+        """CREATE TABLE IF NOT EXISTS compliance_docs (
+            id TEXT PRIMARY KEY, orgao TEXT NOT NULL, tipo TEXT, numero TEXT, titulo TEXT NOT NULL,
+            data_publicacao TEXT, vigencia_inicio TEXT, situacao TEXT NOT NULL, ultima_verificacao TEXT,
+            url_oficial TEXT, versao INTEGER NOT NULL DEFAULT 1, hash_sha256 TEXT, status_atualizacao TEXT,
+            meta TEXT NOT NULL,                   -- JSON completo do documento (tags, fontes, conflito...)
+            texto TEXT NOT NULL, origem TEXT NOT NULL, atualizado_em TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS compliance_doc_history (
+            id INTEGER PRIMARY KEY, doc_id TEXT NOT NULL, versao INTEGER NOT NULL, hash_sha256 TEXT,
+            situacao TEXT, meta TEXT NOT NULL, texto TEXT NOT NULL, substituido_em TEXT NOT NULL, motivo TEXT)""",
+        """CREATE TABLE IF NOT EXISTS compliance_updates (
+            id INTEGER PRIMARY KEY, iniciado_em TEXT NOT NULL, concluido_em TEXT, origem TEXT NOT NULL,
+            novos INTEGER DEFAULT 0, alterados INTEGER DEFAULT 0, revogados INTEGER DEFAULT 0, falhas INTEGER DEFAULT 0,
+            detalhes TEXT)""",
+        """CREATE TABLE IF NOT EXISTS compliance_analyses (
+            id INTEGER PRIMARY KEY, criado_em TEXT NOT NULL, produto TEXT NOT NULL, product_id TEXT,
+            entrada TEXT NOT NULL, resultado TEXT NOT NULL, base_versao TEXT, modo TEXT NOT NULL)""",
+        "CREATE INDEX IF NOT EXISTS idx_comp_an_prod ON compliance_analyses(product_id, criado_em)",
+        """CREATE TABLE IF NOT EXISTS compliance_attachments (
+            id INTEGER PRIMARY KEY, analysis_id INTEGER, nome TEXT NOT NULL, tipo TEXT NOT NULL, tamanho INTEGER NOT NULL,
+            sha256 TEXT NOT NULL, caminho TEXT NOT NULL, texto_extraido TEXT, criado_em TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS ncm_table (
+            codigo TEXT PRIMARY KEY, descricao TEXT NOT NULL, data_inicio TEXT, data_fim TEXT, ato TEXT)""",
+        """CREATE TABLE IF NOT EXISTS ncm_meta (k TEXT PRIMARY KEY, v TEXT)""",
+        """CREATE TABLE IF NOT EXISTS anatel_homologacoes (
+            numero TEXT, fabricante TEXT, modelo TEXT, nome_comercial TEXT, tipo_produto TEXT,
+            data_homologacao TEXT, situacao TEXT, solicitante TEXT, extra TEXT)""",
+        "CREATE INDEX IF NOT EXISTS idx_anatel_num ON anatel_homologacoes(numero)",
+        "CREATE INDEX IF NOT EXISTS idx_anatel_mod ON anatel_homologacoes(modelo)",
+        """CREATE TABLE IF NOT EXISTS compliance_cert_checks (
+            id INTEGER PRIMARY KEY, analysis_id INTEGER, orgao TEXT NOT NULL, consulta TEXT NOT NULL,
+            resultado TEXT NOT NULL, evidencia TEXT, verificado_por TEXT NOT NULL, criado_em TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS suppliers (
+            id INTEGER PRIMARY KEY, nome TEXT NOT NULL, nome_local TEXT, pais TEXT NOT NULL DEFAULT 'CN', cidade TEXT,
+            provincia TEXT, site TEXT, contato TEXT, produtos TEXT, certificacoes TEXT, observacoes TEXT,
+            fonte TEXT NOT NULL DEFAULT 'informado pelo usuário', criado_em TEXT NOT NULL, atualizado_em TEXT NOT NULL)""",
+    ],
 ]
 
 
@@ -346,6 +384,13 @@ class Database:
     def execute(self, sql: str, params=()):
         with self.lock:
             cur = self.con.execute(sql, params)
+            if not getattr(self._tx, "depth", 0):
+                self.con.commit()
+            return cur
+
+    def executemany(self, sql: str, rows):
+        with self.lock:
+            cur = self.con.executemany(sql, rows)
             if not getattr(self._tx, "depth", 0):
                 self.con.commit()
             return cur

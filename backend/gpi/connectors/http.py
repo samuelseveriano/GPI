@@ -394,7 +394,7 @@ class HttpClient:
                      headers: dict | None = None, ttl: float | None = None,
                      min_interval: float | None = None, form: dict | None = None,
                      _raw: bool = False, _max_bytes: int = 50_000_000, timeout: float | None = None,
-                     _body: bytes | None = None):
+                     _body: bytes | None = None, _binary: bool = False):
         if _body is not None:
             data = _body
         elif form is not None:
@@ -457,6 +457,9 @@ class HttpClient:
                 if len(raw) > _max_bytes:
                     raise SourceError("resposta maior que o limite permitido", "formato")
                 raw = decode_body(raw, enc)
+                if _binary:                       # arquivos oficiais (ZIP/JSON) — bytes originais, sem cache
+                    self._fails[host] = 0
+                    return {"_bytes": raw}
                 if _raw:
                     out = {"_text": raw.decode("utf-8", "replace")}
                 else:

@@ -635,6 +635,13 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
     async def index(_):
         return FileResponse(frontend_dir / "index.html")
 
+    # v0.7 — Conformidade de Importação + IA local (carregamento sob demanda, nunca na inicialização)
+    import types as _types
+    from .compliance.api import setup as comp_setup
+    comp_state = _types.SimpleNamespace()
+    comp_routes = comp_setup(comp_state, db, data_dir, cfg, lambda: sync.http, save_user_settings,
+                             [Path(p) for p in (cfg.get("_app_dirs") or [])] or [Path(__file__).resolve().parents[2]])
+
     routes = [
         Route("/", index),
         Route("/api/health", health),
@@ -688,12 +695,17 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         *v061_routes(db, sync, cfg, data_dir, save_user_settings),
         *report_routes(reports),
         *social_routes(db, sync, cfg),
+        *comp_routes,
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
     app = Starlette(routes=routes, middleware=[
         Middleware(BodyLimit, default=2 * 1024 * 1024,
-                   per_path={"/api/import": 50 * 1024 * 1024, "/api/compliance/anexos": 12 * 1024 * 1024}),
+                   per_path={"/api/import": 50 * 1024 * 1024, "/api/compliance/anexos": 12 * 1024 * 1024,
+                             "/api/compliance/ncm/arquivo": 42 * 1024 * 1024, "/api/compliance/base/pacote": 20 * 1024 * 1024,
+                             "/api/compliance/anatel/arquivo": 310 * 1024 * 1024}),
         Middleware(HostGuard)])
+    for k, v in vars(comp_state).items():
+        setattr(app.state, k, v)
     app.state.db = db
     app.state.sync = sync
     app.state.reports = reports

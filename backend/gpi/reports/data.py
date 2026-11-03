@@ -60,6 +60,14 @@ TYPES = {
                   "descricao": "Síntese para a gerência: panorama, produtos em destaque, tendências internacionais, "
                                "evidências, oportunidades, riscos, limitações e próximas investigações.",
                   "secoes": ["executivo", "ranking", "paises", "social", "oportunidades", "fontes"], "grupo": "executivo"},
+    "regulatorio": {"nome": "Relatório de Análise Regulatória de Produto",
+                    "descricao": "Identificação, informações técnicas, finalidade, NCM, Anatel, Inmetro, tratamento "
+                                 "administrativo, outros órgãos, evidências, normas, faltantes, riscos, checklist, próximas "
+                                 "verificações, datas e limitações (17 seções). Triagem — não é decisão oficial.",
+                    "secoes": [], "grupo": "conformidade", "exige_analise": True},
+    "checklist_fornecedor": {"nome": "Checklist Técnico para Importação",
+                             "descricao": "Documentos e informações a solicitar ao fabricante, em português, inglês e "
+                                          "chinês simplificado.", "secoes": [], "grupo": "conformidade", "exige_analise": True},
 }
 FORMATS = ["xlsx", "pdf", "csv"]
 COUNTRY_LABEL = {"BR": "Brasil", "US": "Estados Unidos", "CN": "China", "GLOBAL": "Global"}
@@ -691,6 +699,10 @@ def build(db, tipo: str, filtros: dict | None = None, cfg: dict | None = None, t
     if tipo not in TYPES:
         raise ValueError(f"tipo de relatório desconhecido: {tipo}")
     spec = TYPES[tipo]
+    if spec.get("exige_analise"):
+        from . import regulatory as RG
+        a = RG.load_analysis(db, filtros or {})
+        return RG.build(a, run_id) if tipo == "regulatorio" else RG.build_checklist(a, run_id)
     f = Filters(filtros)
     if spec.get("exige_produto") and not f.produto:
         raise ValueError("selecione um produto para o relatório individual")
@@ -769,7 +781,8 @@ def build(db, tipo: str, filtros: dict | None = None, cfg: dict | None = None, t
 def main_table(ds: dict) -> dict:
     """Tabela principal (para CSV e exportações simples)."""
     pref = {"radar_global": "ranking", "mais_pesquisados": "pesquisados", "tendencias_pais": "ranking", "social": "social_ranking",
-            "previsoes": "previsoes", "oportunidades": "oportunidades", "produto": "historico", "executivo": "ranking"}[ds["tipo"]]
+            "previsoes": "previsoes", "oportunidades": "oportunidades", "produto": "historico", "executivo": "ranking",
+            "regulatorio": "anatel", "checklist_fornecedor": "checklist"}.get(ds["tipo"], "resumo")
     for _, tables in ds["secoes"]:
         for t in tables:
             if t["id"] == pref:
