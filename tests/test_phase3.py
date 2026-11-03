@@ -200,7 +200,9 @@ def test_integration_center_flow(tmp_path):
         code, lst = s.req("/api/integrations")
         ids = {p["id"]: p for p in lst}
         assert ids["publicas"]["tipo"] == "auto" and ids["youtube"]["tipo"] == "api_key"
-        assert ids["mercadolivre"]["tipo"] == "oauth" and ids["mercadolivre"]["redirect_uri"].endswith("/oauth/callback")
+        # v0.7: o Mercado Livre exige Redirect URI HTTPS (página de retorno estática); os demais seguem no loopback
+        assert ids["mercadolivre"]["tipo"] == "oauth" and ids["mercadolivre"]["redirect_uri"].startswith("https://")
+        assert ids["google_ads"]["redirect_uri"].endswith("/oauth/callback")
         assert ids["china_marketplaces"]["tipo"] == "approval" and ids["china_marketplaces"]["link"]
         assert "reclame_aqui" not in ids and "china_search" not in ids        # v0.7: fontes retiradas
         assert not ids["youtube"]["conectado"]
