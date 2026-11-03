@@ -8,7 +8,7 @@ useDefault = true
 description = "Valores claramente fictícios usados em testes automatizados"
 regexTarget = "match"
 regexes = [
-  '''(?i)(TESTE|SEGREDO|FAKE|DUMMY|EXEMPLO|ABCDEFGH|0123456789)''',
+  '''(?i)(TESTE|SEGREDO|FAKE|DUMMY|EXEMPLO|ABCDEF12|ABCDEFGH|0123456789|AUTHCODE12|VERIF12)''',
 ]
 paths = [
   '''backend/gpi/reports/fonts/.*\.ttf''',

@@ -36,7 +36,7 @@ ATRIB = re.compile(
     r"(?i)\b(client_secret|secret|password|senha|api_key|apikey|access_token|refresh_token|developer_token|token)"
     r"\b\s*[\"']?\s*[:=]\s*[\"']([^\"'\s]{16,})[\"']")
 # Valores de teste claramente fictícios usados nos testes automatizados.
-FICTICIO = re.compile(r"(?i)(teste|segredo|fake|dummy|exemplo|ABCDEFGH|0123456789|xxxx)")
+FICTICIO = re.compile(r"(?i)(teste|segredo|fake|dummy|exemplo|ABCDEF12|ABCDEFGH|0123456789|AUTHCODE12|VERIF12|xxxx)")
 IGNORAR_VALOR = re.compile(r"(?i)^(x+|\*+|\.+|test|fake|dummy|exemplo|example|placeholder|segredo|secret|redacted|<.*>|\$\{.*\}|\{\{.*\}\})")
 PROIBIDOS = re.compile(
     r"(?i)(\.sqlite3?$|\.db$|\.gguf$|\.pfx$|\.p12$|\.pem$|\.key$|(^|/)\.env$|credentials\.json$|token\.json$)")
