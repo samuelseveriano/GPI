@@ -1,4 +1,4 @@
-# GPI — Global Product Intelligence · v0.4 (Fase 4)
+# GPI — Global Product Intelligence · v0.5
 
 Plataforma **local e autônoma** de inteligência de produtos: coleta dados de fontes públicas e
 autorizadas, analisa opiniões de consumidores, acompanha o YouTube, compara produtos, gera
@@ -20,6 +20,27 @@ página *Metodologia* e são verificadas por testes.
 - **Desenvolvimento:** `pip install -r requirements.txt` (opcional: `-r requirements-optional.txt`) e
   `Start_GPI.bat` (Windows) ou `./start_gpi.sh` (Linux/macOS). Dados em `data/`.
 - **Testes:** `pip install -r requirements-dev.txt` e `python -m pytest tests`.
+
+## Versão 0.5 — o que foi implementado
+
+| Recurso | Situação |
+|---|---|
+| Menu lateral com 7 categorias expansíveis (uma aberta por vez, teclado, `aria-expanded/aria-controls`, seta, animação de 180 ms, `prefers-reduced-motion`), modo recolhido só com ícones SVG e dicas, busca global e indicador de status da coleta | ✅ testado no navegador em 1366×768 e 1920×1080 (38 rotas, sem erros de JavaScript) |
+| Mercado Livre Trends, Google Trends no BigQuery (dry run + limite de custo), eBay Browse, GDELT, Microsoft Advertising, JD.com (restrito) | ✅ implementados e testados com respostas simuladas · ⚠️ validação real: GDELT no CI; os demais exigem credenciais do usuário (ver `docs/INTEGRACOES.md`) · ⚠️ Microsoft Advertising não validado |
+| Discovery Engine 2.0: correção de grafia, aliases por similaridade (RapidFuzz ou difflib), bloqueio de agrupamento de variantes técnicas, embeddings multilíngues opcionais | ✅ testado · embeddings não incluídos no pacote (ver abaixo) |
+| Modelo global multi-série (HistGB, LightGBM, XGBoost, CatBoost) × modelos locais por backtesting; escolha por série | ✅ testado (LightGBM/XGBoost/CatBoost no CI) |
+| Intervalos conformais 80/90/95% com cobertura observada; SHAP (TreeSHAP nativo); Optuna com limites; ADWIN/Page-Hinkley; reconciliação BU/TD/MinT | ✅ testados |
+| Early Trend Detection (persistência, aceleração, saturação, cobertura, confiança, base mínima) e International Trend Signal | ✅ testados |
+| Review Intelligence 2.0, Análise de Concorrência, Viabilidade de Importação (Monte Carlo, cenários, sensibilidade, pedido ótimo) | ✅ testados |
+| Configurações pela interface; estados vazios explicando o que falta | ✅ |
+| GPI.exe: ícone, metadados 0.5.0, verificação do Microsoft Defender, relatório de segurança, SHA-256, ZIP `GPI-Windows-Portable-v0.5.zip`, assinatura opcional preparada | ✅ no workflow · ⚠️ **não assinado** (ver `docs/SEGURANCA.md`) |
+
+**Decisões técnicas:** MLForecast e HierarchicalForecast não foram incluídos (dependem de compilação JIT/numba, pesada
+para o pacote portátil); o modelo global e a reconciliação foram implementados diretamente com as mesmas técnicas e
+testes. MAPIE: o método conformal foi implementado diretamente (a API de séries temporais do MAPIE mudou na v1 e não
+pôde ser validada aqui). OR-Tools: a otimização do pedido é exata em uma dimensão, sem necessidade de solver.
+Polars/DuckDB: sem ganho mensurável no volume atual (SQLite + pandas). Sentence-transformers: opcional e não
+empacotado (PyTorch + modelo ≈ 1 GB); quando presente em `modelos/`, só sugere produtos relacionados.
 
 ## Fase 4 — inteligência de consumo (o que foi implementado)
 

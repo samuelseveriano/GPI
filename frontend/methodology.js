@@ -289,5 +289,20 @@ ${F('\\rho_{k} = \\text{corr}(\\Delta a_{t}, \\Delta b_{t+k}), \\qquad \\text{ga
 <p><b>Rankings</b> declaram o que medem. “Mais pesquisados” usa somente volume de buscas; sem essa fonte, fica vazio com a explicação.</p>
 <p><b>Scores</b> (0–100, separados): <b>Opportunity</b> = média ponderada dos componentes disponíveis (crescimento Brasil 0,22; internacional 0,14; persistência 0,14; intenção de compra 0,16; concorrência baixa 0,10; estabilidade sazonal 0,06; baixa volatilidade 0,08; qualidade dos dados 0,10), sem penalizar fontes ausentes; <b>Evidence Coverage</b> = 50·(peso disponível) + 50·min(1, fontes/4); <b>Forecast Confidence</b> = qualidade no backtesting × fator de histórico (0 sem previsão validada); <b>Import Readiness</b> = fração de verificações concluídas (NCM fundamentado, importações monitoradas, volume de buscas, previsão validada, intenção de compra, preços). Margem, rentabilidade e quantidade de compra não são estimadas.</p>
 <p class="muted">Código: <code>backend/gpi/products/trends.py</code></p></div>
+
+<div class="panel" id="m-v05"><h2>23. Versão 0.5: modelo global, intervalos conformais, mudanças e viabilidade</h2>
+<p><b>Modelo global multi-série</b> (mesma ideia do MLForecast): um modelo por métrica, treinado com todas as séries elegíveis. Alvo e defasagens em razão ao nível recente:</p>
+${F('\\tilde{y}_{i,t} = \\frac{y_{i,t}}{\\bar{y}_{i,t-3..t-1}}, \\qquad \\hat{y}_{i,t} = \\bar{y}_{i,t-3..t-1} \\cdot f(\\tilde{y}_{i,t-1}, \\tilde{y}_{i,t-2}, \\tilde{y}_{i,t-3}, \\tilde{y}_{i,t-6}, \\tilde{y}_{i,t-12}, m_t, \\text{família}, \\text{categoria}, \\text{país}, \\text{fonte})')}
+<p>f = HistGradientBoosting, LightGBM, XGBoost ou CatBoost. Comparação com o modelo local nas mesmas origens de backtesting; em cada série vale o de menor WAPE.</p>
+<p><b>Intervalos conformais</b>: erros relativos e<sub>h</sub> = (y − ŷ)/ŷ das origens antigas; quantil com correção de amostra finita; cobertura medida na origem mais recente.</p>
+${F('q_{h}^{(1-\\alpha)} = \\text{Quantil}_{⌈(n+1)(1-\\alpha)⌉/n} \\left( |e_{h}| \\right), \\qquad \\left[\\hat{y}/(1+q), \\quad \\hat{y}(1+q)\\right]')}
+<p><b>Mudanças de comportamento</b> — ADWIN: corta a janela quando |μ₀ − μ₁| &gt; ε; Page-Hinkley: alarme quando a soma acumulada dos desvios passa de λ.</p>
+${F('\\varepsilon_{cut} = \\sqrt{\\frac{1}{2m} \\ln\\frac{4n}{\\delta}}, \\quad m = 1 / (1/n_{0} + 1/n_{1}) \\qquad m_{T} = \\sum_{t \\le T} (x_{t} - \\bar{x}_{t} - \\delta), \\quad m_{T} - \\min m > \\lambda')}
+<p><b>Reconciliação hierárquica</b> (só volumes aditivos): ỹ = S·P·ŷ, com P de Bottom-Up, Top-Down (proporções históricas), MinT-OLS P = (SᵀS)⁻¹Sᵀ ou MinT-WLS P = (SᵀW⁻¹S)⁻¹SᵀW⁻¹, W = diag(S·1).</p>
+<p><b>Discovery 2.0</b>: correção de grafia por similaridade ≥ 88 (palavras ≥ 5 letras); alias por similaridade ≥ 92 só com o mesmo núcleo e nenhum atributo numérico divergente.</p>
+<p><b>Early Trend Detection</b>: persistência = fração de variações positivas (ano contra ano em série sazonal); base mínima por métrica para entrar em rankings de crescimento; possível saturação = crescimento &gt; 0, aceleração &lt; −10 p.p. e média recente ≥ 90% do máximo; confiança da classificação = 0,4·min(1, n/36) + 0,3·[p &lt; 0,05] + 0,3·cobertura.</p>
+<p><b>Viabilidade de importação</b>: custo nacionalizado com ICMS “por dentro”; Monte Carlo com distribuições triangulares (mín, base, máx) informadas pelo usuário; pedido ótimo:</p>
+${F('Q^{*} = \\arg\\max_{Q \\ge MOQ, Q \\cdot c \\le B} \; \\frac{1}{N}\\sum_{k} \\left[ \\min(Q, D_{k}) \\, p_{k} - Q \\, c_{k} \\right]')}
+<p class="muted">Código: <code>backend/gpi/forecasting/advanced.py</code>, <code>products/discovery.py</code>, <code>market/viability.py</code>, <code>market/reviews2.py</code></p></div>
 </div>`;
 };

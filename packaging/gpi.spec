@@ -20,13 +20,21 @@ binaries, datas = [], [
     (os.path.join(ROOT, "config"), "config"),
     (os.path.join(ROOT, "docs"), "docs"),
 ]
-# Modelos opcionais: incluídos somente se instalados no ambiente de build
-for opt in ("lightgbm", "xgboost"):
+# Bibliotecas opcionais: incluídas somente se instaladas no ambiente de build (sem módulos de teste)
+for opt in ("lightgbm", "xgboost", "catboost"):
     try:
         __import__(opt)
         binaries += collect_dynamic_libs(opt)
         datas += collect_data_files(opt)
         hidden += collect_submodules(opt, filter=lambda n: ".testing" not in n and ".tests" not in n)
+    except ImportError:
+        pass
+for opt in ("river", "rapidfuzz", "optuna"):
+    try:
+        __import__(opt)
+        hidden += collect_submodules(opt, filter=lambda n: ".test" not in n and ".benchmarks" not in n and ".datasets" not in n)
+        datas += collect_data_files(opt, excludes=["**/tests/**"])
+        binaries += collect_dynamic_libs(opt)
     except ImportError:
         pass
 try:
@@ -43,7 +51,9 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden,
-    excludes=["matplotlib", "IPython", "notebook", "pytest", "torch", "tensorflow"],
+    # não empacotados: ferramentas de desenvolvimento e bibliotecas pesadas não usadas (embeddings são opcionais e externos)
+    excludes=["matplotlib", "IPython", "notebook", "pytest", "torch", "tensorflow", "sentence_transformers", "transformers",
+              "plotly", "graphviz", "jupyter", "ipykernel", "black", "pylint"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
@@ -54,5 +64,7 @@ exe = EXE(
     console=False,          # aplicativo de janela: mostra a janela de controle "GPI em execução"
     upx=False,              # UPX costuma gerar falsos positivos em antivírus corporativos
     version=os.path.join(ROOT, "packaging", "version_info.txt"),
+    icon=os.path.join(ROOT, "packaging", "gpi.ico"),
+    uac_admin=False,        # executa como o usuário (asInvoker): nunca pede privilégio administrativo
 )
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="GPI")

@@ -9,7 +9,7 @@ name: windows-build
 
 on:
   push:
-    branches: [main, fase4]
+    branches: [main, fase4, "feature/**"]
   workflow_dispatch:
 
 permissions:
@@ -83,7 +83,11 @@ jobs:
     name: 3. Compilar e testar GPI.exe
     needs: testes
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      # Assinatura digital opcional: só roda se os segredos forem configurados no repositório
+      # (Microsoft Artifact Signing). Sem eles, o build é publicado identificado como NÃO ASSINADO.
+      SIGNING_ENABLED: ${{ secrets.SIGN_ENDPOINT != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -105,8 +109,38 @@ jobs:
           if ($c -ne 0) { $t = (Get-Content pyi.log -Tail 40) -join '%0A'; Write-Output "::error title=pyinstaller::$t"; exit $c }
           Select-String -Path pyi.log -Pattern "WARNING: (Hidden import|lib not found)" | Select-Object -First 40 | ForEach-Object { $_.Line } | Out-File -Encoding utf8 pyi_avisos.txt
 
+      - name: Assinar GPI.exe (opcional — Microsoft Artifact Signing)
+        if: env.SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          SIGN_ENDPOINT: ${{ secrets.SIGN_ENDPOINT }}
+          SIGN_ACCOUNT: ${{ secrets.SIGN_ACCOUNT }}
+          SIGN_PROFILE: ${{ secrets.SIGN_PROFILE }}
+        run: |
+          Install-Module -Name TrustedSigning -Force -Scope CurrentUser
+          Invoke-TrustedSigning -Endpoint $env:SIGN_ENDPOINT -CodeSigningAccountName $env:SIGN_ACCOUNT `
+            -CertificateProfileName $env:SIGN_PROFILE -Files "dist/GPI/GPI.exe" -FileDigest SHA256 `
+            -TimestampRfc3161 "http://timestamp.acs.microsoft.com" -TimestampDigest SHA256
+
       - name: Documentação e manifesto de integridade
         run: python packaging/make_manifest.py dist/GPI
+
+      - name: Verificação com o Microsoft Defender
+        shell: pwsh
+        run: |
+          $mp = Join-Path $env:ProgramFiles "Windows Defender\MpCmdRun.exe"
+          if (-not (Test-Path $mp)) { "Microsoft Defender (MpCmdRun) indisponível neste runner" | Out-File -Encoding utf8 defender.txt; exit 0 }
+          try { Update-MpSignature -ErrorAction Stop } catch { Write-Host "atualização de assinaturas não disponível: $_" }
+          $ver = (Get-MpComputerStatus -ErrorAction SilentlyContinue)
+          $out = & $mp -Scan -ScanType 3 -File (Resolve-Path dist/GPI) -DisableRemediation 2>&1
+          $code = $LASTEXITCODE
+          @("MpCmdRun -Scan -ScanType 3 -File dist/GPI -DisableRemediation", "código de saída: $code (0 = nenhuma ameaça; 2 = ameaça encontrada)",
+            "versão das definições: $($ver.AntivirusSignatureVersion) de $($ver.AntivirusSignatureLastUpdated)", "", $out) | Out-File -Encoding utf8 defender.txt
+          Get-Content defender.txt
+          if ($code -eq 2) { Write-Output "::error title=defender::O Defender acusou ameaça no pacote — investigar antes de publicar (ver defender.txt)"; exit 1 }
 
       - name: Testes do executável (A–H, cópia limpa sem Python no PATH)
         timeout-minutes: 20
@@ -118,13 +152,15 @@ jobs:
         run: |
           $exe = Get-Item dist/GPI/GPI.exe
           $files = (Get-ChildItem -Recurse -File dist/GPI | Measure-Object -Property Length -Sum)
-          $pkgs = Get-Content dependencias.txt | Where-Object { $_ -match '^(numpy|scipy|pandas|scikit-learn|statsmodels|lightgbm|xgboost|starlette|uvicorn|pyinstaller)==' }
+          $pkgs = Get-Content dependencias.txt | Where-Object { $_ -match '^(numpy|scipy|pandas|scikit-learn|statsmodels|lightgbm|xgboost|catboost|river|rapidfuzz|optuna|starlette|uvicorn|pyinstaller)==' }
+          $sig = Get-AuthenticodeSignature dist/GPI/GPI.exe
           $report = @(
             "GPI - relatório de build",
             "Commit: $env:GITHUB_SHA",
             "Execução: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
             "Runner: $env:RUNNER_OS $env:RUNNER_ARCH  |  $(python --version)  |  PyInstaller $(pyinstaller --version)",
             "GPI.exe: $([math]::Round($exe.Length/1KB)) KB; pacote: $($files.Count) arquivos, $([math]::Round($files.Sum/1MB,1)) MB",
+            "Assinatura digital: $(if ($sig.Status -eq 'Valid') { 'assinado por ' + $sig.SignerCertificate.Subject } else { 'NÃO ASSINADO (' + $sig.Status + ')' })",
             "",
             "Bibliotecas principais:", $pkgs,
             "",
@@ -133,22 +169,40 @@ jobs:
           )
           New-Item -ItemType Directory -Force dist/GPI/relatorios | Out-Null
           $report | Out-File -Encoding utf8 dist/GPI/relatorios/relatorio_build.txt
-          Copy-Item dependencias.txt, selftest.json dist/GPI/relatorios/
+          Copy-Item dependencias.txt, selftest.json, defender.txt dist/GPI/relatorios/
+          "0.5.0" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
+          $sigtxt = if ($sig.Status -eq 'Valid') { "assinado: $($sig.SignerCertificate.Subject)" } else { "" }
+          python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.5.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error title=seguranca::relatório de segurança encontrou problema (credencial embutida ou nível de execução elevado)"; exit 1 }
           $report | Out-File -Encoding utf8 relatorio_build.txt
           "### Build do GPI.exe" >> $env:GITHUB_STEP_SUMMARY
           '```' >> $env:GITHUB_STEP_SUMMARY
           $report >> $env:GITHUB_STEP_SUMMARY
           '```' >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Gerar GPI-Windows-Portable.zip
+      - name: Gerar GPI-Windows-Portable-v0.5.zip e hashes SHA-256
         shell: pwsh
-        run: Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable.zip
+        run: |
+          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.5.zip
+          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.5.zip -Algorithm SHA256)
+          $h | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+          Copy-Item dist/GPI/relatorios/seguranca.md seguranca.md
+          "### Hashes SHA-256" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY; Get-Content SHA256SUMS.txt >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY
+          Get-Content seguranca.md >> $env:GITHUB_STEP_SUMMARY
+          # integridade do ZIP: extrair numa pasta nova e conferir o hash do executável
+          Expand-Archive GPI-Windows-Portable-v0.5.zip -DestinationPath zipcheck -Force
+          if ((Get-FileHash zipcheck/GPI/GPI.exe).Hash -ne (Get-FileHash dist/GPI/GPI.exe).Hash) { Write-Output "::error title=zip::GPI.exe no ZIP difere do compilado"; exit 1 }
+          $ok = (Start-Process zipcheck/GPI/GPI.exe -ArgumentList "--check" -Wait -PassThru).ExitCode
+          if ($ok -ne 0) { Write-Output "::error title=zip::verificação de integridade do pacote extraído falhou ($ok)"; exit 1 }
 
       - uses: actions/upload-artifact@v5
         with:
-          name: GPI-Windows-Portable
+          name: GPI-Windows-Portable-v0.5
           path: |
-            GPI-Windows-Portable.zip
+            GPI-Windows-Portable-v0.5.zip
+            SHA256SUMS.txt
+            seguranca.md
             relatorio_build.txt
           retention-days: 30
 
@@ -160,6 +214,7 @@ jobs:
           path: |
             pyi.log
             pyi_avisos.txt
+            defender.txt
             dependencias.txt
             smoke_resultados.txt
             selftest.json
