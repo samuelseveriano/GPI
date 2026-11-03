@@ -195,13 +195,15 @@ class LocalLLM:
             self.port, self.key = _free_port(), secrets.token_urlsafe(24)
             args = [str(server), "-m", str(model), "--host", "127.0.0.1", "--port", str(self.port),
                     "--api-key", self.key, "-c", str(lim["ia_contexto"]), "-t", str(lim["ia_threads"]),
-                    "--parallel", "1", "--log-disable"]
+                    "--parallel", "1"]
             extra = v["manifesto"].get("argumentos_extras") or []
             args += [a for a in extra if isinstance(a, str) and a.startswith("--") and a in
                      ("--no-webui", "--no-mmap", "--mlock", "--jinja", "--no-warmup")]
             env = {k: v2 for k, v2 in os.environ.items() if k.upper() in ("SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP")}
             env["LLAMA_ARG_HF_REPO"] = ""                      # nunca baixar modelos
-            kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
+            import tempfile
+            self._errf = tempfile.TemporaryFile()               # diagnóstico de falha na inicialização (sem segredos)
+            kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": self._errf,
                   "cwd": str(folder), "env": env}
             t0 = time.perf_counter()
             if sys.platform == "win32":
@@ -229,7 +231,14 @@ class LocalLLM:
             deadline = time.time() + max(60, lim["ia_timeout_s"])
             while time.time() < deadline:
                 if self.proc.poll() is not None:
-                    self.last_error = f"o servidor do modelo encerrou ao iniciar (código {self.proc.returncode}) — RAM insuficiente ou binário incompatível"
+                    tail = ""
+                    try:
+                        self._errf.seek(0)
+                        tail = self._errf.read()[-1200:].decode("utf-8", "replace").replace(self.key, "***")
+                    except OSError:
+                        pass
+                    self.last_error = (f"o servidor do modelo encerrou ao iniciar (código {self.proc.returncode}) — RAM "
+                                       f"insuficiente ou binário incompatível. Saída: {tail.strip()[-600:]}")
                     self.proc = None
                     raise RuntimeError(self.last_error)
                 try:
@@ -257,6 +266,12 @@ class LocalLLM:
         if self.job:
             self.job.close()
             self.job = None
+        f, self._errf = getattr(self, "_errf", None), None
+        if f:
+            try:
+                f.close()
+            except OSError:
+                pass
 
     # ------------------------------------------------------------------ geração
     def _req(self, method, path, body, timeout):
