@@ -39,6 +39,20 @@ jobs:
           # --redact: o relatório nunca contém o valor do segredo
           "$(go env GOPATH)/bin/gitleaks" git --redact --no-banner --report-format json --report-path gitleaks.json \
             --config .gitleaks.toml . && echo "Gitleaks: nenhum segredo encontrado" >> "$GITHUB_STEP_SUMMARY"
+      - name: Resumo dos achados (regra, arquivo, linha e commit — nunca o valor)
+        if: always()
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, os
+          if not os.path.exists("gitleaks.json"):
+              raise SystemExit
+          d = json.load(open("gitleaks.json"))
+          print(f"### Gitleaks: {len(d)} achado(s)")
+          if d:
+              print("| Regra | Arquivo | Linha | Commit | Data |\n|---|---|---|---|---|")
+          for f in d:
+              print(f"| {f['RuleID']} | {f['File']} | {f['StartLine']} | {f['Commit'][:8]} | {f['Date'][:10]} |")
+          PY
       - name: Varredura própria do GPI (histórico + arquivos proibidos)
         run: python3 scripts/secret_scan.py --historico
       - name: Relatório (sem valores)
@@ -66,6 +80,7 @@ jobs:
           python -m pip install --upgrade pip pip-audit pip-licenses
           pip install -r requirements.txt -r requirements-optional.txt
           pip-audit -r requirements.txt -r requirements-optional.txt --desc on -f markdown -o pip-audit.md || echo "VULNERABILIDADES=1" >> "$GITHUB_ENV"
+          [ -s pip-audit.md ] || echo "pip-audit: nenhuma vulnerabilidade conhecida nas dependências declaradas." > pip-audit.md
           cat pip-audit.md >> "$GITHUB_STEP_SUMMARY"
           pip-licenses --from=mixed --format=markdown --with-urls --order=license > licencas.md
           python scripts/license_check.py licencas.md >> "$GITHUB_STEP_SUMMARY"
