@@ -116,7 +116,9 @@ def test_packaging_files_present():
     wf = (ROOT / ".github" / "workflows" / "windows-build.yml").read_text()
     for step in ("windows-latest", "pytest", "pyinstaller", "smoke_test.ps1", "GPI-Windows-Portable.zip", "upload-artifact"):
         assert step in wf
-    assert "secrets." not in wf                                   # sem credenciais no workflow
+    # segredos só como referência opcional para assinatura (nunca valores, nunca impressos)
+    import re as _re
+    assert all(m.startswith("secrets.SIGN_") or m.startswith("secrets.AZURE_") for m in _re.findall(r"secrets\.[A-Z_]+", wf))
 
 
 # ---------------------------------------------------------------- credenciais e OAuth
@@ -447,6 +449,9 @@ def test_selftest_runs_builtin_models(tmp_path):
         assert out["modelos"][k]["ok"], (k, out["modelos"][k])
     from gpi.forecasting.extra_models import available
     missing_libs = [k for k, ok in available().items() if not ok]
+    from gpi.forecasting.advanced import libs
+    missing_libs += [f"{k}_global" for k in ("lightgbm", "xgboost", "catboost") if not libs()[k]]   # modelos globais (v0.5)
+    assert out["modelos"]["hist_gb_global"]["ok"]
     assert sorted(out["exigidos_com_falha"]) == sorted(missing_libs)
     assert code == (0 if not missing_libs else 6)
 
