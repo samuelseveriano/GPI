@@ -295,7 +295,7 @@ class Gdelt(Connector):
     def run(self, job, ctx):
         q = f'"{job.params["q"].lower()}"'
         url = self.URL + "?" + urllib.parse.urlencode({"query": q, "mode": "timelinevolraw", "format": "json", "timespan": "12m"})
-        pts = parse_gdelt_timeline(ctx.http.request_json(url, ttl=24 * 3600, min_interval=5.5))
+        pts = parse_gdelt_timeline(ctx.http.request_json(url, ttl=24 * 3600, min_interval=6.5))   # GDELT: ≤ 1 consulta a cada 5 s
         months = {}
         for d, v, _ in pts:
             months[d[:7]] = months.get(d[:7], 0.0) + v

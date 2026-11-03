@@ -56,6 +56,13 @@ a = Analysis(
               "plotly", "graphviz", "jupyter", "ipykernel", "black", "pylint"],
     noarchive=False,
 )
+# Remove pacotes de TESTE das bibliotecas (pastas "tests"); módulos "testing" são mantidos (usados em tempo de execução)
+import re as _re
+_is_test = lambda name: bool(_re.search(r"(^|[./\\])tests([./\\]|$)", name))
+a.pure = [x for x in a.pure if not _is_test(x[0])]
+a.datas = [x for x in a.datas if not _is_test(x[0])]
+a.binaries = [x for x in a.binaries if not _is_test(x[0])]
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [],

@@ -26,7 +26,7 @@ def main(dist: str, zip_path: str, defender: str, out: str, signature: str = "")
     d = Path(dist)
     files = [p for p in d.rglob("*") if p.is_file()]
     native = [p for p in files if p.suffix.lower() in (".dll", ".pyd", ".so")]
-    tests = [str(p.relative_to(d)) for p in files if re.search(r"[\\/](tests?|testing)[\\/]", str(p.relative_to(d)))]
+    tests = [str(p.relative_to(d)) for p in files if re.search(r"[\\/]tests[\\/]", str(p.relative_to(d)))]
     exe = d / "GPI.exe"
     raw = exe.read_bytes()
     level = re.search(rb'requestedExecutionLevel\s+level="(\w+)"', raw)

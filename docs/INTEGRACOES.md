@@ -57,6 +57,17 @@ A Central de Integrações agrupa as fontes em três níveis:
 
 ## Lista de conectores validados com resposta real
 
+### v0.5 (02/11/2026 — GitHub Actions, execução 41565156801)
+
+| Fonte | Situação |
+|---|---|
+| GDELT (DOC 2.0) | ✅ validada — 48 registros mensais; 2 consultas receberam HTTP 429 (limite de 1 consulta a cada 5 s) → intervalo ajustado para 6,5 s |
+| Google Trends Trending Now, BCB PTAX, Wikimedia, Comex Stat, UN Comtrade, RSS | ✅ validadas novamente (20 / 964 / 687 / 86.114 / 120 / 189 registros) |
+| IBGE PMC | ❌ tempo esgotado a partir dos EUA (rede); validar numa rede brasileira |
+| Mercado Livre Trends, Google Trends BigQuery, eBay Browse, Google Ads, Microsoft Advertising, UN Comtrade com chave | ⏸ implementadas e testadas com respostas no formato documentado; **não validadas** — exigem credenciais do usuário (Central de Integrações) |
+| Microsoft Advertising | ⚠️ além de não validada, a chamada SOAP foi escrita a partir da documentação e pode precisar de ajuste na primeira conexão real |
+| Baidu Index, 巨量算数, Alibaba/1688, JD.com, Taobao | 🚫 restritas — sem API aberta a terceiros |
+
 ### Fase 4 (31/10/2026 — GitHub Actions, runner Ubuntu nos EUA, execução 41156252313)
 
 | Fonte | Situação | Registros na amostra |
