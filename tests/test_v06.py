@@ -546,4 +546,5 @@ def test_packaging_includes_reportlab_and_fonts():
     req = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     assert "reportlab" in req
     wf = (ROOT / ".github" / "workflows" / "windows-build.yml").read_text(encoding="utf-8")
-    assert "GPI-Windows-Portable-v0.6" in wf
+    from gpi import __version__
+    assert f"GPI-Windows-Portable-v{'.'.join(__version__.split('.')[:2])}" in wf or "GPI-Windows-Portable-v0.6" in wf   # nome acompanha a versão

@@ -1,4 +1,4 @@
-# Testes do GPI.exe empacotado (usados no CI e utilizáveis manualmente no Windows).
+﻿# Testes do GPI.exe empacotado (usados no CI e utilizáveis manualmente no Windows).
 #   I relatórios XLSX/PDF · A inicialização · B servidor local · C interface · D modelos de ML dentro do pacote
 #   E persistência · F encerramento e liberação da porta · G integridade · H distribuição limpa
 # Cada resultado é gravado em smoke_resultados.txt (anexado ao relatório de build).
@@ -165,6 +165,27 @@ $diag = Invoke-WebRequest -Uri "$base/api/diagnostics/export" -UseBasicParsing -
 if ($diag.StatusCode -ne 200 -or $diag.Content -notmatch "versao_gpi") { Fail "exportação de diagnóstico falhou" }
 Note "   painel: $($pn.titulo) · Google Ads sem developer token · YouTube: $($yt.videos_armazenados) vídeos · diagnóstico exportado"
 
+Note "K) Conformidade de Importação, IA local sob demanda, Mercado Livre HTTPS e cabeçalhos de segurança (v0.7)"
+$cs = Invoke-RestMethod -Uri "$base/api/compliance/status" -NoProxy -TimeoutSec 30
+if ($cs.documentos -lt 20) { Fail "base regulatória com $($cs.documentos) documentos" }
+if ($cs.ia.carregado) { Fail "IA local carregada na inicialização (deveria ser sob demanda)" }
+$body = @{ formulario = @{ nome_comercial = "Fechadura inteligente"; descricao_tecnica = "Wi-Fi 2.4 GHz e Bluetooth LE"; destinacao = "comercializacao" } } | ConvertTo-Json -Depth 4
+$an = Invoke-RestMethod -Uri "$base/api/compliance/analisar" -Method Post -Headers $hdr -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($body)) -NoProxy -TimeoutSec 60
+$anatel = @($an.achados | Where-Object { $_.orgao -eq "Anatel" })[0]
+if ($anatel.estado -ne 1) { Fail "análise regulatória: Anatel estado $($anatel.estado) (esperado 1)" }
+if (($an | ConvertTo-Json -Depth 8) -match "liberado para importar") { Fail "resultado contém 'liberado para importar'" }
+$rb = @{ tipo = "regulatorio"; formato = "pdf"; filtros = @{ analise_id = $an.id } } | ConvertTo-Json -Depth 4
+$rr = Invoke-RestMethod -Uri "$base/api/reports/generate" -Method Post -Headers $hdr -ContentType "application/json" -Body $rb -NoProxy -TimeoutSec 120
+if ($rr.status -ne "gerado") { Fail "relatório regulatório não gerado: $($rr.erro)" }
+$ask = @{ pergunta = "Um produto com Bluetooth precisa de homologação?" } | ConvertTo-Json
+$aa = Invoke-RestMethod -Uri "$base/api/compliance/assistente" -Method Post -Headers $hdr -ContentType "application/json" -Body ([Text.Encoding]::UTF8.GetBytes($ask)) -NoProxy -TimeoutSec 60
+if ($aa.modo -ne "essencial" -or -not $aa.fontes) { Fail "assistente (Modo Essencial) sem resposta com fontes" }
+$ret = Invoke-WebRequest -Uri "$base/oauth/mercadolivre/retorno" -UseBasicParsing -NoProxy -TimeoutSec 30
+if ($ret.Content -notmatch "oauth_retorno.js") { Fail "página local de retorno do Mercado Livre ausente" }
+$h = Invoke-WebRequest -Uri "$base/" -UseBasicParsing -NoProxy -TimeoutSec 30
+if ($h.Headers["Content-Security-Policy"] -notmatch "script-src 'self'") { Fail "CSP ausente" }
+Note "   base: $($cs.documentos) documentos · análise nº $($an.id): Anatel estado 1 · relatório regulatório PDF · assistente essencial · CSP ativo · IA não carregada"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -191,4 +212,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–J)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–K)"

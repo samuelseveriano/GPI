@@ -92,7 +92,8 @@ def build(analysis: dict) -> dict:
     extra = []
     for a in analysis.get("achados", []):
         for d in a.get("documentos_solicitar", []):
-            if d not in extra and not any(d == it[2] for it in items):
+            dup = any(d == it[2] for it in items) or "HS" in d or d.startswith(("Especificação técnica completa", "Especificações elétricas"))
+            if d not in extra and not dup:
                 extra.append(d)
     rows = [{"grupo": g, "item": code, "pt": pt, "en": en, "zh": zh} for g, code, pt, en, zh in items]
     rows += [{"grupo": "achados", "item": "—", "pt": d, "en": None, "zh": None} for d in extra]
