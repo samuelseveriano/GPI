@@ -263,6 +263,10 @@ def compare(store: MarketStore, keys: list[str]) -> dict:
                 "youtube", "B — dados públicos do YouTube, exibidos sem combinação")
         put("Score de oportunidade", i, o.get("score"), "GPI", f"cobertura {o.get('cobertura', 0):.0%}, confiança {o.get('confianca_rotulo', '—')}" if o else "—")
         put("Possíveis fornecedores", i, "sem fonte autorizada (Alibaba/AliExpress exigem credenciais aprovadas)", conf="—")
+    for vals in rows.values():                      # célula sem dado: informada como tal (nunca vazia)
+        for i, v in enumerate(vals):
+            if v is None:
+                vals[i] = {"valor": "não disponível para este produto", "fonte": None, "confiabilidade": "—", "url": None}
     return _clean({"produtos": cols, "linhas": [{"atributo": a, "valores": v} for a, v in rows.items()],
                    "aviso": "Nenhuma especificação é inventada: atributos sem fonte aparecem como não disponíveis."})
 
