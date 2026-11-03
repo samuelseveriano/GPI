@@ -417,6 +417,7 @@
   Object.assign(PAGES, window.GPI_V05({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
   Object.assign(PAGES, window.GPI_V06({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
   Object.assign(PAGES, window.GPI_V061({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
+  Object.assign(PAGES, window.GPI_V07({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
 
 
   async function refresh() {
@@ -434,6 +435,7 @@
     const arg = rest.length ? decodeURIComponent(rest.join('/')) : undefined;
     const key = PAGES[page] ? page : 'dashboard';
     const navKey = key === 'produto' ? 'oportunidades' : key === 'produto-consumo' ? 'dashboard'
+      : key.startsWith('conformidade-') && !document.querySelector(`#nav a[href="#${key}"]`) ? 'conformidade'
       : key === 'consumo' ? 'consumo/' + ((arg || 'BR').toUpperCase())
       : (key === 'social' || key === 'relatorios') && arg ? key + '/' + arg : key;
     document.title = 'GPI — ' + ((document.querySelector(`#nav a[href="#${navKey}"]`) || {}).textContent || 'Global Product Intelligence');

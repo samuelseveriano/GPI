@@ -44,9 +44,18 @@ def base(tmp_path_factory):
     F.build(db)
     svc = ReportService(db, d, {})
     out = {}
+    aid = None
+    if any(v.get("exige_analise") for v in D.TYPES.values()):        # v0.7: relatórios da Conformidade de Importação
+        from gpi.compliance import engine as CE
+        from gpi.compliance.knowledge import KnowledgeBase
+        from gpi.compliance.ncm import NcmTable
+        aid = CE.analyze(db, KnowledgeBase(db, d), NcmTable(db), {"nome_comercial": "Projetor portátil", "wifi": "sim",
+                                                                 "destinacao": "comercializacao"})["id"]
     for tipo in D.TYPES:
         for fmt in ("xlsx", "pdf", "csv"):
             f = {"produto": "projector+portable"} if tipo == "produto" else {}
+            if D.TYPES[tipo].get("exige_analise"):
+                f = {"analise_id": aid}
             r = svc.generate(tipo, fmt, f)
             out[(tipo, fmt)] = (r, svc.file(r["id"]))
     yield {"db": db, "dir": d, "svc": svc, "rep": out}
@@ -58,7 +67,8 @@ def test_all_report_types_generated_in_three_formats(base):
     assert len(D.TYPES) >= 8
     for (tipo, fmt), (r, p) in base["rep"].items():
         assert r["status"] == "gerado", (tipo, fmt, r.get("erro"))
-        assert p.exists() and p.stat().st_size > 500 and r["demo"] == 1
+        # a análise regulatória não usa dados de mercado demonstrativos (v0.7)
+        assert p.exists() and p.stat().st_size > 500 and r["demo"] == (0 if D.TYPES[tipo].get("exige_analise") else 1)
         assert re.match(rf"GPI_{tipo}_\d{{8}}-\d{{6}}_[0-9a-f]{{8}}\.{fmt}$", p.name)
 
 
@@ -513,7 +523,9 @@ def test_reports_and_social_api(tmp_path):
 def test_menu_structure_v06():
     html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
     groups = re.findall(r'data-grp="(\w+)"', html)
-    assert groups == ["overview", "consumer", "social", "market", "ml", "trade", "reports", "sales", "system"]
+    v06 = ["overview", "consumer", "social", "market", "ml", "trade", "reports", "sales", "system"]
+    assert [g for g in groups if g != "compliance"] == v06              # v0.7 acrescenta "compliance" após "trade"
+    assert "compliance" not in groups or groups.index("compliance") == groups.index("trade") + 1
     for label in ("Centro de Relatórios", "Histórico", "Social Intelligence", "TikTok Trends", "Instagram Intelligence",
                   "Facebook Intelligence", "YouTube Intelligence", "Viral Product Radar", "Viabilidade de Importação"):
         assert f">{label}<" in html, label
