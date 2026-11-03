@@ -28,6 +28,8 @@ def collect(workers: int) -> tuple[dict, float, Database, SyncManager]:
     # amostra de no máximo 6 requisições por fonte e rodada: suficiente para provar a coleta real
     cfg = {"history_start_year": datetime.now().year - 1, "contact": "ci-validacao", "max_jobs_per_source": 6,
            "sync_workers": workers}
+    from gpi.products.catalog import Catalog
+    Catalog(db, cfg).ensure_seeded()          # catálogo de referência: fontes por produto (GDELT, eBay…) têm o que consultar
     sm = SyncManager(db, tmp, cfg)
     t0 = time.monotonic()
     summary = sm.run(f"validacao-ci-{workers}")
