@@ -249,3 +249,13 @@ def test_ai_never_loaded_at_app_startup(tmp_path):
         assert code == 200 and a["modo"] == "essencial"
     finally:
         s.stop()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="servidor simulado usa script com shebang")
+def test_relative_pack_folder(tmp_path, monkeypatch):
+    """Regressão (CI real): pasta do pacote relativa não pode duplicar o caminho quando o processo roda na pasta."""
+    make_pack(tmp_path / "ia")
+    monkeypatch.chdir(tmp_path)
+    llm = LocalLLM({"ia_timeout_s": 20}, [Path("ia")])
+    assert llm.generate([{"role": "user", "content": "oi"}], "rel")["status"] == "concluida"
+    llm.stop()
