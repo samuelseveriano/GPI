@@ -30,6 +30,11 @@ SETTINGS = {
 }
 
 
+DEFAULTS = {"auto_sync": True, "sync_workers": 4, "trends_geos": ["BR", "US"], "catalog_max_products": 5000,
+            "catalog_max_candidates": 20000, "kp_max_products": 200, "trend_forecast_max": 20, "gdelt_max_products": 30,
+            "ebay_max_products": 30, "bq_max_gb": 2.0, "ml_global_enabled": True, "ml_tuning_trials": 15, "ml_tuning_seconds": 120}
+
+
 def routes(db, sync, cfg, save_settings=None) -> list[Route]:
     lock = threading.Lock()
 
@@ -107,7 +112,13 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
                        "WHERE product_id = ? OR product_id LIKE ? ORDER BY ref_date DESC LIMIT 60", (fam, fam + ":%"))
         for o in obs:
             o["extra"] = json.loads(o["extra"]) if o["extra"] else None
-        return j({"produto": p, "series": series, "previsoes": {k: v for k, v in r["previsoes"].items() if k.split("|")[0] == fam},
+        ml = sync.store.load_result("ml_models") or {}
+        ml_series = {sid: v for g in ml.get("grupos", {}).values() for sid, v in (g.get("por_serie") or {}).items()
+                     if sid.split("|")[0] == fam}
+        comp = [c for c in (sync.store.load_result("competition") or {}).get("itens", []) if c["product_id"] == fam]
+        rev = next((x for x in (sync.store.load_result("reviews2") or {}).get("produtos", []) if x["product_id"] == fam), None)
+        return j({"produto": p, "series": series, "ml": ml_series, "concorrencia": comp, "reviews": rev,
+                  "previsoes": {k: v for k, v in r["previsoes"].items() if k.split("|")[0] == fam},
                   "comparacoes": r["comparacoes"].get(fam, []), "score": r["scores"].get(fam),
                   "evidencias": obs, "metricas": METRICS})
 
@@ -219,6 +230,8 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
                 body = {}
             vals, errs = {}, []
             for k, v in body.items():
+                if v is None or (isinstance(v, str) and not v.strip()) or v == [""]:
+                    continue                                    # campo em branco: mantém o valor atual
                 if k not in SETTINGS:
                     errs.append(f"{k}: configuração desconhecida")
                     continue
@@ -241,10 +254,45 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
                 save_settings(vals)
             else:
                 cfg.update(vals)
-        return j({"valores": {k: cfg.get(k) for k in SETTINGS},
+        return j({"valores": {k: cfg.get(k, DEFAULTS.get(k)) for k in SETTINGS},
                   "campos": [{"chave": k, "tipo": t.__name__, "min": lo, "max": hi, "descricao": d} for k, (t, lo, hi, d) in SETTINGS.items()]})
 
+    async def models(_):
+        from ..forecasting.advanced import libs
+        from . import discovery
+        ml = sync.store.load_result("ml_models") or {}
+        drift = db.query("SELECT * FROM drift_events ORDER BY created_at DESC, ref_date DESC LIMIT 100")
+        return j({"ml": ml, "bibliotecas": libs(), "descoberta": discovery.status(), "mudancas": drift,
+                  "aviso": "Comparações por backtesting de origem móvel nas mesmas origens; o melhor modelo é escolhido por série."})
+
+    async def reviews2(_):
+        return j(sync.store.load_result("reviews2") or {"produtos": [], "clusters": {"grupos": []},
+                                                          "aviso": "Ainda não calculado: aguarde a primeira sincronização."})
+
+    async def competition(_):
+        return j(sync.store.load_result("competition") or {"itens": [], "aviso": "Sem anúncios coletados: conecte o eBay na Central de Integrações."})
+
+    async def import_defaults(_):
+        r = db.query("SELECT o.value, o.ref_date FROM market_obs o JOIN market_series s ON s.id = o.series_id "
+                     "WHERE s.series_key = 'bcb:ptax:USD:D' ORDER BY o.ref_date DESC LIMIT 1")
+        from ..market.viability import REQUIRED
+        return j({"cambio_ptax": r[0] if r else None, "campos": REQUIRED})
+
+    async def import_simulate(request):
+        from ..market.viability import simulate
+        try:
+            body = await request.json()
+            res = await run_in_threadpool(simulate, body.get("parametros", body), int(body.get("cenarios", 10000)))
+        except (ValueError, KeyError, TypeError) as e:
+            return j({"erro": str(e)}, 400)
+        return j(res)
+
     return [
+        Route("/api/consumer/models", models),
+        Route("/api/consumer/reviews2", reviews2),
+        Route("/api/consumer/competition", competition),
+        Route("/api/import/defaults", import_defaults),
+        Route("/api/import/simulate", import_simulate, methods=["POST"]),
         Route("/api/search", search),
         Route("/api/settings", settings, methods=["GET", "POST"]),
         Route("/api/consumer/dashboard", dashboard),

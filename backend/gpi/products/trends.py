@@ -202,6 +202,15 @@ def anomalies(y: np.ndarray, window: int = 5, z: float = 3.5) -> list[int]:
     return [int(i) for i in np.flatnonzero(np.abs(r / mad) > z)]
 
 
+MIN_BASE = {"volume_mensal_aprox": 100, "volume_bing": 50, "visualizacoes": 300, "mencoes": 3, "noticias_gdelt": 5}
+
+
+def cfg_min_base(metric: str) -> float:
+    """Nível mínimo (mediana) para que crescimentos percentuais entrem nos rankings — evita que séries
+    minúsculas com +500% dominem a lista."""
+    return MIN_BASE.get(metric, 0)
+
+
 def indicators(s: dict, today: date) -> dict:
     ind = {"n": len(s["points"]), "primeiro": s["points"][0][0] if s["points"] else None,
            "ultimo": s["points"][-1][0] if s["points"] else None}
@@ -265,8 +274,29 @@ def indicators(s: dict, today: date) -> dict:
             if seas and seas.get("significativa"):        # em série sazonal, a tendência é julgada ano contra ano
                 sig_up = pos >= 0.75 and np.median(yoy) > 0.05
                 sig_dn = pos <= 0.25 and np.median(yoy) < -0.05
+    # ---- Early Trend Detection (v0.5): indicadores separados
+    nzm = y[y > 0]
+    ind["persistencia"] = (float(np.mean(np.diff(y[-13:]) > 0)) if len(y) >= 13 else None) if not (seas and seas.get("significativa")) \
+        else (float(np.mean([v > 0 for v in [y[t] / y[t - 12] - 1 for t in range(len(y) - 12, len(y)) if y[t - 12] > 0]])) if len(y) >= 24 else None)
+    ind["cobertura"] = float(np.mean(y > 0)) if len(y) else 0.0
+    if tt:
+        ind["theil_sen_rel_mes"] = tt.get("inclinacao_relativa")
+    base_ok = len(nzm) >= 6 and float(np.median(nzm)) >= float(cfg_min_base(s["metric"]))
+    ind["base_suficiente"] = base_ok
+    near_max = len(y) >= 12 and float(np.mean(y[-3:])) >= 0.9 * float(np.max(y))
+    ind["saturacao_possivel"] = bool(base_ok and (g or 0) > 0 and (ind.get("aceleracao") or 0) < -0.1 and near_max)
+    conf = 0.0
+    if len(y) >= 6:
+        conf = min(1.0, len(y) / 36) * 0.4 + (0.3 if tt.get("p_valor") is not None and tt["p_valor"] < 0.05 else
+                                             0.15 if tt.get("p_valor") is not None and tt["p_valor"] < 0.2 else 0.0)
+        conf += 0.3 * ind["cobertura"]
+    ind["confianca_classificacao"] = round(conf if base_ok else conf * 0.5, 2)
     if ind["emergente"]:
         cls = "emergente"
+    elif ind["saturacao_possivel"]:
+        cls = "possível saturação"
+    elif sig_up and (g or 0) > 0 and (ind.get("aceleracao") or 0) > 0.1 and base_ok:
+        cls = "crescimento acelerado"
     elif sig_up and (g or 0) > 0:
         cls = "crescimento consistente"
     elif (g or 0) > 0.15:
@@ -451,6 +481,35 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
     return _clean(out)
 
 
+def international_signal(lst: list[dict], comps: list[dict]) -> dict | None:
+    """International Trend Signal: produto que cresceu antes em outro mercado e começa a crescer no Brasil.
+    Usa mesma métrica e fonte em ambos; exige crescimento anterior no exterior (6–18 meses atrás) e
+    crescimento recente no Brasil. Lead-lag significativo e estável reforça o sinal. Não é previsão nem causalidade."""
+    br = [s for s in lst if s["page"] == "BR" and s["period"] == "mes" and s["ind"].get("n", 0) >= 18]
+    out = None
+    for b in br:
+        for f in lst:
+            if f is b or f["page"] not in ("US", "CN") or f["metric"] != b["metric"] or f["period"] != "mes":
+                continue
+            v = f["ind"].get("valores") or []
+            if len(v) < 24 or not v[-24:-21] or np.mean(v[-24:-21]) <= 0:
+                continue
+            prior = float(np.mean(v[-9:-6]) / np.mean(v[-24:-21]) - 1)          # crescimento do exterior até 6 meses atrás
+            recent_br = b["ind"].get("crescimento") or 0
+            if prior > 0.15 and recent_br > 0.05:
+                ll = next((c for c in comps if {c["a"], c["b"]} == {b["country"], f["country"]}), None)
+                lead_ok = bool(ll and ll["significativa"] and ll["estavel"] and
+                               ((ll["a"] == f["country"] and ll["lag"] > 0) or (ll["b"] == f["country"] and ll["lag"] < 0)))
+                strength = min(1.0, prior) * 0.5 + min(1.0, recent_br) * 0.3 + (0.2 if lead_ok else 0)
+                cand = {"mercado_antecedente": f["pais_nome"], "metrica": f["metrica"]["rotulo"], "crescimento_exterior_anterior": prior,
+                        "crescimento_brasil_recente": recent_br, "lead_lag_confirmado": lead_ok, "forca": round(strength, 2),
+                        "rotulo": "Possível tendência internacional para investigação",
+                        "aviso": "Sinal exploratório: o crescimento em outro mercado não garante crescimento no Brasil."}
+                if out is None or cand["forca"] > out["forca"]:
+                    out = cand
+    return out
+
+
 def product_scores(pid, lst, prod, fc, comps, db) -> dict:
     br = [s for s in lst if s["page"] == "BR"]
     intl = [s for s in lst if s["page"] in ("US", "CN")]
@@ -528,6 +587,7 @@ def product_scores(pid, lst, prod, fc, comps, db) -> dict:
     else:
         lead = None
     return {"opportunity_score": None if score is None else round(score, 1), "componentes": comp,
+            "sinal_internacional": international_signal(lst, comps),
             "evidence_coverage": round(evid, 1), "forecast_confidence": round(fconf, 1),
             "import_readiness": round(readiness, 1), "checklist_importacao": checklist, "riscos": risks,
             "fontes": sorted(sources), "sinal_antecedente": lead,
@@ -566,7 +626,8 @@ def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict
                          if s["ind"].get("soma_30d")], key=lambda x: -x["valor"])[:50],
         "limitacao": None if lists else ("Nenhuma lista de mais buscados conectada para este país (Mercado Livre Trends para o "
                                          "Brasil; Google Trends no BigQuery para Brasil e EUA — Central de Integrações).")}
-    grow = [s for s in mine if s["ind"].get("crescimento") is not None and (s["ind"].get("n", 0) >= 6 or s["period"] == "dia")]
+    grow = [s for s in mine if s["ind"].get("crescimento") is not None and (s["period"] == "dia" or
+                                                                         (s["ind"].get("n", 0) >= 6 and s["ind"].get("base_suficiente")))]
     rk["maior_crescimento"] = {"mede": "Variação do último trimestre sobre o mesmo trimestre do ano anterior (ou sobre o trimestre anterior quando "
                                        "há menos de 15 meses; 30 dias sobre os 30 anteriores nas buscas em alta), por métrica.",
                                "itens": sorted([item(s, s["ind"]["crescimento"]) for s in grow], key=lambda x: -x["valor"])[:50]}
@@ -575,6 +636,14 @@ def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict
     rk["crescimento_consistente"] = {"mede": "Tendência de alta estatisticamente significativa (Mann–Kendall, p < 0,05) e crescimento recente.",
                                      "itens": sorted([item(s, s["ind"].get("crescimento")) for s in mine if s["ind"].get("classe") == "crescimento consistente"],
                                                      key=lambda x: -(x["valor"] or 0))[:50]}
+    rk["crescimento_acelerado"] = {"mede": "Tendência de alta significativa, crescimento recente e aceleração > 10 p.p., com base mínima de volume.",
+                                   "itens": sorted([item(s, s["ind"].get("aceleracao")) for s in mine if s["ind"].get("classe") == "crescimento acelerado"],
+                                                   key=lambda x: -(x["valor"] or 0))[:50]}
+    rk["estaveis"] = {"mede": "Séries com base suficiente, sem tendência significativa e sem sazonalidade — demanda estável.",
+                      "itens": sorted([item(s, s["ind"].get("media_3m")) for s in mine if s["ind"].get("classe") == "estável"
+                                       and s["ind"].get("base_suficiente")], key=lambda x: -(x["valor"] or 0))[:50]}
+    rk["saturacao"] = {"mede": "Ainda crescendo, mas desacelerando (aceleração < −10 p.p.) e perto do máximo histórico — possível saturação.",
+                       "itens": [item(s, s["ind"].get("aceleracao")) for s in mine if s["ind"].get("classe") == "possível saturação"][:50]}
     rk["maior_aceleracao"] = {"mede": "Diferença entre o crescimento do último trimestre e o do trimestre anterior.",
                               "itens": sorted([item(s, s["ind"]["aceleracao"]) for s in mine if s["ind"].get("aceleracao") is not None],
                                               key=lambda x: -x["valor"])[:50]}
@@ -589,6 +658,12 @@ def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict
         c = cats[s["categoria"] or "Outros"]
         c["produtos"].add(s["product_id"])
         c["busca"] += s["ind"].get("media_3m") or s["ind"].get("soma_30d") or 0
+    if cc == "BR":
+        sig = [(pid, sc["sinal_internacional"]) for pid, sc in scores.items() if sc.get("sinal_internacional")]
+        names = {s["product_id"]: s for s in series}
+        rk["sinal_internacional"] = {
+            "mede": "International Trend Signal: crescimento anterior nos EUA/China e crescimento recente no Brasil, mesma métrica e fonte.",
+            "itens": sorted([{**item(names[p], v["forca"]), "detalhe": v} for p, v in sig if p in names], key=lambda x: -x["valor"])[:50]}
     rk["categorias"] = {"mede": "Categorias com produtos nas fontes de busca deste país (soma por métrica de busca disponível).",
                         "itens": sorted([{"categoria": k, "produtos": len(v["produtos"]), "valor": v["busca"]} for k, v in cats.items()],
                                         key=lambda x: -x["valor"])}

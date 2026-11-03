@@ -75,9 +75,11 @@ window.GPI_CONSUMER = function (H) {
   }
 
   /* ----------------------------------------------------------------- RANKINGS / PAÍSES */
-  const RK = [['mais_pesquisados', 'Mais pesquisados (volume)'], ['em_alta', 'Em alta no Google'], ['maior_crescimento', 'Maior crescimento'],
-    ['emergentes', 'Emergentes'], ['crescimento_consistente', 'Crescimento consistente'], ['maior_aceleracao', 'Maior aceleração'],
-    ['sazonais', 'Interesse sazonal'], ['declinio', 'Em declínio'], ['categorias', 'Categorias']];
+  const RK = [['mais_pesquisados', 'Mais pesquisados (volume)'], ['listas_de_busca', 'Listas de mais buscados'], ['em_alta', 'Em alta no Google'],
+    ['maior_crescimento', 'Maior crescimento'], ['emergentes', 'Emergentes'], ['crescimento_acelerado', 'Crescimento acelerado'],
+    ['crescimento_consistente', 'Crescimento consistente'], ['estaveis', 'Tendências estáveis'], ['saturacao', 'Possível saturação'],
+    ['maior_aceleracao', 'Maior aceleração'], ['sazonais', 'Interesse sazonal'], ['declinio', 'Em declínio'], ['sinal_internacional', 'Sinal internacional'],
+    ['categorias', 'Categorias']];
 
   async function pageRankings(arg) {
     const [cc0, rk0] = (arg || 'BR/mais_pesquisados').split('/');
@@ -93,7 +95,7 @@ window.GPI_CONSUMER = function (H) {
         <label class="f">Classe de tendência<select id="fcls"><option value="">todas</option>${Object.keys(CLS).map((c) => `<option>${c}</option>`).join('')}</select></label></div>
       <div id="rkt"></div>`;
     main.querySelectorAll('[data-rk]').forEach((b) => b.onclick = () => { location.hash = `mais-pesquisados/${cc}/${b.dataset.rk}`; });
-    const R = d.rankings[rk];
+    const R = d.rankings[rk] || { mede: 'Ranking disponível apenas para o Brasil.', itens: [] };
     const cats = [...new Set((R.itens || []).map((i) => i.categoria).filter(Boolean))].sort();
     $('#fcat').insertAdjacentHTML('beforeend', cats.map((c) => `<option>${escH(c)}</option>`).join(''));
     const draw = () => {

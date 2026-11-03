@@ -69,8 +69,8 @@ ASPECTS = {
                          "short circuit", "shock", "burned", "smoke", "sparks", "fuse"],
     "montagem": ["montagem", "montar", "encaixe", "parafuso", "instalacao", "instalar", "manual", "assembly",
                  "install", "installation", "screws"],
-    "assistencia_tecnica": ["assistencia", "garantia", "suporte", "conserto", "reparo", "autorizada", "warranty",
-                            "repair", "customer support", "support"],
+    "assistencia_tecnica": ["assistencia", "suporte", "conserto", "reparo", "autorizada", "repair", "support"],
+    "garantia": ["garantia", "warranty", "troca", "devolucao", "devolver", "return policy", "rma", "acionar a garantia"],
     "custo_beneficio": ["custo-beneficio", "custo beneficio", "preco", "barato", "caro", "vale a pena", "vale cada",
                         "price", "worth", "value for money", "expensive", "cheap"],
     "qualidade": ["qualidade", "acabamento", "material", "plastico", "quality", "build quality", "finish"],
@@ -79,10 +79,12 @@ ASPECTS = {
     "vendedor": ["vendedor", "loja", "anuncio", "seller", "store", "listing"],
     "atendimento": ["atendimento", "sac", "atendente", "resposta", "contato", "customer service", "reembolso", "refund"],
 }
-TARGET = {"entrega": "entrega", "vendedor": "vendedor", "atendimento": "atendimento"}
+TARGET = {"entrega": "entrega", "vendedor": "vendedor", "atendimento": "atendimento", "garantia": "garantia"}
+TARGET_NAMES = {"produto": "Produto", "entrega": "Transporte/entrega", "vendedor": "Vendedor", "atendimento": "Atendimento",
+                "garantia": "Garantia/troca"}
 ASPECT_NAMES = {"durabilidade": "Durabilidade", "bateria": "Bateria", "aquecimento": "Aquecimento",
                 "defeito_eletrico": "Defeito elétrico", "montagem": "Montagem/instalação",
-                "assistencia_tecnica": "Assistência técnica/garantia", "custo_beneficio": "Custo-benefício",
+                "assistencia_tecnica": "Assistência técnica", "garantia": "Garantia/troca", "custo_beneficio": "Custo-benefício",
                 "qualidade": "Qualidade/acabamento", "entrega": "Entrega", "vendedor": "Vendedor",
                 "atendimento": "Atendimento"}
 

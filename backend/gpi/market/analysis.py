@@ -35,6 +35,8 @@ def make_analyzer(cfg: dict | None = None):
         step("oportunidades", lambda: _intel(store))
         step("previsoes", lambda: _forecasts(store, cfg, state))
         step("consumo", lambda: _consumer(store, cfg, state, forecasts=True))
+        if cfg.get("ml_global_enabled", False):
+            step("ml_avancado", lambda: _advanced(store, cfg, state))
         out["segundos"] = round(time.time() - t0, 1)
         return out
 
@@ -46,6 +48,19 @@ def make_analyzer(cfg: dict | None = None):
     return analyze
 
 
+def _advanced(store, cfg, state):
+    from ..forecasting import advanced
+    cons = store.load_result("consumer") or {}
+    res = advanced.run_all(cons, cfg, store.load_result("ml_models"), state)
+    store.save_result("ml_models", res)
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with store.db.transaction():
+        for e in res["drift"]:
+            store.db.execute("INSERT OR IGNORE INTO drift_events (series_id, detector, ref_date, direction, detail, created_at)"
+                             " VALUES (?, ?, ?, ?, ?, ?)", (e["serie"], e["detector"], e["data"], e["direcao"], e.get("nome"), now))
+    return {"grupos": len(res["grupos"]), "mudancas": len(res["drift"]), "segundos": res["segundos"]}
+
+
 def _consumer(store, cfg, state, forecasts: bool):
     from ..products import trends
     t0 = time.time()
@@ -55,6 +70,10 @@ def _consumer(store, cfg, state, forecasts: bool):
         res["previsoes"] = prev["previsoes"]          # análise rápida não descarta as previsões anteriores
     res["segundos_analise"] = round(time.time() - t0, 2)
     store.save_result("consumer", res)
+    from ..products.catalog import Catalog
+    from . import reviews2
+    store.save_result("reviews2", reviews2.review_intelligence(store.db, Catalog(store.db, cfg)))
+    store.save_result("competition", reviews2.competition(store.db))
     return {"series": len(res["series"]), "produtos": res["kpis"]["produtos_monitorados"],
             "segundos": res["segundos_analise"]}
 
