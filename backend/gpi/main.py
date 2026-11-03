@@ -36,6 +36,9 @@ HOST = "127.0.0.1"
 APP_ID = "gpi-global-product-intelligence"
 DEFAULTS = {"port": 8765, "port_range": 10, "open_browser": True, "data_dir": None, "telemetry": False,
             "log_level": "INFO", "auto_sync": True, "history_start_year": 2016, "proxy": None,
+            "sync_workers": 4, "trends_geos": ["BR", "US"], "catalog_max_products": 5000, "catalog_max_candidates": 20000,
+            "kp_max_products": 200, "trend_forecast_max": 20, "gdelt_max_products": 30, "ebay_max_products": 30,
+            "bq_max_gb": 2.0, "ml_global_enabled": True, "ml_tuning_trials": 15, "ml_tuning_seconds": 120,
             "ca_bundle": None, "contact": None, "mercadolivre_access_token": None, "automl_budget_s": 420,
             "youtube_daily_units": 3000}
 

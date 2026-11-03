@@ -12,7 +12,25 @@ from .catalog import Catalog
 from .trends import COUNTRY_NAMES, METRICS
 
 
-def routes(db, sync, cfg) -> list[Route]:
+# Configurações editáveis pela interface (sem editar arquivos): chave → (tipo, mín, máx, descrição)
+SETTINGS = {
+    "auto_sync": (bool, None, None, "Sincronizar automaticamente ao abrir e semanalmente"),
+    "sync_workers": (int, 1, 8, "Fontes coletadas em paralelo (cada fonte continua respeitando seus limites)"),
+    "trends_geos": (list, None, None, "Países do Google Trends — Trending Now (códigos ISO, ex.: BR, US)"),
+    "catalog_max_products": (int, 500, 50000, "Limite de produtos no catálogo (controle de memória)"),
+    "catalog_max_candidates": (int, 1000, 200000, "Limite de termos candidatos guardados"),
+    "kp_max_products": (int, 10, 2000, "Produtos consultados por mês no Planejador do Google Ads"),
+    "trend_forecast_max": (int, 0, 200, "Séries de busca previstas por sincronização"),
+    "gdelt_max_products": (int, 0, 200, "Produtos consultados no GDELT por sincronização"),
+    "ebay_max_products": (int, 0, 200, "Produtos pesquisados no eBay por sincronização"),
+    "bq_max_gb": (float, 0.1, 100.0, "Limite de dados processados por consulta no BigQuery (GB) — consultas acima disso não são executadas"),
+    "ml_global_enabled": (bool, None, None, "Treinar o modelo global multi-série (LightGBM/XGBoost/CatBoost) após a sincronização"),
+    "ml_tuning_trials": (int, 0, 100, "Tentativas de otimização de hiperparâmetros (Optuna); 0 desliga"),
+    "ml_tuning_seconds": (int, 10, 1800, "Tempo máximo da otimização de hiperparâmetros (segundos)"),
+}
+
+
+def routes(db, sync, cfg, save_settings=None) -> list[Route]:
     lock = threading.Lock()
 
     def result() -> dict:
@@ -169,7 +187,66 @@ def routes(db, sync, cfg) -> list[Route]:
                         "fontes": db.query("SELECT * FROM source_metrics WHERE run_id = ? ORDER BY seconds DESC", (r["id"],))})
         return j({"execucoes": out})
 
+    async def search(request):
+        q = (request.query_params.get("q") or "").strip().lower()[:80]
+        if len(q) < 2:
+            return j({"itens": []})
+        from . import nlp
+        qn = nlp._norm(q)
+        out = []
+        for cc, name in (("BR", "Brasil"), ("US", "Estados Unidos"), ("CN", "China")):
+            if qn in nlp._norm(name) or q == cc.lower():
+                out.append({"titulo": name, "tipo": "País", "href": f"#consumo/{cc}", "detalhe": "inteligência de consumo"})
+        rows = db.query("SELECT product_id, canonical, name_en, name_zh, category, family, level FROM catalog_products "
+                        "WHERE lower(canonical) LIKE ? OR lower(name_en) LIKE ? OR name_zh LIKE ? OR lower(category) LIKE ? "
+                        "OR family LIKE ? OR product_id IN (SELECT product_id FROM product_aliases WHERE alias_norm LIKE ?) "
+                        "ORDER BY level, evidence DESC LIMIT 25", (f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{qn}%", f"%{qn}%"))
+        cats = sorted({r["category"] for r in rows if q in (r["category"] or "").lower()})
+        out += [{"titulo": c, "tipo": "Categoria", "href": "#mais-pesquisados/BR/categorias", "detalhe": "rankings por categoria"} for c in cats[:3]]
+        out += [{"titulo": r["canonical"], "tipo": "Variante" if r["level"] == "variante" else "Produto",
+                 "detalhe": f"{r['category']} · família {r['family']}", "href": "#produto-consumo/" + r["product_id"]} for r in rows]
+        kws = db.query("SELECT term, country, source, product_id FROM search_observations WHERE lower(term) LIKE ? "
+                       "AND product_id IS NOT NULL GROUP BY term LIMIT 10", (f"%{q}%",))
+        out += [{"titulo": k["term"], "tipo": "Palavra-chave", "detalhe": f"{k['country']} · {k['source']}",
+                 "href": "#produto-consumo/" + k["product_id"]} for k in kws]
+        return j({"itens": out[:30]})
+
+    async def settings(request):
+        if request.method == "POST":
+            try:
+                body = await request.json()
+            except Exception:  # noqa: BLE001
+                body = {}
+            vals, errs = {}, []
+            for k, v in body.items():
+                if k not in SETTINGS:
+                    errs.append(f"{k}: configuração desconhecida")
+                    continue
+                typ, lo, hi, _ = SETTINGS[k]
+                try:
+                    if typ is bool:
+                        v = bool(v)
+                    elif typ is list:
+                        v = [str(x).strip().upper()[:2] for x in (v if isinstance(v, list) else str(v).split(",")) if str(x).strip()]
+                    else:
+                        v = typ(v)
+                        if (lo is not None and v < lo) or (hi is not None and v > hi):
+                            raise ValueError(f"fora do intervalo {lo}–{hi}")
+                    vals[k] = v
+                except (TypeError, ValueError) as e:
+                    errs.append(f"{k}: {e}")
+            if errs:
+                return j({"erro": "; ".join(errs)}, 400)
+            if save_settings:
+                save_settings(vals)
+            else:
+                cfg.update(vals)
+        return j({"valores": {k: cfg.get(k) for k in SETTINGS},
+                  "campos": [{"chave": k, "tipo": t.__name__, "min": lo, "max": hi, "descricao": d} for k, (t, lo, hi, d) in SETTINGS.items()]})
+
     return [
+        Route("/api/search", search),
+        Route("/api/settings", settings, methods=["GET", "POST"]),
         Route("/api/consumer/dashboard", dashboard),
         Route("/api/consumer/country/{cc}", country),
         Route("/api/consumer/product/{pid:path}", product),

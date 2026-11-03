@@ -8,58 +8,58 @@
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-<aside>
-  <div class="brand"><b>GPI</b><small>Global Product Intelligence · local · v0.4</small></div>
-  <nav id="nav">
-    <h6>Visão geral</h6>
-    <a href="#dashboard">Dashboard</a>
-    <a href="#oportunidades-consumo">Oportunidades</a>
-    <a href="#alertas">Alertas de tendências</a>
-    <h6>Inteligência de consumo</h6>
-    <a href="#mais-pesquisados">Produtos Mais Pesquisados</a>
-    <a href="#consumo/BR">Brasil</a>
-    <a href="#consumo/CN">China</a>
-    <a href="#consumo/US">Estados Unidos</a>
-    <a href="#comparacao-internacional">Comparação Internacional</a>
-    <a href="#emergentes">Tendências Emergentes</a>
-    <h6>Inteligência de mercado</h6>
-    <a href="#comparador">Comparativo de Produtos</a>
-    <a href="#marketplaces">Marketplaces</a>
-    <a href="#reviews">Reviews e Opiniões</a>
-    <a href="#youtube">YouTube Intelligence</a>
-    <h6>Comércio exterior</h6>
-    <a href="#brasil">Importações do Brasil</a>
-    <a href="#radar">Importações Internacionais</a>
-    <a href="#descobertos">Categorias NCM/SH</a>
-    <a href="#china">Fornecedores (China)</a>
-    <a href="#oportunidades">Oportunidades de importação (SH4)</a>
-    <h6>Machine learning</h6>
-    <a href="#previsao-tendencias">Previsão de Tendências</a>
-    <a href="#previsoes">Forecasting</a>
-    <a href="#clusters">Clustering</a>
-    <a href="#anomalias">Anomalias</a>
-    <a href="#metodologia">Metodologia</a>
-    <h6>Fontes e sistema</h6>
-    <a href="#integracoes">Central de Integrações</a>
-    <a href="#fontes">Saúde das Fontes</a>
-    <a href="#catalogo">Catálogo e Descoberta</a>
-    <a href="#desempenho">Desempenho da Coleta</a>
-    <a href="#sistema">Sistema</a>
-    <button type="button" class="dd" id="dd-vendas" aria-expanded="false" aria-controls="dd-vendas-list">
-      <span>Vendas próprias</span><i aria-hidden="true">▸</i></button>
-    <div class="dd-list" id="dd-vendas-list" role="group" aria-label="Vendas próprias">
-      <a href="#dados">Importar Vendas</a>
-      <a href="#visao-geral">Resumo de Vendas</a>
-      <a href="#produtos">Histórico de Vendas</a>
-      <a href="#tendencias">Tendências de Vendas</a>
-      <a href="#forecasting">Previsão de Demanda</a>
-      <a href="#estoque">Gestão de Estoque</a>
-      <a href="#abcxyz">ABC/XYZ</a>
+<aside id="side">
+  <div class="brand"><b>GPI</b><small class="lbl">Global Product Intelligence · local · v0.5</small>
+    <button type="button" id="collapse" class="icon-btn" aria-label="Recolher barra lateral" aria-pressed="false" title="Recolher barra lateral">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg></button></div>
+  <nav id="nav" aria-label="Navegação principal">
+    <div class="grp" data-grp="overview">
+      <button type="button" class="grp-h" id="grp-overview-h" aria-expanded="false" aria-controls="grp-overview" data-tip="Visão Geral">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg><span class="lbl">Visão Geral</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-overview" role="region" aria-labelledby="grp-overview-h"><div class="grp-in"><a href="#dashboard" data-tip="Dashboard"><span class="lbl">Dashboard</span></a><a href="#oportunidades-consumo" data-tip="Oportunidades"><span class="lbl">Oportunidades</span></a><a href="#alertas" data-tip="Alertas"><span class="lbl">Alertas</span></a></div></div>
+    </div>
+    <div class="grp" data-grp="consumer">
+      <button type="button" class="grp-h" id="grp-consumer-h" aria-expanded="false" aria-controls="grp-consumer" data-tip="Inteligência de Consumo">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M8 11h6M11 8v6"/></svg><span class="lbl">Inteligência de Consumo</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-consumer" role="region" aria-labelledby="grp-consumer-h"><div class="grp-in"><a href="#mais-pesquisados" data-tip="Produtos Mais Pesquisados"><span class="lbl">Produtos Mais Pesquisados</span></a><a href="#consumo/BR" data-tip="Brasil"><span class="lbl">Brasil</span></a><a href="#consumo/US" data-tip="Estados Unidos"><span class="lbl">Estados Unidos</span></a><a href="#consumo/CN" data-tip="China"><span class="lbl">China</span></a><a href="#comparacao-internacional" data-tip="Comparação Internacional"><span class="lbl">Comparação Internacional</span></a><a href="#emergentes" data-tip="Tendências Emergentes"><span class="lbl">Tendências Emergentes</span></a></div></div>
+    </div>
+    <div class="grp" data-grp="market">
+      <button type="button" class="grp-h" id="grp-market-h" aria-expanded="false" aria-controls="grp-market" data-tip="Inteligência de Mercado">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3h18l-2 9H5zM5 12l1 8h12l1-8M9 16h6"/></svg><span class="lbl">Inteligência de Mercado</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-market" role="region" aria-labelledby="grp-market-h"><div class="grp-in"><a href="#marketplaces" data-tip="Marketplaces"><span class="lbl">Marketplaces</span></a><a href="#comparador" data-tip="Comparador de Produtos"><span class="lbl">Comparador de Produtos</span></a><a href="#reviews" data-tip="Reviews e Opiniões"><span class="lbl">Reviews e Opiniões</span></a><a href="#youtube" data-tip="YouTube Intelligence"><span class="lbl">YouTube Intelligence</span></a><a href="#concorrencia" data-tip="Análise de Concorrência"><span class="lbl">Análise de Concorrência</span></a></div></div>
+    </div>
+    <div class="grp" data-grp="ml">
+      <button type="button" class="grp-h" id="grp-ml-h" aria-expanded="false" aria-controls="grp-ml" data-tip="Machine Learning">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19 9 13l4 3 7-9"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="7" r="1.5"/></svg><span class="lbl">Machine Learning</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-ml" role="region" aria-labelledby="grp-ml-h"><div class="grp-in"><a href="#previsao-tendencias" data-tip="Previsão de Tendências"><span class="lbl">Previsão de Tendências</span></a><a href="#previsoes" data-tip="Forecasting"><span class="lbl">Forecasting</span></a><a href="#clusters" data-tip="Clustering"><span class="lbl">Clustering</span></a><a href="#anomalias" data-tip="Detecção de Anomalias"><span class="lbl">Detecção de Anomalias</span></a><a href="#modelos" data-tip="Modelos e Desempenho"><span class="lbl">Modelos e Desempenho</span></a></div></div>
+    </div>
+    <div class="grp" data-grp="trade">
+      <button type="button" class="grp-h" id="grp-trade-h" aria-expanded="false" aria-controls="grp-trade" data-tip="Comércio Exterior">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/><circle cx="12" cy="12" r="10"/></svg><span class="lbl">Comércio Exterior</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-trade" role="region" aria-labelledby="grp-trade-h"><div class="grp-in"><a href="#brasil" data-tip="Importações do Brasil"><span class="lbl">Importações do Brasil</span></a><a href="#radar" data-tip="Importações Internacionais"><span class="lbl">Importações Internacionais</span></a><a href="#descobertos" data-tip="Categorias NCM/SH"><span class="lbl">Categorias NCM/SH</span></a><a href="#china" data-tip="Fornecedores da China"><span class="lbl">Fornecedores da China</span></a><a href="#oportunidades" data-tip="Oportunidades de Importação"><span class="lbl">Oportunidades de Importação</span></a><a href="#viabilidade" data-tip="Viabilidade de Importação"><span class="lbl">Viabilidade de Importação</span></a></div></div>
+    </div>
+    <div class="grp" data-grp="sales">
+      <button type="button" class="grp-h" id="grp-sales-h" aria-expanded="false" aria-controls="grp-sales" data-tip="Vendas Próprias">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg><span class="lbl">Vendas Próprias</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-sales" role="region" aria-labelledby="grp-sales-h"><div class="grp-in"><a href="#dados" data-tip="Importação de Vendas"><span class="lbl">Importação de Vendas</span></a><a href="#produtos" data-tip="Histórico de Vendas"><span class="lbl">Histórico de Vendas</span></a><a href="#visao-geral" data-tip="Resumo de Vendas"><span class="lbl">Resumo de Vendas</span></a><a href="#tendencias" data-tip="Tendências de Vendas"><span class="lbl">Tendências de Vendas</span></a><a href="#forecasting" data-tip="Previsão de Demanda"><span class="lbl">Previsão de Demanda</span></a><a href="#estoque" data-tip="Gestão de Estoque"><span class="lbl">Gestão de Estoque</span></a><a href="#abcxyz" data-tip="ABC/XYZ"><span class="lbl">ABC/XYZ</span></a></div></div>
+    </div>
+    <div class="grp" data-grp="system">
+      <button type="button" class="grp-h" id="grp-system-h" aria-expanded="false" aria-controls="grp-system" data-tip="Fontes e Sistema">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">Fontes e Sistema</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="grp-b" id="grp-system" role="region" aria-labelledby="grp-system-h"><div class="grp-in"><a href="#integracoes" data-tip="Central de Integrações"><span class="lbl">Central de Integrações</span></a><a href="#fontes" data-tip="Saúde das Fontes"><span class="lbl">Saúde das Fontes</span></a><a href="#catalogo" data-tip="Catálogo e Descoberta"><span class="lbl">Catálogo e Descoberta</span></a><a href="#desempenho" data-tip="Desempenho da Coleta"><span class="lbl">Desempenho da Coleta</span></a><a href="#metodologia" data-tip="Metodologia"><span class="lbl">Metodologia</span></a><a href="#configuracoes" data-tip="Configurações"><span class="lbl">Configurações</span></a></div></div>
     </div>
   </nav>
-  <div class="side-foot" id="foot">carregando…</div>
+  <div class="side-foot lbl" id="foot">carregando…</div>
 </aside>
-<div class="content"><div id="syncbar"></div><main id="main"></main></div>
+<div class="content">
+  <header class="topbar">
+    <div class="gsearch" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="gq" type="search" placeholder="Buscar produto, família, categoria, palavra-chave ou país…" autocomplete="off"
+             aria-label="Busca global" aria-controls="gres" aria-expanded="false"><div id="gres" class="gres" role="listbox" hidden></div></div>
+    <button type="button" id="status" class="status" aria-expanded="false" aria-controls="statusbox"><i></i><span>dados locais</span></button>
+    <div id="statusbox" class="statusbox" hidden></div>
+  </header>
+  <div id="syncbar"></div><main id="main"></main></div>
 <div id="modal"><div class="modal-card"><button class="modal-close small">Fechar ✕</button><div class="modal-body"></div></div></div>
 <script src="/static/math.js"></script>
 <script src="/static/charts.js"></script>
@@ -67,6 +67,7 @@
 <script src="/static/market.js"></script>
 <script src="/static/market3.js"></script>
 <script src="/static/consumer.js"></script>
+<script src="/static/shell.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

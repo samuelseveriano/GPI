@@ -422,7 +422,7 @@ def test_consumer_api_and_own_sales_still_work(tmp_path):
         code, fc = srv.req("/api/forecast", {"sku": sku, "horizon": 3})
         assert code == 200 and len(fc["modelos"][fc["modelo_escolhido"]]["previsao"]) == 3
         html = srv.req("/", raw=True)[1].decode("utf-8")
-        assert 'id="dd-vendas"' in html and 'aria-expanded="false"' in html and "consumer.js" in html
+        assert 'id="grp-sales-h"' in html and 'aria-controls="grp-sales"' in html and "consumer.js" in html and "shell.js" in html
     finally:
         srv.stop()
 

@@ -545,7 +545,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/compare", m_compare),
         Route("/api/market/marketplaces", m_marketplaces),
         Route("/api/market/models", m_models),
-        *consumer_routes(db, sync, cfg),
+        *consumer_routes(db, sync, cfg, save_user_settings),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
     app = Starlette(routes=routes, middleware=[Middleware(HostGuard)])
