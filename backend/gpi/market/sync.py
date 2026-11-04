@@ -272,6 +272,12 @@ class SyncManager:
         pct = None if indeterminado else (round(100 * done_frac / tasks) if tasks else (100 if not rodando else 0))
         if rodando and pct == 100:
             pct = 99 if st.get("fase") != "concluida" else 100
+        # o denominador cresce enquanto as fontes entram no painel: a barra nunca volta dentro da mesma execução
+        floor = getattr(self, "_pct_floor", None)
+        if floor and floor[0] == self.run_id and pct is not None and rodando:
+            pct = max(pct, floor[1])
+        if pct is not None:
+            self._pct_floor = (self.run_id, pct)
         fase = st.get("fase")
         if not rodando and fase in ("parcial",) or (not rodando and cnt["falhas"] and fase == "concluida"):
             titulo = "Sincronização concluída com restrições"
