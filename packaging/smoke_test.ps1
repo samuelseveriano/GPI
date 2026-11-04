@@ -186,6 +186,17 @@ $h = Invoke-WebRequest -Uri "$base/" -UseBasicParsing -NoProxy -TimeoutSec 30
 if ($h.Headers["Content-Security-Policy"] -notmatch "script-src 'self'") { Fail "CSP ausente" }
 Note "   base: $($cs.documentos) documentos · análise nº $($an.id): Anatel estado 1 · relatório regulatório PDF · assistente essencial · CSP ativo · IA não carregada"
 
+Note "L) v0.7.1: auditoria das fontes, integridade do banco, Inteligência de Oportunidades e atualização manual"
+$au = Invoke-RestMethod -Uri "$base/api/sources/audit" -NoProxy -TimeoutSec 60
+if (@($au.fontes).Count -lt 20) { Fail "auditoria das fontes com $(@($au.fontes).Count) fontes" }
+$ig = Invoke-RestMethod -Uri "$base/api/db/integrity" -NoProxy -TimeoutSec 60
+if (-not $ig.ok) { Fail "integridade do banco: $($ig.integridade)" }
+$ins = Invoke-RestMethod -Uri "$base/api/consumer/insights" -NoProxy -TimeoutSec 120
+if (-not $ins.aviso) { Fail "Inteligência de Oportunidades sem resposta" }
+$mb = @{ fontes = @("bcb_ptax"); manual = $true } | ConvertTo-Json
+$ms = Invoke-RestMethod -Uri "$base/api/sync/start" -Method Post -Headers $hdr -ContentType "application/json" -Body $mb -NoProxy -TimeoutSec 30
+Note "   auditoria: $(@($au.fontes).Count) fontes · banco íntegro (esquema v$($ig.versao_esquema)) · insights: $(@($ins.itens).Count) produtos · atualização manual iniciada: $($ms.iniciada)"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -212,4 +223,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–K)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–L)"

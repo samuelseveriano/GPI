@@ -75,6 +75,14 @@ def main(out: str, compare: bool, reports_dir: str | None = None):
     for t_ in trends:
         print(f"google_trends {t_['country']}: {t_['termos']} termos em alta, {t_['com_produto']} com produto, "
               f"{t_['comerciais']} comerciais")
+    # v0.7.1: matriz de auditoria A–F das fontes, a partir do banco desta coleta REAL (sem credenciais no CI)
+    from gpi.market.audit import audit, markdown
+    a = audit(db, sm.store, sm.creds, sm.cfg, sm.connectors)
+    report["auditoria"] = a
+    Path(out).with_name("auditoria_fontes.md").write_text(
+        "# Auditoria das fontes — coleta real no GitHub Actions (sem credenciais de usuário)\n\n" + markdown(a), encoding="utf-8")
+    Path(out).write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    print("auditoria:", json.dumps(a["resumo"], ensure_ascii=False))
     ok = [k for k, v in report["fontes"].items() if v["validada"]]
     bad = [k for k, v in report["fontes"].items() if v["estado"] == "falhou"]
     print(f"validadas: {', '.join(ok)} | falharam: {', '.join(bad) or 'nenhuma'}")
