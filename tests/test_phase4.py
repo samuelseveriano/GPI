@@ -199,7 +199,7 @@ class FakeCreds:
 
 
 class AdsHttp:
-    def __init__(self, dead=("v23", "v22")):
+    def __init__(self, dead=("v26", "v25")):
         self.dead, self.urls = set(dead), []
         self.cancel_event = threading.Event()
 
@@ -210,7 +210,8 @@ class AdsHttp:
         v = url.split("/")[3]
         if v in self.dead:
             raise SourceError("recurso não encontrado (HTTP 404)", "http", status=404)
-        assert headers["developer-token"] == "DT" and headers["Authorization"] == "Bearer tok"
+        # v0.6.1: developer token descontinuado pelo Google (09/09/2026) — nunca é enviado, mesmo se salvo
+        assert "developer-token" not in headers and headers["Authorization"] == "Bearer tok"
         return ADS
 
 
@@ -220,7 +221,7 @@ def test_keyword_ideas_parse_and_version_probe():
     creds = FakeCreds({"google_ads": {"refresh_token": "r", "developer_token": "DT", "customer_id": "123-456-7890"}})
     http = AdsHttp()
     gads_call(http, creds, ":generateKeywordIdeas", {})
-    assert creds.get("google_ads")["api_version"] == "v21"            # versões desligadas foram puladas
+    assert creds.get("google_ads")["api_version"] == "v24"            # versões desligadas foram puladas
     assert "/customers/1234567890:generateKeywordIdeas" in http.urls[-1]
 
 
@@ -230,7 +231,7 @@ def test_keyword_planner_unavailable_without_credentials_and_stores_approx_volum
     c = GoogleAdsKeywordPlanner()
     ctx0 = SyncContext(AdsHttp(), MarketStore(db), {}, TODAY, creds=FakeCreds({}))
     assert not c.available(ctx0)
-    creds = FakeCreds({"google_ads": {"refresh_token": "r", "developer_token": "DT", "customer_id": "1"}})
+    creds = FakeCreds({"google_ads": {"refresh_token": "r", "customer_id": "1"}})   # sem developer token
     ctx = SyncContext(AdsHttp(dead=()), MarketStore(db), {}, TODAY, creds=creds)
     Catalog(db).ensure_seeded()
     assert c.available(ctx)

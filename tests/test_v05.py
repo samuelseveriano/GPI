@@ -358,7 +358,7 @@ def test_sidebar_structure_accessibility_and_routes():
         assert label in html
     hrefs = re.findall(r'<a href="#([^"]+)" data-tip', html)
     assert len(hrefs) == len(set(hrefs))                                       # sem duplicar páginas
-    js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js", "v06.js"))
+    js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js", "v06.js", "v061.js"))
     for h in hrefs:
         assert f"'{h.split('/')[0]}'" in js or f"{h.split('/')[0]}:" in js or f"'{h.split('/')[0]}':" in js, h
     css = (ROOT / "frontend" / "styles.css").read_text(encoding="utf-8")
@@ -376,5 +376,5 @@ def test_windows_packaging_metadata():
     spec = (ROOT / "packaging" / "gpi.spec").read_text(encoding="utf-8")
     assert "upx=False" in spec and "uac_admin" not in spec.replace("uac_admin=False", "") and 'icon=' in spec
     wf = (ROOT / ".github" / "workflows" / "windows-build.yml").read_text(encoding="utf-8")
-    assert "MpCmdRun" in wf and "Get-FileHash" in wf and f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf
+    assert "MpCmdRun" in wf and "Get-FileHash" in wf and (f"GPI-Windows-Portable-v{__version__}.zip" in wf or f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf)
     assert "SIGNING_ENABLED" in wf                                               # assinatura opcional, só com secrets configurados

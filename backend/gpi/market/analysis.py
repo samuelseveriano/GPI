@@ -19,12 +19,16 @@ def make_analyzer(cfg: dict | None = None):
 
         def step(name, fn):
             state["atual"] = name
+            state["etapas_feitas"] = state.get("etapas_feitas", 0)
             try:
                 out[name] = fn()
             except Exception as e:  # noqa: BLE001 — uma etapa com erro não impede as demais
                 log.exception("falha na etapa %s", name)
                 out[name] = {"erro": str(e)}
                 state["erros"].append(f"análise/{name}: {e}")
+            finally:
+                state["etapas_feitas"] = state.get("etapas_feitas", 0) + 1
+                state["versao"] = state.get("versao", 0) + 1
 
         step("consumo_rapido", lambda: _consumer(store, cfg, state, forecasts=False))
         step("descoberta", lambda: _discovery(store, cfg))
@@ -48,6 +52,7 @@ def make_analyzer(cfg: dict | None = None):
         return _consumer(store, cfg, state, forecasts=False)
 
     analyze.quick = quick
+    analyze.steps = 10 + (1 if cfg.get("ml_global_enabled", False) else 0)   # etapas reais (progresso da análise)
     return analyze
 
 

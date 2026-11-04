@@ -77,22 +77,22 @@ PROVIDERS = [
      "permissoes": "Leitura do feed público oficial do Google Trends. Os dados são exibidos com a atribuição "
                    "'Fonte: Google Trends'.", "link": "https://trends.google.com/trending?geo=BR"},
     {"id": "google_ads", "nome": "Google Ads — Planejador de palavras-chave", "tipo": "oauth", "conectores": ["google_ads_kp"],
-     "campos": [{"nome": "developer_token", "rotulo": "Developer token (Central da API do Google Ads)", "secreto": True},
-                {"nome": "customer_id", "rotulo": "ID da conta Google Ads (ex.: 123-456-7890)", "secreto": False},
-                {"nome": "login_customer_id", "rotulo": "ID da conta de administrador (MCC), se houver", "secreto": False},
-                {"nome": "client_id", "rotulo": "OAuth Client ID (tipo 'App para computador')", "secreto": False},
-                {"nome": "client_secret", "rotulo": "OAuth Client secret", "secreto": True}],
+     "assistente": "google_ads",
+     "campos": [{"nome": "client_id", "rotulo": "OAuth Client ID (tipo 'App para computador')", "secreto": False},
+                {"nome": "client_secret", "rotulo": "OAuth Client Secret", "secreto": True}],
      "descricao": "Volume mensal de buscas (aproximado) e histórico de 12 meses por produto, no Brasil e nos EUA.",
-     "permissoes": "Login na página oficial do Google (o GPI não vê sua senha) com o escopo "
-                   "'https://www.googleapis.com/auth/adwords' — permite ler e gerenciar a conta de anúncios; o GPI usa "
-                   "SOMENTE o planejador de palavras-chave (nenhum anúncio é criado ou alterado). O developer token "
-                   "precisa estar aprovado (acesso Básico ou superior) para dados de contas reais.",
-     "como_obter": "1) ads.google.com: crie/acesse uma conta (não precisa veicular anúncios). 2) Ferramentas → Central "
-                   "da API: solicite o developer token. 3) console.cloud.google.com: ative a 'Google Ads API' e crie "
-                   "credenciais OAuth do tipo 'App para computador'. 4) Preencha os campos e clique em Conectar.",
-     "link": "https://developers.google.com/google-ads/api/docs/get-started/introduction",
-     "documentacao": "https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas",
+     "permissoes": "Login na página oficial do Google (o GPI não vê sua senha), com PKCE e o escopo "
+                   "'https://www.googleapis.com/auth/adwords'. O GPI usa SOMENTE leitura de contas e o planejador de palavras-chave: "
+                   "nenhum anúncio ou campanha é criado ou alterado. Developer token NÃO é mais necessário (descontinuado pelo Google em "
+                   "09/09/2026): o acesso é do projeto Google Cloud dono do Client ID, e o planejador exige nível Basic ou Standard "
+                   "(Explorer não acessa).",
+     "como_obter": "1) console.cloud.google.com: ative a 'Google Ads API' no projeto e crie credenciais OAuth do tipo 'App para "
+                   "computador'. 2) Em Google Ads API → Overview, confira o nível de acesso (Basic para palavras-chave). "
+                   "3) Informe Client ID e Secret, clique em Entrar com Google e depois em Identificar contas disponíveis.",
+     "link": "https://console.cloud.google.com/apis/library/googleads.googleapis.com",
+     "documentacao": "https://developers.google.com/google-ads/api/docs/api-policy/developer-token",
      "auth_url": "https://accounts.google.com/o/oauth2/v2/auth", "token_url": "https://oauth2.googleapis.com/token",
+     "revoke_url": "https://oauth2.googleapis.com/revoke",
      "scope": "https://www.googleapis.com/auth/adwords", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
     {"id": "google_trends", "nome": "Google Trends API (séries históricas, alfa)", "tipo": "approval",
      "conectores": ["google_trends"],
@@ -122,6 +122,7 @@ PROVIDERS = [
                    "'App para computador'. Informe os dados e clique em Entrar.",
      "link": "https://console.cloud.google.com/bigquery", "documentacao": "https://cloud.google.com/blog/products/data-analytics/international-google-trends-datasets-in-bigquery",
      "auth_url": "https://accounts.google.com/o/oauth2/v2/auth", "token_url": "https://oauth2.googleapis.com/token",
+     "revoke_url": "https://oauth2.googleapis.com/revoke",
      "scope": "https://www.googleapis.com/auth/bigquery.readonly", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
     {"id": "ebay", "nome": "eBay — Browse API", "tipo": "api_key", "conectores": ["ebay"],
      "campos": [{"nome": "client_id", "rotulo": "App ID (Client ID) de produção", "secreto": False},
@@ -174,15 +175,16 @@ PROVIDERS = [
                 {"nome": "ig_user_id", "rotulo": "ID da conta profissional do Instagram (preenchido ao conectar)", "secreto": False}],
      "descricao": "Central Meta: um login compartilhado para três conectores independentes — hashtags do Instagram, "
                   "páginas comerciais do Facebook e Biblioteca de Anúncios (UE).",
-     "permissoes": "Login do Facebook na página oficial da Meta com as permissões instagram_basic, pages_show_list, "
-                   "pages_read_engagement e ads_read (somente leitura). Hashtags exigem o recurso Instagram Public Content "
+     "permissoes": "Login do Facebook na página oficial da Meta, em MÓDULOS independentes: login básico (public_profile), "
+                   "Páginas (pages_show_list, pages_read_engagement), Instagram (instagram_basic, pages_show_list) e Biblioteca de "
+                   "Anúncios (ads_read) — cada módulo pede só as suas permissões, somente leitura. Hashtags exigem o recurso Instagram Public Content "
                    "Access; páginas públicas de terceiros exigem Page Public Content Access; a Biblioteca de Anúncios exige "
                    "identidade verificada. Cada recurso depende da revisão do app pela Meta. O token de longo prazo vale ~60 dias.",
      "como_obter": "developers.facebook.com → Meus apps → criar app (tipo Empresa) → adicionar 'Login do Facebook' e "
                    "'Instagram Graph API' → cadastrar a URL de redirecionamento exibida abaixo → solicitar os recursos na "
                    "revisão do app → informar App ID e App Secret → Conectar.",
-     "link": "https://developers.facebook.com/apps/", "documentacao": "https://developers.facebook.com/docs/instagram-platform",
-     "scope": "instagram_basic,pages_show_list,pages_read_engagement,ads_read,business_management"},
+     "link": "https://developers.facebook.com/apps/", "documentacao": "https://developers.facebook.com/docs/facebook-login",
+     "assistente": "meta"},
     {"id": "amazon", "nome": "Amazon Brasil / EUA", "tipo": "approval", "conectores": ["amazon_br", "amazon_us"],
      "descricao": "Preços e rankings de produtos.", "permissoes": "Product Advertising API: exige conta aprovada no "
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
@@ -261,36 +263,14 @@ def tiktok_exchange(http, creds, code: str, mode: str, redirect_uri: str) -> dic
     return vals
 
 
-def meta_authorize_url(c: dict, ver: str, redirect_uri: str, state: str) -> str:
-    import urllib.parse as up
-    return f"https://www.facebook.com/{ver}/dialog/oauth?" + up.urlencode({
-        "client_id": c.get("client_id", ""), "redirect_uri": redirect_uri, "state": state, "response_type": "code",
-        "scope": provider("meta")["scope"]})
+def meta_authorize_url(c: dict, ver: str, redirect_uri: str, state: str, modulo: str = "basico", rerequest: bool = False) -> str:
+    from .meta import authorize_url
+    return authorize_url(c, ver, redirect_uri, state, modulo, rerequest)
 
 
-def meta_exchange(http, creds, code: str, redirect_uri: str, ver: str) -> dict:
-    """Código → token curto → token de longo prazo (~60 dias) → detecta a conta profissional do Instagram."""
-    import urllib.parse as up
-    c = creds.get("meta")
-    g = f"https://graph.facebook.com/{ver}/"
-    r = http.request_json(g + "oauth/access_token?" + up.urlencode({"client_id": c.get("client_id"), "redirect_uri": redirect_uri,
-                                                                      "client_secret": c.get("client_secret"), "code": code}), ttl=0)
-    if not r.get("access_token"):
-        raise SourceError(f"Meta não emitiu token: {(r.get('error') or {}).get('message', r)}", "restrita")
-    ll = http.request_json(g + "oauth/access_token?" + up.urlencode({"grant_type": "fb_exchange_token", "client_id": c.get("client_id"),
-                                                                       "client_secret": c.get("client_secret"),
-                                                                       "fb_exchange_token": r["access_token"]}), ttl=0)
-    tok = ll.get("access_token") or r["access_token"]
-    vals = {"access_token": tok, "expires_at": str(time.time() + float(ll.get("expires_in", r.get("expires_in", 3600))))}
-    try:
-        acc = http.request_json(g + "me/accounts?" + up.urlencode({"fields": "name,instagram_business_account", "access_token": tok}), ttl=0)
-        ig = next((a["instagram_business_account"]["id"] for a in acc.get("data", []) if a.get("instagram_business_account")), None)
-        if ig and not c.get("ig_user_id"):
-            vals["ig_user_id"] = ig
-    except SourceError:
-        pass
-    creds.set("meta", vals)
-    return vals
+def meta_exchange(http, creds, code: str, redirect_uri: str, ver: str, modulo: str = "basico") -> dict:
+    from .meta import exchange
+    return exchange(http, creds, code, redirect_uri, ver, modulo)
 
 
 def provider(pid: str) -> dict | None:
@@ -327,13 +307,11 @@ def test_connection(pid: str, http, creds, cfg: dict) -> tuple[bool, str]:
                 res.append(f"{geo}: {len(items)} buscas em alta")
             return True, "; ".join(res)
         if pid == "google_ads":
-            from ..connectors.search import gads_call
-            r = gads_call(http, creds, ":generateKeywordIdeas", {
-                "language": "languageConstants/1014", "geoTargetConstants": ["geoTargetConstants/2076"],
-                "keywordPlanNetwork": "GOOGLE_SEARCH", "keywordSeed": {"keywords": ["air fryer"]}})
-            n = len(r.get("results", []))
-            return (n > 0, f"API respondeu ({creds.get('google_ads').get('api_version')}): {n} ideias de palavras-chave"
-                    if n else "a API respondeu sem ideias (verifique o nível de acesso do developer token)")
+            from .google_ads import diagnose
+            d = diagnose(http, creds)
+            last = d["etapas"][-1]
+            return d["estado"] == "validado", " · ".join(f"{x['etapa']}: {'ok' if x['ok'] else x['mensagem']}" for x in d["etapas"]) \
+                if d["estado"] != "validado" else f"Planejador respondeu: {last['mensagem']}"
         if pid == "ebay":
             from ..connectors.sources5 import EbayBrowse, ebay_token, parse_ebay
             tok = ebay_token(http, creds)

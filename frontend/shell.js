@@ -106,10 +106,12 @@
 
   // ------------------------------------------------------------- status da coleta
   const st = $('#status'), box = $('#statusbox');
-  st.addEventListener('click', () => { const open = box.hidden; box.hidden = !open; st.setAttribute('aria-expanded', String(open)); });
+  st.addEventListener('click', () => { if (window.GPI_SYNC_OPEN) { window.GPI_SYNC_OPEN(); return; } const open = box.hidden; box.hidden = !open; st.setAttribute('aria-expanded', String(open)); });
   async function poll() {
+    if (window.GPI_SYNC) return;                 // v0.6.1: o indicador é atualizado pelos eventos em tempo real
     try {
       const [s, src] = await Promise.all([fetch('/api/sync/status').then((r) => r.json()), fetch('/api/market/sources').then((r) => r.json())]);
+      if (window.GPI_SYNC) return;               // v0.6.1 assumiu o indicador durante a requisição
       const failed = src.filter((x) => x.estado === 'falhou');
       let cls = 's-ok', label = 'atualizado';
       if (s.rodando) { cls = 's-sync'; label = `sincronizando ${s.total ? Math.round(100 * s.feitos / s.total) + '%' : ''}`; }

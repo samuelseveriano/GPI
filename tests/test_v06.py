@@ -240,7 +240,7 @@ def test_history_snapshot_reproduction_and_no_overwrite(base):
     snap = Path(svc.db.query("SELECT snapshot_path FROM reports WHERE id = ?", (r1["id"],))[0]["snapshot_path"])
     with gzip.open(snap, "rt", encoding="utf-8") as fh:
         s = json.load(fh)
-    assert s["meta"]["run_id"] == r1["run_id"] and s["meta"]["versao_software"] == "0.6.0"
+    assert s["meta"]["run_id"] == r1["run_id"] and s["meta"]["versao_software"] == __import__("gpi").__version__
 
 
 def test_delete_requires_confirmation_and_keeps_audit(base):

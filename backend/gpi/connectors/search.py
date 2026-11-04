@@ -144,7 +144,7 @@ class GoogleTrendsTrending(Connector):
 
 
 # ----------------------------------------------------------------------------- Google Ads
-GADS_VERSIONS = ["v23", "v22", "v21", "v20", "v19"]   # testadas da mais nova para a mais antiga
+from ..integrations.google_ads import VERSIONS as GADS_VERSIONS  # noqa: E402,F401 — da mais nova para a mais antiga
 GEO = {"BR": ("geoTargetConstants/2076", "languageConstants/1014", "pt"),
        "US": ("geoTargetConstants/2840", "languageConstants/1000", "en")}
 MONTHS = {m: i for i, m in enumerate(["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST",
@@ -152,45 +152,14 @@ MONTHS = {m: i for i, m in enumerate(["JANUARY", "FEBRUARY", "MARCH", "APRIL", "
 
 
 def gads_token(http, creds) -> str:
-    c = creds.get("google_ads")
-    if not c.get("refresh_token"):
-        raise SourceError("Google Ads não conectado: use 'Conectar' na Central de Integrações", "restrita")
-    if c.get("access_token") and float(c.get("expires_at", 0)) > time.time() + 60:
-        return c["access_token"]
-    r = http.request_json("https://oauth2.googleapis.com/token", "POST", form={
-        "grant_type": "refresh_token", "client_id": c.get("client_id", ""), "client_secret": c.get("client_secret", ""),
-        "refresh_token": c["refresh_token"]})
-    if not r.get("access_token"):
-        raise SourceError(f"Google não renovou o token: {r.get('error_description') or r.get('error')}", "restrita")
-    creds.set("google_ads", {"access_token": r["access_token"], "expires_at": str(time.time() + float(r.get("expires_in", 3600)))})
-    return r["access_token"]
+    from ..integrations.google_ads import token
+    return token(http, creds)
 
 
 def gads_call(http, creds, path: str, body: dict) -> dict:
-    """POST na API do Google Ads, descobrindo a versão ativa (versões antigas são desligadas pelo Google)."""
-    c = creds.get("google_ads")
-    tok = gads_token(http, creds)
-    cid = re.sub(r"\D", "", c.get("customer_id", ""))
-    if not cid or not c.get("developer_token"):
-        raise SourceError("informe o developer token e o ID da conta Google Ads (Central de Integrações)", "restrita")
-    hdr = {"Authorization": f"Bearer {tok}", "developer-token": c["developer_token"]}
-    if c.get("login_customer_id"):
-        hdr["login-customer-id"] = re.sub(r"\D", "", c["login_customer_id"])
-    versions = ([c["api_version"]] if c.get("api_version") else []) + [v for v in GADS_VERSIONS if v != c.get("api_version")]
-    last = None
-    for v in versions:
-        try:
-            r = http.request_json(f"https://googleads.googleapis.com/{v}/customers/{cid}{path}", "POST", body,
-                                  headers=hdr, ttl=0)
-            if c.get("api_version") != v:
-                creds.set("google_ads", {"api_version": v})
-            return r
-        except SourceError as e:
-            last = e
-            if e.status in (404,) or (e.status == 400 and "UNSUPPORTED_VERSION" in str(e)):
-                continue                       # versão desligada: tenta a anterior/seguinte
-            raise
-    raise last or SourceError("nenhuma versão da API do Google Ads respondeu", "http")
+    """POST na API REST oficial do Google Ads, sem developer token (descontinuado em 09/09/2026)."""
+    from ..integrations.google_ads import call
+    return call(http, creds, path, body)
 
 
 def parse_keyword_ideas(payload: dict) -> list[dict]:
@@ -217,14 +186,19 @@ class GoogleAdsKeywordPlanner(Connector):
     docs_url = "https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas"
     description = ("Média mensal e histórico de 12 meses de buscas por palavra-chave no Brasil e nos EUA, com "
                    "concorrência publicitária. Valores arredondados pelo Google (aproximados).")
-    limitations = ("Exige conta Google Ads, developer token aprovado e autorização OAuth do usuário. Volumes são "
-                   "arredondados e, em contas sem investimento, podem vir em faixas amplas.")
+    limitations = ("Exige conta Google Ads, autorização OAuth do usuário e projeto Google Cloud com acesso Basic ou Standard "
+                   "(Explorer não acessa o planejador). Developer token não é mais necessário (descontinuado em 09/09/2026). "
+                   "Volumes são arredondados e, em contas sem investimento, podem vir em faixas amplas.")
     order = 18
     stage = 2
 
     def available(self, ctx) -> bool:
         c = ctx.creds.get("google_ads") if ctx.creds else {}
-        return bool(c.get("refresh_token") and c.get("developer_token") and c.get("customer_id"))
+        return bool(c.get("refresh_token") and c.get("customer_id"))
+
+    @property
+    def restricted_reason(self):  # type: ignore[override]
+        return "Conecte com 'Entrar com Google' e selecione a conta Google Ads (Central de Integrações → Google Ads)."
 
     def plan(self, ctx):
         from ..products.catalog import Catalog

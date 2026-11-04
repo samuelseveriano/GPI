@@ -128,6 +128,28 @@ def keywords(ctx, limit: int, lang: str = "pt") -> list[tuple[str, str]]:
     return out[:limit]
 
 
+def youtube_queries(ctx, limit: int) -> list[tuple[str, str]]:
+    """v0.6.1: consultas do YouTube a partir do catálogo canônico (o mesmo usado pela inteligência de consumo),
+    priorizado por evidências; os produtos da Fase 2 (wiki:) completam a lista. A chave gravada no vídeo é o
+    product_id do catálogo, o que permite filtrar a página por produto e categoria."""
+    try:
+        rows = ctx.store.db.query("SELECT product_id, canonical, name_pt FROM catalog_products WHERE level = 'produto' "
+                                  "ORDER BY evidence DESC, last_seen DESC LIMIT ?", (limit * 2,))
+    except Exception:  # noqa: BLE001 — banco anterior à migração v4
+        rows = []
+    cat = [(r["product_id"], re.sub(r"\s*\(.*?\)", "", r["name_pt"] or r["canonical"] or "").strip()) for r in rows]
+    wiki = keywords(ctx, limit)
+    out, seen = [], set()
+    for i in range(max(len(cat), len(wiki))):          # intercalados: catálogo e produtos priorizados da Fase 2
+        for lst in (cat, wiki):
+            if i < len(lst):
+                k, q = lst[i]
+                if q and q.lower() not in seen:
+                    seen.add(q.lower())
+                    out.append((k, q))
+    return out[:limit]
+
+
 def week_tag(d: date) -> str:
     y, w, _ = d.isocalendar()
     return f"{y}-W{w:02d}"
@@ -205,11 +227,21 @@ class YouTube(Connector):
     def restricted_reason(self):  # type: ignore[override]
         return "Requer uma chave gratuita da YouTube Data API v3 (Central de Integrações → YouTube)."
 
+    REGION = "BR"                       # país da consulta (regionCode) — exibido na página
+
     def plan(self, ctx):
         wk = week_tag(ctx.today)
         n = max(1, int(ctx.cfg.get("youtube_daily_units", 3000)) // 150)
+        if getattr(ctx, "force", False):
+            # "Atualizar agora": poucas buscas novas (padrão 5 = ~505 unidades), nunca acima do limite diário do GPI
+            m = max(1, min(n, int(ctx.cfg.get("youtube_manual_max_searches", 5))))
+            stamp = datetime.now().strftime("%Y-%m-%dT%H")
+            jobs = [Job(f"youtube:manual:{k}:{stamp}", {"product_key": k, "q": q}, None, priority=2)
+                    for k, q in youtube_queries(ctx, m)]
+            jobs.append(Job(f"youtube:refresh:{ctx.today.isoformat()}", {}, None, priority=5))
+            return jobs
         jobs = [Job(f"youtube:search:{k}:{wk}", {"product_key": k, "q": q}, None, priority=3)
-                for k, q in keywords(ctx, min(n, 20))]
+                for k, q in youtube_queries(ctx, min(n, 20))]
         jobs.append(Job(f"youtube:refresh:{ctx.today.isoformat()}", {}, None, priority=5))
         return jobs
 
@@ -263,13 +295,14 @@ class YouTube(Connector):
         self._spend(ctx, 100)
         after = (datetime.now(timezone.utc) - timedelta(days=180)).strftime("%Y-%m-%dT%H:%M:%SZ")
         s = self._get(ctx, "search", {"part": "id", "type": "video", "q": f"{q} review OR teste OR unboxing",
-                                      "maxResults": 25, "order": "relevance", "regionCode": "BR",
+                                      "maxResults": 25, "order": "relevance", "regionCode": self.REGION,
                                       "relevanceLanguage": "pt", "publishedAfter": after})
         ids = [it["id"]["videoId"] for it in s["items"] if isinstance(it.get("id"), dict) and it["id"].get("videoId")]
         if ids:
             self._spend(ctx, 1)
             v = self._get(ctx, "videos", {"part": "snippet,statistics", "id": ",".join(ids)})
-            ctx.content.upsert(self.id, self.parse_videos(v, pk, q))
+            r = ctx.content.upsert(self.id, self.parse_videos(v, pk, q))
+            self.last_counts = r
         return [], []
 
 

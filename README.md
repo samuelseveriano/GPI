@@ -1,4 +1,4 @@
-# GPI — Global Product Intelligence · v0.6
+# GPI — Global Product Intelligence · v0.6.1
 
 Plataforma **local e autônoma** de inteligência de produtos: coleta dados de fontes públicas e
 autorizadas, analisa opiniões de consumidores, acompanha o YouTube, compara produtos, gera
@@ -11,7 +11,7 @@ página *Metodologia* e são verificadas por testes.
 - **Relatórios Excel/PDF:** `docs/RELATORIOS.md`. **Plano da v0.6:** `docs/PLANO_V06.md`.
 
 > **Executável Windows:** o `GPI-Windows-Portable.zip` é gerado e testado pelo GitHub Actions
-> (aba *Actions → windows-build → Artifacts*). O `GPI.exe` passa pelos testes A–I numa cópia
+> (aba *Actions → windows-build → Artifacts*). O `GPI.exe` passa pelos testes A–J numa cópia
 > sem Python instalado: inicialização, servidor, interface, modelos de ML dentro do pacote,
 > persistência, exportação de relatórios XLSX/PDF, encerramento, integridade. Veja `docs/BUILD.md`.
 
@@ -21,6 +21,18 @@ página *Metodologia* e são verificadas por testes.
 - **Desenvolvimento:** `pip install -r requirements.txt` (opcional: `-r requirements-optional.txt`) e
   `Start_GPI.bat` (Windows) ou `./start_gpi.sh` (Linux/macOS). Dados em `data/`.
 - **Testes:** `pip install -r requirements-dev.txt` e `python -m pytest tests`.
+
+## Versão 0.6.1 — Intelligent Sync & API Stability Update
+Detalhes e diagnóstico completo em `docs/V061.md`.
+- **Google Ads sem developer token** (descontinuado pelo Google em 09/09/2026): Client ID/Secret → Entrar com Google →
+  contas identificadas automaticamente → diagnóstico de OAuth, conta, nível de acesso e permissão do planejador.
+- **YouTube Intelligence** lê os vídeos armazenados diretamente do banco, com filtros, indicadores, diagnóstico A–E e
+  "Atualizar agora" limitado pela cota.
+- **Painel de sincronização** em tempo real (SSE) por API, com progresso real, histórico, novas tentativas, cancelamento
+  cooperativo, log estruturado sem segredos e exportação de diagnóstico.
+- **Conexões**: keep-alive, tempos de conexão/leitura separados, Retry-After, semáforo por host e métricas por host.
+- **Meta** em módulos de permissões, verificação do app e orientação oficial para o bloqueio "Recurso indisponível".
+- **Central de Integrações**: estados Configurado → Autenticado → Autorizado → Validado → Funcional, Restrito e Erro.
 
 ## Versão 0.6 — o que foi implementado
 

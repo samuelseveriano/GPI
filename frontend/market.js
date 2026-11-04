@@ -14,6 +14,7 @@ window.GPI_MARKET = function (H) {
   let pollT = null;
   async function pollSync() {
     clearTimeout(pollT);
+    if (window.GPI_SYNC) return;                 // v0.6.1: barra e painel em tempo real (v061.js)
     let st; try { st = await api('/api/sync/status'); } catch { pollT = setTimeout(pollSync, 10000); return; }
     const bar = $('#syncbar');
     if (st.rodando) {
