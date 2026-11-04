@@ -1,0 +1,44 @@
+# v0.8.1 — auditoria com dados REAIS públicos (Wikimedia, Comex Stat, BCB, Google Trends RSS), sem segredos.
+name: real-data-audit
+
+on:
+  push:
+    branches: ["feature/**", "fix/**"]
+    paths:
+      - "scripts/real_data_audit_v081.py"
+      - "backend/gpi/products/trends.py"
+      - "backend/gpi/intel/**"
+      - ".github/workflows/real-data-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auditoria:
+    name: Auditoria com dados reais públicos
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Coleta real + análises (declínio, sazonalidade, Wikipédia, idiomas, backtesting, cobertura)
+        run: |
+          set +e
+          python scripts/real_data_audit_v081.py auditoria_real_v081.json > audit.log 2>&1
+          code=$?
+          cat audit.log | tail -40
+          { echo "### Auditoria v0.8.1 com dados reais"; echo '```'; tail -20 audit.log | cut -c1-600; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: auditoria-dados-reais-v081
+          path: |
+            auditoria_real_v081.json
+            audit.log
+          retention-days: 30
