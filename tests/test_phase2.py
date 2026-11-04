@@ -256,8 +256,10 @@ def test_weekly_due_logic(tmp_path):
 
 def test_connector_registry_has_required_sources():
     ids = {c.id for c in all_connectors()}
-    assert {"amazon_br", "amazon_us", "mercadolivre", "shopee", "aliexpress", "alibaba", "taobao",
+    assert {"amazon_br", "amazon_us", "mercadolivre", "shopee", "aliexpress", "taobao",
             "google_trends", "comexstat", "ibge_pmc", "bcb_ptax", "wikimedia", "comtrade"} <= ids
+    # v0.7: fontes sem acesso aberto retiradas das integrações ativas
+    assert not ids & {"reclame_aqui", "baidu_index", "ocean_engine", "alibaba", "alibaba_insights", "jd_com"}
 
 
 # ---------------------------------------------------------------- AutoML

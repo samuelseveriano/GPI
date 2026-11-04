@@ -164,6 +164,9 @@ def setup_logging(data: Path, level: str):
         sh = logging.StreamHandler()
         sh.setFormatter(fmt)
         handlers.append(sh)
+    from .security import RedactFilter
+    for h in handlers:
+        h.addFilter(RedactFilter())          # sanitização automática de tokens/segredos em todos os logs
     root = logging.getLogger()
     root.setLevel(level)
     root.handlers = handlers
@@ -441,6 +444,7 @@ def main(argv=None) -> int:
     def shutdown():
         holder["server"].should_exit = True
 
+    cfg["_app_dirs"] = list(dict.fromkeys([str(app_dir()), str(resource_dir())]))   # pacote de IA / dados oficiais
     app = create_app(data, resource_dir() / "frontend", shutdown_cb=shutdown, cfg=cfg,
                      start_sync=cfg.get("auto_sync", True) and not args.smoke)
     log.info("aplicação carregada em %.1f s (importação + banco)", time.time() - t_app)
@@ -465,6 +469,10 @@ def main(argv=None) -> int:
     def finish():
         shutdown()
         t.join(15)
+        try:
+            app.state.ai.stop()                 # encerra o processo do modelo (se carregado)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             app.state.sync.stop()
             app.state.db.close()

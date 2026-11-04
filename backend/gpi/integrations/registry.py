@@ -45,12 +45,15 @@ PROVIDERS = [
      "campos": [{"nome": "client_id", "rotulo": "App ID", "secreto": False},
                 {"nome": "client_secret", "rotulo": "Secret Key", "secreto": True}],
      "descricao": "Tendências de busca do Mercado Livre Brasil (termos mais buscados, com histórico de cada coleta).",
-     "permissoes": "Login na página oficial do Mercado Livre (o GPI não vê sua senha), com PKCE. Somente leitura. "
-                   "No DevCenter, cadastre a URL de redirecionamento exibida abaixo; se o Mercado Livre não aceitar "
-                   "endereço http://127.0.0.1, a conexão OAuth não é possível nesta instalação.",
-     "como_obter": "developers.mercadolivre.com.br → Minhas aplicações → criar aplicação (ative PKCE).",
+     "permissoes": "Login na página oficial do Mercado Livre (o GPI não vê sua senha), com PKCE S256. Somente "
+                   "leitura. O Mercado Livre exige Redirect URI HTTPS: cadastre no DevCenter exatamente o endereço "
+                   "HTTPS exibido abaixo (página de retorno estática, sem segredos). O code_verifier e a Secret Key "
+                   "nunca saem deste computador.",
+     "como_obter": "developers.mercadolivre.com.br → Minhas aplicações → criar aplicação: Redirect URI = endereço "
+                   "HTTPS exibido abaixo; ative PKCE; escopos: leitura e acesso offline.",
      "link": "https://developers.mercadolivre.com.br/devcenter",
-     "documentacao": "https://developers.mercadolivre.com.br/pt_br/autenticacao-e-autorizacao",
+     "documentacao": "https://developers.mercadolivre.com.br/en_us/authentication-and-authorization",
+     "oauth_https_relay": True,
      "auth_url": "https://auth.mercadolivre.com.br/authorization",
      "token_url": "https://api.mercadolibre.com/oauth/token"},
     {"id": "comtrade", "nome": "UN Comtrade (chave gratuita opcional)", "tipo": "api_key", "conectores": ["comtrade"],
@@ -101,14 +104,6 @@ PROVIDERS = [
                    "Trending Now (RSS) e o Planejador do Google Ads.",
      "alternativas": "Trending Now (automático) · Planejador de palavras-chave do Google Ads (conexão assistida)",
      "link": "https://developers.google.com/search/blog/2025/07/trends-api"},
-    {"id": "china_search", "nome": "Busca na China (Baidu Index, 巨量算数, Alibaba, JD.com)", "tipo": "approval",
-     "conectores": ["baidu_index", "ocean_engine", "alibaba_insights", "jd_com"],
-     "descricao": "Interesse de busca de consumidores na China continental.",
-     "permissoes": "Nenhuma dessas fontes oferece API aberta a terceiros: exigem login chinês, contrato pago ou "
-                   "empresa registrada. O GPI não raspa nem contorna essas proteções. Visualizações da Wikipédia em "
-                   "chinês NÃO equivalem a buscas na China e não são apresentadas como tal.",
-     "alternativas": "Sinais de oferta (exportações chinesas via UN Comtrade/Comex Stat), claramente identificados",
-     "link": "https://index.baidu.com/"},
     {"id": "google_bigquery", "nome": "Google Trends no BigQuery (conjunto público)", "tipo": "oauth",
      "conectores": ["google_trends_bq"],
      "campos": [{"nome": "project_id", "rotulo": "ID do projeto Google Cloud (onde as consultas são contabilizadas)", "secreto": False},
@@ -190,17 +185,14 @@ PROVIDERS = [
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
     {"id": "shopee", "nome": "Shopee", "tipo": "approval", "conectores": ["shopee"],
      "descricao": "Produtos e preços.", "permissoes": "Open Platform exige parceiro aprovado.", "link": "https://open.shopee.com/"},
-    {"id": "china_marketplaces", "nome": "AliExpress / Alibaba / Taobao", "tipo": "approval",
-     "conectores": ["aliexpress", "alibaba", "taobao"], "descricao": "Fornecedores e preços na China.",
+    {"id": "china_marketplaces", "nome": "AliExpress / Taobao", "tipo": "approval",
+     "conectores": ["aliexpress", "taobao"], "descricao": "Fornecedores e preços na China.",
      "permissoes": "Plataformas abertas exigem app key aprovada (afiliados, dropshipping ou cadastro empresarial).",
      "link": "https://openservice.aliexpress.com/"},
     {"id": "trustpilot", "nome": "Trustpilot", "tipo": "approval", "conectores": ["trustpilot"],
      "descricao": "Avaliações de empresas.", "permissoes": "A API é oferecida a empresas clientes do Trustpilot "
      "(planos pagos); não há acesso público gratuito para coleta de avaliações de terceiros.",
      "link": "https://developers.trustpilot.com/"},
-    {"id": "reclame_aqui", "nome": "Reclame Aqui", "tipo": "approval", "conectores": ["reclame_aqui"],
-     "descricao": "Reclamações de consumidores no Brasil.", "permissoes": "Não há API pública; acesso a dados somente "
-     "por parceria comercial com o Reclame Aqui. O site não é raspado.", "link": "https://www.reclameaqui.com.br/"},
     {"id": "comparadores", "nome": "Comparadores de preço (Buscapé, Zoom, Google Shopping)", "tipo": "approval",
      "conectores": ["comparadores"], "descricao": "Preços praticados no varejo.",
      "permissoes": "Sem API pública para consulta de preços de terceiros; exige licença/parceria.",
@@ -212,11 +204,11 @@ CATEGORIAS = {"pesquisas": "Pesquisas", "marketplaces": "Marketplaces", "redes_s
               "dados_publicos": "Dados Públicos", "conteudo": "Notícias e Avaliações"}
 CATEGORIA_DE = {
     "google_trends_rss": ["pesquisas"], "google_ads": ["pesquisas"], "google_bigquery": ["pesquisas"], "google_trends": ["pesquisas"],
-    "msads": ["pesquisas"], "china_search": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
+    "msads": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
     "ebay": ["marketplaces"], "amazon": ["marketplaces"], "shopee": ["marketplaces"], "china_marketplaces": ["marketplaces"],
     "comparadores": ["marketplaces"], "tiktok": ["redes_sociais"], "meta": ["redes_sociais"], "youtube": ["redes_sociais"],
     "reddit": ["redes_sociais"], "publicas": ["dados_publicos"], "comtrade": ["dados_publicos"], "gdelt": ["dados_publicos"],
-    "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"], "reclame_aqui": ["conteudo"],
+    "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"],
 }
 NIVEL = {"auto": 1, "api_key": 2, "client_id": 2, "oauth": 2, "optin": 2, "approval": 3}
 NIVEL_NOME = {1: "Conexão automática", 2: "Conexão assistida", 3: "Acesso restrito"}
@@ -413,19 +405,9 @@ def reddit_token(http, client_id: str) -> dict:
 
 
 def ml_token(http, creds) -> str:
-    """Token de acesso do Mercado Livre, renovando com o refresh_token quando expirado."""
-    c = creds.get("mercadolivre")
-    if not c.get("access_token"):
-        raise SourceError("Mercado Livre não conectado: use 'Conectar' na Central de Integrações", "restrita")
-    if float(c.get("expires_at", 0)) > time.time() + 60:
-        return c["access_token"]
-    if not c.get("refresh_token"):
-        raise SourceError("token do Mercado Livre expirado; conecte novamente", "restrita")
-    r = http.request_json(provider("mercadolivre")["token_url"], "POST", form={
-        "grant_type": "refresh_token", "client_id": c.get("client_id", ""), "client_secret": c.get("client_secret", ""),
-        "refresh_token": c["refresh_token"]})
-    store_ml_token(creds, r)
-    return r["access_token"]
+    """Token de acesso do Mercado Livre (renovação com refresh token de uso único — ver mercadolivre.py)."""
+    from .mercadolivre import token
+    return token(http, creds)
 
 
 def store_oauth_token(creds, pid: str, r: dict):
@@ -440,8 +422,5 @@ def store_oauth_token(creds, pid: str, r: dict):
 
 
 def store_ml_token(creds, r: dict):
-    if not r.get("access_token"):
-        raise SourceError(f"Mercado Livre não emitiu token: {r.get('message') or r.get('error')}", "restrita")
-    creds.set("mercadolivre", {"access_token": r["access_token"], "refresh_token": r.get("refresh_token"),
-                               "expires_at": str(time.time() + float(r.get("expires_in", 21600))),
-                               "user_id": str(r.get("user_id", ""))})
+    from .mercadolivre import store
+    store(creds, r)

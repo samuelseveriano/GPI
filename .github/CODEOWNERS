@@ -1,0 +1,9 @@
+# Mudanças críticas exigem revisão do responsável pelo repositório.
+.github/                         @samuelseveriano
+packaging/                       @samuelseveriano
+backend/gpi/security.py          @samuelseveriano
+backend/gpi/integrations/        @samuelseveriano
+backend/gpi/compliance/          @samuelseveriano
+backend/gpi/ai/                  @samuelseveriano
+requirements*.txt                @samuelseveriano
+docs/oauth/                      @samuelseveriano

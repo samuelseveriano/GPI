@@ -1,0 +1,109 @@
+# IA local do GPI (v0.7): monta o pacote opcional GPI-Local-AI-Model-Pack com componentes oficiais e redistribuíveis
+# (llama.cpp — MIT; modelo GGUF — Apache-2.0), conferindo o SHA-256 com os valores publicados pelo GitHub e pelo
+# Hugging Face, e avalia o desempenho real no Windows (CPU, sem GPU) com perguntas técnicas brasileiras.
+# Nada disso é baixado pelo GPI em uso: o usuário/TI copia o pacote para a pasta 'ia'.
+name: local-ai
+
+on:
+  push:
+    branches: ["feature/gpi-v0.7"]
+    paths: ["backend/gpi/ai/**", "backend/gpi/compliance/**", "scripts/build_model_pack.py", "scripts/evaluate_local_ai.py",
+            ".github/workflows/local-ai.yml"]
+  workflow_dispatch:
+    inputs:
+      llama_tag:
+        description: "Tag da release oficial do llama.cpp"
+        default: "b12050"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: "1"
+  LLAMA_TAG: ${{ inputs.llama_tag || 'b12050' }}
+
+jobs:
+  pacote:
+    name: Pacote e avaliação (${{ matrix.nome }})
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: Qwen3-0.6B (pacote padrão)
+            repo: Qwen/Qwen3-0.6B-GGUF
+            arquivo: Qwen3-0.6B-Q8_0.gguf
+            publicar: true
+          - nome: Qwen3-1.7B (comparação)
+            repo: Qwen/Qwen3-1.7B-GGUF
+            arquivo: Qwen3-1.7B-Q8_0.gguf
+            publicar: false
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt psutil
+      - name: Montar pacote (downloads oficiais com SHA-256 conferido)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/build_model_pack.py --saida pack/ia --llama-tag $env:LLAMA_TAG --modelo ${{ matrix.repo }} --arquivo ${{ matrix.arquivo }}
+      - name: Verificação do pacote pelo próprio GPI
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "backend"
+          python -c "import json,sys; from pathlib import Path; from gpi.ai.runtime import verify_pack; v=verify_pack(Path('pack/ia')); print(json.dumps({k:v[k] for k in ('ok','problemas')}, ensure_ascii=False)); sys.exit(0 if v['ok'] else 1)"
+      - name: Microsoft Defender no pacote
+        shell: pwsh
+        run: |
+          $mp = Join-Path $env:ProgramFiles "Windows Defender\MpCmdRun.exe"
+          if (Test-Path $mp) { & $mp -Scan -ScanType 3 -File (Resolve-Path pack/ia) -DisableRemediation | Tee-Object defender_ia.txt; if ($LASTEXITCODE -eq 2) { exit 1 } } else { "indisponível" | Out-File defender_ia.txt }
+      - name: Avaliação real (CPU, perguntas técnicas brasileiras)
+        timeout-minutes: 45
+        run: python scripts/evaluate_local_ai.py --pacote pack/ia --saida avaliacao_ia.json
+      - name: Resumo
+        if: always()
+        shell: pwsh
+        run: |
+          "### IA local — ${{ matrix.nome }}" >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path avaliacao_ia.md) { Get-Content avaliacao_ia.md >> $env:GITHUB_STEP_SUMMARY }
+      - name: Compactar pacote e hashes
+        if: matrix.publicar
+        shell: pwsh
+        run: |
+          Copy-Item avaliacao_ia.json, avaliacao_ia.md pack/ia/
+          @("GPI — pacote opcional de IA local (v0.7)", "", "Copie a pasta 'ia' para ao lado do GPI.exe (mesma pasta) ou para %LOCALAPPDATA%\GPI\ia.",
+            "O GPI confere o SHA-256 de cada arquivo (gpi-model-pack.json) antes de executar e nunca baixa nada.",
+            "Licenças: llama.cpp (MIT) e modelo (ver gpi-model-pack.json e arquivos LICENSE-*).") | Out-File -Encoding utf8 pack/ia/LEIA-ME.txt
+          Compress-Archive -Path pack/ia -DestinationPath GPI-Local-AI-Model-Pack-v0.7.zip
+          $h = Get-FileHash GPI-Local-AI-Model-Pack-v0.7.zip -Algorithm SHA256
+          "$($h.Hash.ToLower())  GPI-Local-AI-Model-Pack-v0.7.zip" | Out-File -Encoding ascii SHA256SUMS-IA.txt
+          Get-Content SHA256SUMS-IA.txt
+          Write-Output "::notice title=sha256-ia::$(Get-Content SHA256SUMS-IA.txt)"
+          "### SHA-256 do pacote de IA" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY; Get-Content SHA256SUMS-IA.txt >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: matrix.publicar
+        with:
+          name: GPI-Local-AI-Model-Pack-v0.7
+          path: |
+            GPI-Local-AI-Model-Pack-v0.7.zip
+            SHA256SUMS-IA.txt
+          retention-days: 30
+          compression-level: 0
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: avaliacao-ia-${{ matrix.publicar && 'padrao' || 'comparacao' }}
+          path: |
+            avaliacao_ia.json
+            avaliacao_ia.md
+            defender_ia.txt
+            pack/ia/gpi-model-pack.json
+          retention-days: 30

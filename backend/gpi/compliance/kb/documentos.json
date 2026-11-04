@@ -1,0 +1,617 @@
+{
+ "formato": "gpi-base-regulatoria",
+ "versao_formato": 1,
+ "versao_base": "2026.11.03",
+ "gerado_em": "2026-11-03",
+ "curadoria": "GPI v0.7 — documentos identificados e conferidos em fontes oficiais ou, quando o portal oficial não pôde ser lido, em fontes secundárias citadas; 'texto' é resumo do GPI (não é o texto oficial).",
+ "documentos": [
+  {
+   "id": "anatel-lgt-9472-1997",
+   "orgao": "Anatel",
+   "tipo": "Lei",
+   "numero": "9.472/1997",
+   "titulo": "Lei Geral de Telecomunicações",
+   "data_publicacao": "1997-07-16",
+   "vigencia_inicio": "1997-07-17",
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.planalto.gov.br/ccivil_03/leis/l9472.htm",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.planalto.gov.br/ccivil_03/leis/l9472.htm"
+   ],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "telecom",
+    "radiofrequencia"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Lei que organiza os serviços de telecomunicações e cria a Anatel, atribuindo-lhe competência para a certificação de produtos de telecomunicações. Base legal das regras de avaliação da conformidade e homologação."
+  },
+  {
+   "id": "anatel-res-715-2019",
+   "orgao": "Anatel",
+   "tipo": "Resolução",
+   "numero": "715/2019",
+   "titulo": "Regulamento de Avaliação da Conformidade e de Homologação de Produtos para Telecomunicações",
+   "data_publicacao": "2019-10-25",
+   "vigencia_inicio": null,
+   "situacao": "vigente_com_alteracoes",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://informacoes.anatel.gov.br/legislacao/",
+   "localizar_no_portal": "Resoluções → 2019 → Resolução nº 715",
+   "fontes_da_verificacao": [
+    "https://www.tuv.com/regulations-and-standards/en/brazil-anatel-resolution-715-2019-updated-conformity-assessment-and-approval-regulations-for-telecommunications-products.html",
+    "https://lefosse.com/noticias/alerta/anatel-altera-regulamentacao-de-homologacao-de-produtos-para-telecomunicacoes-e-estabelece-novas-obrigacoes-para-data-centers-e-plataformas-de-marketplace/"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_fonte_secundaria",
+   "hash_sha256": null,
+   "aplica_a": [
+    "telecom",
+    "radiofrequencia",
+    "wifi",
+    "bluetooth",
+    "celular",
+    "homologacao"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Regulamento da Anatel para avaliação da conformidade e homologação de produtos para telecomunicações (substituiu as Resoluções 242/2000 e 323/2002). Produtos de telecomunicação, inclusive equipamentos de radiocomunicação, dependem de avaliação da conformidade e homologação da Anatel. A identificação de homologação deve estar disponível quando o produto entra no país. Alterado pela Resolução 780/2025 — consultar o texto compilado."
+  },
+  {
+   "id": "anatel-res-780-2025",
+   "orgao": "Anatel",
+   "tipo": "Resolução",
+   "numero": "780/2025",
+   "titulo": "Altera o Regulamento de Avaliação da Conformidade e de Homologação de Produtos para Telecomunicações",
+   "data_publicacao": "2025-08-04",
+   "vigencia_inicio": "2025-08-04",
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://informacoes.anatel.gov.br/legislacao/resolucoes/2025/2054-resolucao-anatel-780",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://lefosse.com/noticias/alerta/anatel-altera-regulamentacao-de-homologacao-de-produtos-para-telecomunicacoes-e-estabelece-novas-obrigacoes-para-data-centers-e-plataformas-de-marketplace/",
+    "https://www.brics-ocp.com.br/resolucao-anatel-780-2025-homologacao-produtos-telecomunicacoes/"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_fonte_secundaria",
+   "hash_sha256": null,
+   "aplica_a": [
+    "telecom",
+    "homologacao",
+    "marketplace",
+    "comercializacao"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Altera o Regulamento aprovado pela Resolução 715/2019. Marketplaces e plataformas digitais passam a responder solidariamente com o vendedor pela comercialização de produtos, inclusive pela divulgação do código de homologação e verificação de sua regularidade (dispositivos com vigência em 04/12/2025, segundo análise jurídica publicada). Amplia as condutas consideradas comercialização de produto não homologado (oferta, anúncio, armazenagem, entre outras)."
+  },
+  {
+   "id": "anatel-res-680-2017",
+   "orgao": "Anatel",
+   "tipo": "Resolução",
+   "numero": "680/2017",
+   "titulo": "Regulamento sobre Equipamentos de Radiocomunicação de Radiação Restrita",
+   "data_publicacao": "2017-06-27",
+   "vigencia_inicio": null,
+   "situacao": "vigente_verificar_alteracoes",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://informacoes.anatel.gov.br/legislacao/",
+   "localizar_no_portal": "Resoluções → 2017 → Resolução nº 680",
+   "fontes_da_verificacao": [
+    "https://www.tuv.com/regulations-and-standards/en/brazil-draft-amendment-of-anatel-resolution-680-restricted-radiation-radio-communication-equipment.html"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_fonte_secundaria",
+   "hash_sha256": null,
+   "aplica_a": [
+    "radiofrequencia",
+    "wifi",
+    "bluetooth",
+    "radiacao_restrita"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Regulamento sobre equipamentos de radiocomunicação de radiação restrita (dispositivos de curto alcance de baixa potência, categoria em que normalmente se enquadram equipamentos com Wi-Fi e Bluetooth). Houve consulta pública de alteração (CP 82/2020) — verificar o texto vigente e as condições de uso de cada faixa."
+  },
+  {
+   "id": "anatel-servico-homologacao",
+   "orgao": "Anatel",
+   "tipo": "Orientação oficial",
+   "numero": "—",
+   "titulo": "Homologar produtos de telecomunicações (Carta de Serviços)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/pt-br/servicos/homologar-produtos-de-telecomunicacoes-anatel",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/pt-br/servicos/homologar-produtos-de-telecomunicacoes-anatel"
+   ],
+   "versao": 1,
+   "status_atualizacao": "localizado_em_busca",
+   "hash_sha256": null,
+   "aplica_a": [
+    "telecom",
+    "homologacao",
+    "procedimento"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Página oficial de serviço que descreve como solicitar a homologação de produtos de telecomunicações junto à Anatel (requerentes, etapas e canais). Usar como roteiro do procedimento oficial."
+  },
+  {
+   "id": "anatel-dados-homologados",
+   "orgao": "Anatel",
+   "tipo": "Dados abertos",
+   "numero": "—",
+   "titulo": "Produtos de telecomunicações homologados pela Anatel (dados abertos)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.anatel.gov.br/dadosabertos/paineis_de_dados/certificacao_de_produtos/produtos_certificados.zip",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/anatel/pt-br/dados/dados-abertos",
+    "https://apify.com/kman-br/anatel.md"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_fonte_secundaria",
+   "hash_sha256": null,
+   "aplica_a": [
+    "homologacao",
+    "consulta_certificado"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Conjunto de dados abertos com os produtos homologados (número de homologação, fabricante, modelo, nome comercial, tipo de produto, datas e situação). Permite verificação local de homologações; a correspondência deve ser feita pelo modelo técnico exato, nunca por produto semelhante."
+  },
+  {
+   "id": "anatel-sch-consulta",
+   "orgao": "Anatel",
+   "tipo": "Sistema oficial",
+   "numero": "—",
+   "titulo": "Consulta pública de produtos homologados (SCH/Mosaico)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://sistemas.anatel.gov.br/mosaico/sch/publicView/listarProdutosHomologados.xhtml",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "homologacao",
+    "consulta_certificado"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Sistema oficial para consulta manual de produtos homologados por número de homologação, fabricante ou modelo. Use quando os dados abertos não estiverem atualizados no GPI."
+  },
+  {
+   "id": "inmetro-lei-9933-1999",
+   "orgao": "Inmetro",
+   "tipo": "Lei",
+   "numero": "9.933/1999",
+   "titulo": "Competências do Conmetro e do Inmetro (metrologia e avaliação da conformidade)",
+   "data_publicacao": "1999-12-20",
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.planalto.gov.br/ccivil_03/leis/l9933.htm",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.planalto.gov.br/ccivil_03/leis/l9933.htm"
+   ],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "inmetro",
+    "avaliacao_conformidade",
+    "metrologia"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Lei que dispõe sobre as competências do Conmetro e do Inmetro, base legal dos regulamentos técnicos e dos programas de avaliação da conformidade compulsória e da metrologia legal (instrumentos de medição)."
+  },
+  {
+   "id": "inmetro-port-148-2022",
+   "orgao": "Inmetro",
+   "tipo": "Portaria",
+   "numero": "148/2022",
+   "titulo": "Aparelhos eletrodomésticos e similares — regulamento técnico e requisitos de avaliação da conformidade",
+   "data_publicacao": "2022-03-28",
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "http://www.inmetro.gov.br/legislacao/",
+   "localizar_no_portal": "Portaria Inmetro nº 148, de 28/03/2022",
+   "fontes_da_verificacao": [
+    "https://www.gov.br/inmetro/pt-br/acesso-a-informacao/perguntas-frequentes/avaliacao-da-conformidade/aparelhos-eletrodomesticos-e-similares/quais-eletrodomesticos-nao-estao-no-escopo-da-portaria-inmetro-ndeg-148-de-2022"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_portal_oficial",
+   "hash_sha256": null,
+   "aplica_a": [
+    "eletrico",
+    "eletrodomestico",
+    "avaliacao_conformidade"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Portaria do Inmetro para aparelhos eletrodomésticos e similares. A Tabela 2 do Anexo III lista aparelhos fora do escopo, por exemplo aparelhos exclusivamente classe III (exceto os alimentados por baterias recarregadas em base carregadora), produtos com regulamentação própria do Inmetro, aparelhos exclusivamente industriais, equipamentos médicos sob vigilância sanitária e ferramentas elétricas. O enquadramento depende das características elétricas e do uso."
+  },
+  {
+   "id": "inmetro-port-302-2021",
+   "orgao": "Inmetro",
+   "tipo": "Portaria",
+   "numero": "302/2021",
+   "titulo": "Brinquedos — regulamento técnico consolidado e requisitos de avaliação da conformidade",
+   "data_publicacao": "2021-07-14",
+   "vigencia_inicio": "2021-08-02",
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "http://www.inmetro.gov.br/legislacao/",
+   "localizar_no_portal": "Portaria Inmetro nº 302, de 12/07/2021",
+   "fontes_da_verificacao": [
+    "https://www.sgs.com/en/news/2021/08/safeguards-10721-brazil-issues-legislation-for-toys"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_fonte_secundaria",
+   "hash_sha256": null,
+   "aplica_a": [
+    "brinquedo",
+    "criancas",
+    "avaliacao_conformidade"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Portaria do Inmetro com o regulamento técnico consolidado e os requisitos de avaliação da conformidade para brinquedos (certificação, registro no Inmetro e selo de identificação da conformidade). Anexos listam produtos considerados e não considerados brinquedos. Prazos: importação apenas de brinquedos conformes desde 01/01/2022; comercialização por fabricantes/importadores desde 01/01/2023."
+  },
+  {
+   "id": "inmetro-registro-consulta",
+   "orgao": "Inmetro",
+   "tipo": "Sistema oficial",
+   "numero": "—",
+   "titulo": "Banco de Registro do Inmetro e Prodcert (produtos certificados)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "http://registro.inmetro.gov.br/consulta",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/inmetro/pt-br/acesso-a-informacao/perguntas-frequentes/avaliacao-da-conformidade/fios-e-cabos-eletricos/como-saber-se-alguma-empresa-ou-marca-de-fios-e-cabos-eletricos-esta-certificada-e-se-ela-esta-regular-para-a-comercializacao"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_portal_oficial",
+   "hash_sha256": null,
+   "aplica_a": [
+    "consulta_certificado",
+    "registro",
+    "avaliacao_conformidade"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Consulta oficial de objetos registrados no Inmetro (por produto/marca, empresa ou número de registro) — indica se o produto pode ser comercializado; e Prodcert (http://www.inmetro.gov.br/prodcert) para certificados, produtos e empresas. Verificação manual assistida; o registro deve corresponder ao modelo exato."
+  },
+  {
+   "id": "rfb-classificacao-fiscal",
+   "orgao": "Receita Federal",
+   "tipo": "Orientação oficial",
+   "numero": "—",
+   "titulo": "Classificação Fiscal de Mercadorias (consultas, NCM, TEC/TIPI)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/receitafederal/pt-br/assuntos/aduana-e-comercio-exterior/classificacao-fiscal-de-mercadorias",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/siscomex/pt-br/servicos/aprendendo-a-exportar/1-classificacao-fiscal-da-mercadoria/ferramentas-uteis"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_portal_oficial",
+   "hash_sha256": null,
+   "aplica_a": [
+    "ncm",
+    "classificacao_fiscal"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Página da Receita Federal sobre classificação fiscal de mercadorias e o processo de consulta formal sobre classificação (instrumento gratuito para dirimir dúvidas sobre a NCM na TEC e na TIPI). A classificação correta exige especificações técnicas, notas legais e notas explicativas."
+  },
+  {
+   "id": "siscomex-classif",
+   "orgao": "Receita Federal / Siscomex",
+   "tipo": "Sistema oficial",
+   "numero": "—",
+   "titulo": "Sistema Classif — consulta pública da NCM e tratamentos",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://portalunico.siscomex.gov.br/classif/#/sumario?perfil=publico",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/siscomex/pt-br/servicos/aprendendo-a-exportar/1-classificacao-fiscal-da-mercadoria/ferramentas-uteis"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_portal_oficial",
+   "hash_sha256": null,
+   "aplica_a": [
+    "ncm",
+    "classificacao_fiscal",
+    "tratamento_administrativo"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Plataforma gratuita do Portal Único com informações da NCM e tratamentos tributário e administrativo. Pode sugerir classificação a partir da descrição, mas a sugestão não é vinculante e precisa ser validada."
+  },
+  {
+   "id": "siscomex-tabela-ncm",
+   "orgao": "Receita Federal / Siscomex",
+   "tipo": "Dados oficiais",
+   "numero": "—",
+   "titulo": "Tabela NCM vigente — download público (JSON)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://portalunico.siscomex.gov.br/classif/api/publico/nomenclatura/download/json?perfil=PUBLICO",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://apify.com/downright_blessing/brazil-ncm-tipi-lookup.md"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_fonte_secundaria",
+   "hash_sha256": null,
+   "aplica_a": [
+    "ncm"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Arquivo oficial com os códigos NCM, descrições, datas de início/fim de vigência e o ato legal correspondente. Usado pelo GPI para validar formato, existência e vigência do código e sugerir candidatos."
+  },
+  {
+   "id": "secex-port-249-2023",
+   "orgao": "Secex / Siscomex",
+   "tipo": "Portaria",
+   "numero": "249/2023",
+   "titulo": "Portaria SECEX nº 249, de 4 de julho de 2023 (texto consolidado) — operações de comércio exterior e licenciamento de importações",
+   "data_publicacao": "2023-07-05",
+   "vigencia_inicio": null,
+   "situacao": "vigente_com_alteracoes",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/siscomex/pt-br/legislacao/PortariaSecex249de2023TextoConsolidado.pdf/@@download/file",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/siscomex/pt-br/legislacao/PortariaSecex249de2023TextoConsolidado.pdf/@@download/file"
+   ],
+   "versao": 1,
+   "status_atualizacao": "localizado_em_busca",
+   "hash_sha256": null,
+   "aplica_a": [
+    "tratamento_administrativo",
+    "lpco",
+    "licenciamento"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Norma da Secretaria de Comércio Exterior com regras de operações de comércio exterior, incluindo licenciamento de importações no Portal Único (LPCO). O GPI usa o texto consolidado publicado pelo Siscomex; alterações posteriores devem ser conferidas."
+  },
+  {
+   "id": "siscomex-tratamento-administrativo",
+   "orgao": "Siscomex",
+   "tipo": "Orientação oficial",
+   "numero": "—",
+   "titulo": "Tratamento administrativo das importações (órgãos anuentes, LPCO, simulador)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/siscomex/pt-br/informacoes/tratamento-administrativos",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/siscomex/pt-br/servicos/aprendendo-a-exportar/1-classificacao-fiscal-da-mercadoria/ferramentas-uteis"
+   ],
+   "versao": 1,
+   "status_atualizacao": "verificado_portal_oficial",
+   "hash_sha256": null,
+   "aplica_a": [
+    "tratamento_administrativo",
+    "lpco",
+    "anuentes"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Informações oficiais sobre o tratamento administrativo: exigências de órgãos anuentes (licenças, permissões, certificados) aplicadas conforme NCM, destaque, país e condições da operação. A verificação final deve ser feita no Simulador de Tratamento Administrativo do Portal Único com a NCM validada."
+  },
+  {
+   "id": "siscomex-manual-lpco",
+   "orgao": "Siscomex",
+   "tipo": "Manual oficial",
+   "numero": "v2",
+   "titulo": "Manual do Anuente — Tratamento Administrativo e LPCO",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "verificar_versao",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/siscomex/pt-br/arquivos-e-imagens/2021/08/Manual-Anuente-TA-e-LPCO-v2.pdf/@@download/file",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [
+    "https://www.gov.br/siscomex/pt-br/arquivos-e-imagens/2021/08/Manual-Anuente-TA-e-LPCO-v2.pdf/@@download/file"
+   ],
+   "versao": 1,
+   "status_atualizacao": "localizado_em_busca",
+   "hash_sha256": null,
+   "aplica_a": [
+    "lpco",
+    "anuentes"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Manual do Portal Único sobre o funcionamento do tratamento administrativo e dos LPCO (licenças, permissões, certificados e outros documentos) do ponto de vista dos órgãos anuentes."
+  },
+  {
+   "id": "anvisa-portal",
+   "orgao": "Anvisa",
+   "tipo": "Portal oficial",
+   "numero": "—",
+   "titulo": "Anvisa — produtos sujeitos à vigilância sanitária",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/anvisa/pt-br",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "medico",
+    "cosmetico",
+    "alimento",
+    "contato_alimento",
+    "saude"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Portal da Agência Nacional de Vigilância Sanitária. Produtos para saúde (equipamentos médicos), cosméticos, saneantes, alimentos e materiais em contato com alimentos podem ter exigências sanitárias e anuência na importação. O GPI não possui regras detalhadas da Anvisa nesta versão: encaminha para revisão especializada."
+  },
+  {
+   "id": "mapa-portal",
+   "orgao": "MAPA",
+   "tipo": "Portal oficial",
+   "numero": "—",
+   "titulo": "Ministério da Agricultura e Pecuária — produtos de origem animal/vegetal e insumos",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/agricultura/pt-br",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "agro",
+    "animal",
+    "vegetal",
+    "madeira"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Portal do MAPA. Produtos de origem animal ou vegetal, insumos agropecuários e alguns materiais (ex.: embalagens de madeira) podem ter exigências fitossanitárias/zoossanitárias. Sem regras detalhadas no GPI nesta versão."
+  },
+  {
+   "id": "ibama-portal",
+   "orgao": "Ibama",
+   "tipo": "Portal oficial",
+   "numero": "—",
+   "titulo": "Ibama — controle ambiental de produtos e substâncias",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.gov.br/ibama/pt-br",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "quimico",
+    "ambiental"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Portal do Ibama. Substâncias químicas controladas, produtos com impacto ambiental e determinados resíduos podem ter controle ambiental na importação. Sem regras detalhadas no GPI nesta versão."
+  },
+  {
+   "id": "exercito-dfpc",
+   "orgao": "Exército",
+   "tipo": "Portal oficial",
+   "numero": "—",
+   "titulo": "Diretoria de Fiscalização de Produtos Controlados (DFPC)",
+   "data_publicacao": null,
+   "vigencia_inicio": null,
+   "situacao": "vigente",
+   "ultima_verificacao": "2026-11-03",
+   "url_oficial": "https://www.dfpc.eb.mil.br/",
+   "localizar_no_portal": null,
+   "fontes_da_verificacao": [],
+   "versao": 1,
+   "status_atualizacao": "a_verificar",
+   "hash_sha256": null,
+   "aplica_a": [
+    "controlado"
+   ],
+   "categorias": [],
+   "ncm_prefixos": [],
+   "conflito": null,
+   "texto_tipo": "resumo_gpi",
+   "texto": "Órgão do Exército responsável pela fiscalização de produtos controlados. Itens potencialmente controlados exigem análise especializada antes de qualquer importação. Sem regras detalhadas no GPI nesta versão."
+  }
+ ],
+ "legenda_status": {
+  "verificado_portal_oficial": "existência e conteúdo resumido conferidos em página oficial (gov.br/planalto/portal do órgão)",
+  "verificado_fonte_secundaria": "conferido em fonte secundária citada (escritório, laboratório, certificadora); confirmar no texto oficial",
+  "localizado_em_busca": "documento oficial localizado em busca, texto ainda não lido pelo GPI",
+  "a_verificar": "referência conhecida, aguardando verificação automática da URL oficial",
+  "verificado_automatico": "URL oficial lida pelo atualizador do GPI; hash registrado",
+  "alterado_revisao": "o atualizador detectou mudança no texto oficial — revisão humana necessária"
+ }
+}

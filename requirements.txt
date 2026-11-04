@@ -11,3 +11,4 @@ starlette>=0.37
 uvicorn>=0.29
 # Opcional: se instalado, o GPI usa DuckDB em vez de SQLite.
 # duckdb>=1.0
+pypdf>=4.0   # v0.7: leitura de texto de anexos PDF na Conformidade de Importação (BSD)

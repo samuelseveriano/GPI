@@ -671,9 +671,10 @@ def country_page(cc: str, series: list[dict], scores: dict, today: date) -> dict
                                         key=lambda x: -x["valor"])}
     limit = []
     if cc == "CN":
-        limit.append("Não há fonte autorizada de buscas de consumidores na China continental (Baidu Index, 巨量算数 e "
-                     "dados do Alibaba exigem login chinês ou contrato). Os rankings de busca ficam vazios; a página "
-                     "mostra apenas sinais auxiliares claramente identificados.")
+        limit.append("O GPI não integra fontes de buscas de consumidores na China continental (nenhuma oferece acesso "
+                     "aberto a terceiros). Esta seção mostra fornecedores cadastrados pelo usuário, estatísticas oficiais "
+                     "de importação, informações técnicas e sinais auxiliares claramente identificados — sem ranking "
+                     "de buscas chinesas.")
     if not search:
         limit.append("Sem dados de busca coletados para este país.")
     regional = any(s.get("region") for s in mine)

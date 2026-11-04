@@ -358,7 +358,8 @@ def test_sidebar_structure_accessibility_and_routes():
         assert label in html
     hrefs = re.findall(r'<a href="#([^"]+)" data-tip', html)
     assert len(hrefs) == len(set(hrefs))                                       # sem duplicar páginas
-    js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js", "v06.js", "v061.js"))
+    js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js", "v06.js", "v061.js")
+                 + (("v07.js",) if (ROOT / "frontend" / "v07.js").exists() else ()))      # v0.7: Conformidade de Importação
     for h in hrefs:
         assert f"'{h.split('/')[0]}'" in js or f"{h.split('/')[0]}:" in js or f"'{h.split('/')[0]}':" in js, h
     css = (ROOT / "frontend" / "styles.css").read_text(encoding="utf-8")

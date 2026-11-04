@@ -69,6 +69,10 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
     def j(o, code=200):
         return JSONResponse(o, status_code=code)
 
+    async def removed(_):
+        from .market.service import removed_sources
+        return j({"fontes": removed_sources(db)})
+
     async def body(request):
         try:
             return await request.json()
@@ -121,6 +125,9 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
             res = diagnose(sync.http, sync.creds, cfg, db, sync.content)
         elif pid == "meta":
             from .integrations.meta import diagnose
+            res = diagnose(sync.http, sync.creds, cfg)
+        elif pid == "mercadolivre":
+            from .integrations.mercadolivre import diagnose
             res = diagnose(sync.http, sync.creds, cfg)
         else:
             ok, msg = integ.test_connection(pid, sync.http, sync.creds, cfg)
@@ -238,6 +245,7 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     return [
+        Route("/api/sources/removed", removed),
         Route("/api/sync/panel", panel), Route("/api/sync/events", events), Route("/api/sync/history", history),
         Route("/api/sync/retry-failed", retry_failed, methods=["POST"]), Route("/api/sync/start", run_all, methods=["POST"]),
         Route("/api/integrations/{pid}/diagnose", diagnose, methods=["POST"]),

@@ -1,4 +1,11 @@
-# GPI — Global Product Intelligence · v0.6.1
+# GPI — Global Product Intelligence · v0.7
+
+> **v0.7 — Product Compliance & Security Intelligence:** novo módulo **Conformidade de Importação** (triagem regulatória
+> Anatel/Inmetro/Receita/Siscomex com 5 estados, NCM, homologações, checklist PT/EN/中文, relatório de 17 seções), IA local
+> opcional (llama.cpp + Qwen3 GGUF, pacote separado e verificado), OAuth do Mercado Livre com Redirect URI HTTPS, retirada de
+> fontes sem acesso aberto e auditoria de segurança. Ver [docs/V07.md](docs/V07.md), [docs/SEGURANCA_V07.md](docs/SEGURANCA_V07.md),
+> [docs/MERCADO_LIVRE_OAUTH.md](docs/MERCADO_LIVRE_OAUTH.md) e [docs/USO_CORPORATIVO.md](docs/USO_CORPORATIVO.md).
+
 
 Plataforma **local e autônoma** de inteligência de produtos: coleta dados de fontes públicas e
 autorizadas, analisa opiniões de consumidores, acompanha o YouTube, compara produtos, gera

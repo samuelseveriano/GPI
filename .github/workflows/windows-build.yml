@@ -126,6 +126,24 @@ jobs:
             -CertificateProfileName $env:SIGN_PROFILE -Files "dist/GPI/GPI.exe" -FileDigest SHA256 `
             -TimestampRfc3161 "http://timestamp.acs.microsoft.com" -TimestampDigest SHA256
 
+      - name: Instantâneo oficial da tabela NCM (Portal Único) e validação real das fontes da Conformidade
+        continue-on-error: true      # sem acesso ao Portal Único o pacote segue sem o instantâneo (o usuário pode carregar depois)
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          python scripts/validate_compliance_sources.py --saida conformidade_fontes.json --ncm-snapshot dist/GPI/dados_oficiais/ncm.json
+          if (Test-Path conformidade_fontes.md) { Get-Content conformidade_fontes.md >> $env:GITHUB_STEP_SUMMARY }
+          if (Test-Path dist/GPI/dados_oficiais/ncm.json) { "Instantâneo NCM: $((Get-FileHash dist/GPI/dados_oficiais/ncm.json).Hash.ToLower())" | Tee-Object -Append ncm_snapshot.txt }
+
+      - name: SBOM (CycloneDX) do ambiente empacotado
+        shell: pwsh
+        run: |
+          pip install "cyclonedx-bom>=4,<8"
+          New-Item -ItemType Directory -Force dist/GPI/relatorios | Out-Null
+          cyclonedx-py environment --of JSON -o dist/GPI/relatorios/sbom.cdx.json
+          $n = (Get-Content dist/GPI/relatorios/sbom.cdx.json | ConvertFrom-Json).components.Count
+          Write-Output "::notice title=sbom::$n componentes no SBOM (CycloneDX)"
+
       - name: Documentação e manifesto de integridade
         run: python packaging/make_manifest.py dist/GPI
 
@@ -172,9 +190,9 @@ jobs:
           New-Item -ItemType Directory -Force dist/GPI/relatorios | Out-Null
           $report | Out-File -Encoding utf8 dist/GPI/relatorios/relatorio_build.txt
           Copy-Item dependencias.txt, selftest.json, defender.txt dist/GPI/relatorios/
-          "0.6.1" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
+          "0.7.0" | Out-File -Encoding ascii -NoNewline dist/GPI/VERSION.txt
           $sigtxt = if ($sig.Status -eq 'Valid') { "assinado: $($sig.SignerCertificate.Subject)" } else { "" }
-          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.6.1.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
+          $sec = python packaging/security_report.py dist/GPI GPI-Windows-Portable-v0.7.zip defender.txt dist/GPI/relatorios/seguranca.md "$sigtxt"
           Write-Output "::notice title=seguranca::$sec | assinatura: $($sig.Status)"
           if ($LASTEXITCODE -ne 0) { Write-Output "::error title=seguranca::relatório de segurança encontrou problema (credencial embutida ou nível de execução elevado)"; exit 1 }
           $report | Out-File -Encoding utf8 relatorio_build.txt
@@ -183,11 +201,11 @@ jobs:
           $report >> $env:GITHUB_STEP_SUMMARY
           '```' >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Gerar GPI-Windows-Portable-v0.6.1.zip e hashes SHA-256
+      - name: Gerar GPI-Windows-Portable-v0.7.zip e hashes SHA-256
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.6.1.zip
-          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.6.1.zip -Algorithm SHA256)
+          Compress-Archive -Path dist/GPI -DestinationPath GPI-Windows-Portable-v0.7.zip
+          $h = @(Get-FileHash dist/GPI/GPI.exe -Algorithm SHA256; Get-FileHash GPI-Windows-Portable-v0.7.zip -Algorithm SHA256)
           $h | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
           Write-Output "::notice title=sha256::$((Get-Content SHA256SUMS.txt) -join ' | ')"
@@ -195,19 +213,23 @@ jobs:
           "### Hashes SHA-256" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY; Get-Content SHA256SUMS.txt >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY
           Get-Content seguranca.md >> $env:GITHUB_STEP_SUMMARY
           # integridade do ZIP: extrair numa pasta nova e conferir o hash do executável
-          Expand-Archive GPI-Windows-Portable-v0.6.1.zip -DestinationPath zipcheck -Force
+          Expand-Archive GPI-Windows-Portable-v0.7.zip -DestinationPath zipcheck -Force
           if ((Get-FileHash zipcheck/GPI/GPI.exe).Hash -ne (Get-FileHash dist/GPI/GPI.exe).Hash) { Write-Output "::error title=zip::GPI.exe no ZIP difere do compilado"; exit 1 }
           $ok = (Start-Process zipcheck/GPI/GPI.exe -ArgumentList "--check" -Wait -PassThru).ExitCode
           if ($ok -ne 0) { Write-Output "::error title=zip::verificação de integridade do pacote extraído falhou ($ok)"; exit 1 }
 
       - uses: actions/upload-artifact@v5
         with:
-          name: GPI-Windows-Portable-v0.6.1
+          name: GPI-Windows-Portable-v0.7
           path: |
-            GPI-Windows-Portable-v0.6.1.zip
+            GPI-Windows-Portable-v0.7.zip
             SHA256SUMS.txt
             seguranca.md
             relatorio_build.txt
+            dist/GPI/relatorios/sbom.cdx.json
+            conformidade_fontes.json
+            conformidade_fontes.md
+            GPI-Base-Regulatoria-verificada.zip
           retention-days: 30
 
       - name: Preservar logs em caso de falha

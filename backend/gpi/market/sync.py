@@ -50,9 +50,9 @@ log = logging.getLogger("gpi.sync")
 
 PRIORITY = {"google_ads_kp": 1, "ml_trends": 1, "msads_kp": 1,
             "google_trends_rss": 2, "google_trends_bq": 2, "google_trends": 2, "wikimedia": 2, "gdelt": 2, "rss": 2,
-            "google_news": 2, "baidu_index": 2, "ocean_engine": 2,
-            "ebay": 3, "mercadolivre": 3, "amazon_br": 3, "amazon_us": 3, "shopee": 3, "aliexpress": 3, "alibaba": 3,
-            "taobao": 3, "jd_com": 3, "alibaba_insights": 3, "comparadores": 3, "trustpilot": 3, "reclame_aqui": 3,
+            "google_news": 2,
+            "ebay": 3, "mercadolivre": 3, "amazon_br": 3, "amazon_us": 3, "shopee": 3, "aliexpress": 3,
+            "taobao": 3, "comparadores": 3, "trustpilot": 3,
             "youtube": 4, "tiktok": 4, "instagram": 4, "facebook": 4, "meta_ads": 4, "reddit": 4,
             "comexstat": 5, "comtrade": 5, "bcb_ptax": 5, "ibge_pmc": 5}
 PRIORITY_NAMES = {1: "Dados de consumo", 2: "Tendências", 3: "Marketplaces", 4: "Redes sociais", 5: "Comércio exterior"}

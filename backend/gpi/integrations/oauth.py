@@ -33,12 +33,18 @@ class PendingFlows:
         self._lock = threading.Lock()
 
     def start(self, provider: str, extra: dict | None = None) -> tuple[str, str]:
-        state, verifier = secrets.token_urlsafe(24), make_verifier()
+        state, verifier = secrets.token_urlsafe(32), make_verifier()      # 256 bits
         with self._lock:
             now = time.time()
             self._d = {k: v for k, v in self._d.items() if v["exp"] > now}
             self._d[state] = {"provider": provider, "verifier": verifier, "exp": now + self.ttl, **(extra or {})}
         return state, verifier
+
+    def rekey(self, old: str, new: str):
+        """Troca a chave de um fluxo (ex.: state público com a porta local acrescentada)."""
+        with self._lock:
+            if old in self._d:
+                self._d[new] = self._d.pop(old)
 
     def consume(self, state: str) -> dict | None:
         with self._lock:

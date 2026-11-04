@@ -233,3 +233,16 @@ td.wrap { white-space: normal; max-width: 320px; }
 .wizard { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
 .wizard h3 { margin: 0 0 6px; font-size: 14px; }
 table.diag td { vertical-align: top; }
+
+/* v0.7 — Conformidade de Importação: estados da triagem regulatória (cores + texto, nunca só cor) */
+.cst { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:600; border:1px solid transparent; }
+.cst1 { background:rgba(214,69,65,.14); color:#c0392b; border-color:rgba(214,69,65,.35); }
+.cst2 { background:rgba(230,150,30,.14); color:#b9770e; border-color:rgba(230,150,30,.35); }
+.cst3 { background:rgba(127,140,141,.14); color:#6c7a7b; border-color:rgba(127,140,141,.35); }
+.cst4 { background:rgba(52,120,200,.12); color:#2e6db4; border-color:rgba(52,120,200,.35); }
+.cst5 { background:rgba(142,68,173,.13); color:#8e44ad; border-color:rgba(142,68,173,.35); }
+.cfind { border-left:4px solid var(--line, #ccc); padding:6px 10px; margin:8px 0; }
+.cfind.cb1 { border-left-color:#c0392b; } .cfind.cb2 { border-left-color:#d68910; } .cfind.cb3 { border-left-color:#95a5a6; }
+.cfind.cb4 { border-left-color:#2e86c1; } .cfind.cb5 { border-left-color:#8e44ad; }
+.ctabs { margin:6px 0 12px; flex-wrap:wrap; gap:6px; }
+@media (prefers-color-scheme: dark) { .cst1{color:#ff8a80} .cst2{color:#ffcc80} .cst3{color:#cfd8dc} .cst4{color:#90caf9} .cst5{color:#ce93d8} }

@@ -6,6 +6,7 @@ localhost/127.0.0.1 são recusadas (proteção contra DNS rebinding).
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 import urllib.parse
@@ -18,6 +19,9 @@ from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from .security import CSP, BodyLimit, public_url_problem, safe_cell
+from .integrations import mercadolivre as ML
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
@@ -63,6 +67,10 @@ class HostGuard(BaseHTTPMiddleware):
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Content-Security-Policy"] = CSP
+        resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        resp.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
         resp.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api") else "no-cache"
         return resp
 
@@ -77,7 +85,7 @@ def to_csv(rows: list[dict], filename: str) -> Response:
         w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()), delimiter=";")
         w.writeheader()
         for r in rows:
-            w.writerow({k: (str(v).replace(".", ",") if isinstance(v, float) else v)
+            w.writerow({k: (str(v).replace(".", ",") if isinstance(v, float) else safe_cell(v))
                         for k, v in r.items()})
     return Response("﻿" + buf.getvalue(), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
@@ -94,11 +102,11 @@ def to_xlsx(rows: list[dict], filename: str, sheet="Dados", notes: list[str] | N
         for c in ws[1]:
             c.font = Font(bold=True)
         for r in rows:
-            ws.append([v if not isinstance(v, (list, dict)) else json.dumps(v) for v in r.values()])
+            ws.append([safe_cell(v) if not isinstance(v, (list, dict)) else safe_cell(json.dumps(v)) for v in r.values()])
     if notes:
         ws2 = wb.create_sheet("Notas")
         for n in notes:
-            ws2.append([n])
+            ws2.append([safe_cell(n)])
     buf = io.BytesIO()
     wb.save(buf)
     return Response(buf.getvalue(),
@@ -411,7 +419,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             item["estados"] = integration_state(p, item, sync.store.load_result(f"diag:{p['id']}"))
             item["diagnosticavel"] = p["tipo"] != "approval"
             if p["tipo"] == "oauth":
-                item["redirect_uri"] = redirect_uri(request)
+                item["redirect_uri"] = (ML.redirect_uri(cfg) if p.get("oauth_https_relay") else redirect_uri(request))
             if p["id"] == "rss":
                 from .connectors.content import RSS_DEFAULT
                 item["feeds"] = cfg.get("rss_feeds") or RSS_DEFAULT
@@ -484,7 +492,8 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             feeds = []
             for f in vals["rss_feeds"][:50]:
                 u = str(f.get("url", "")).strip()
-                if urlsplit(u).scheme in ("http", "https") and urlsplit(u).netloc:
+                if urlsplit(u).scheme in ("http", "https") and urlsplit(u).netloc \
+                        and not public_url_problem(u, resolve=False):
                     feeds.append({"nome": str(f.get("nome") or urlsplit(u).netloc)[:80], "url": u,
                                   "idioma": f.get("idioma", "pt")})
             vals["rss_feeds"] = feeds
@@ -517,6 +526,12 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             except SourceError as e:
                 return err(str(e))
             return JSONResponse({"url": url})
+        if p.get("oauth_https_relay"):
+            try:
+                r = ML.start(flows, sync.creds, cfg, request.url.port or 8765)
+            except SourceError as e:
+                return err(str(e))
+            return JSONResponse({"url": r["url"], "redirect_uri": r["redirect_uri"], "modo": "https_relay"})
         state, verifier = flows.start(p["id"], {"redirect_uri": redirect_uri(request)})
         url = authorize_url(p["auth_url"], c["client_id"], redirect_uri(request), state, verifier, p.get("scope"))
         if p.get("auth_extra"):
@@ -527,7 +542,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         q = request.query_params
         page = lambda title, msg: HTMLResponse(
             f"<!doctype html><meta charset=utf-8><title>GPI</title><body style='font-family:sans-serif;padding:40px'>"
-            f"<h2>{title}</h2><p>{msg}</p><p>Pode fechar esta janela e voltar ao GPI.</p></body>")
+            f"<h2>{html.escape(title)}</h2><p>{html.escape(str(msg))}</p><p>Pode fechar esta janela e voltar ao GPI.</p></body>")
         f = flows.consume(q.get("state", ""))
         if not f:
             return page("Conexão não concluída", "Pedido expirado ou inválido (proteção contra falsificação). Tente novamente.")
@@ -566,6 +581,33 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             return page("Conexão não concluída", "Falha ao obter o token: " + str(e)[:300])
         return page("Conectado ✔", f"{p['nome']} conectado ao GPI. O token fica guardado com {sync.creds.protection}.")
 
+    # ------------------------------------------------------------ Mercado Livre (Redirect URI HTTPS, v0.7)
+    async def ml_return_page(_):
+        return FileResponse(frontend_dir / "oauth_retorno.html", headers={"Cache-Control": "no-store"})
+
+    async def ml_complete(request):
+        b = await body_json(request)
+        code, state = str(b.get("code") or ""), str(b.get("state") or "")
+        if b.get("colado"):
+            code, state2 = ML.parse_pasted(str(b["colado"]))
+            state = state2 or state
+        try:
+            r = await run_in_threadpool(ML.complete, sync.http, sync.creds, flows, code, state)
+        except SourceError as e:
+            log.warning("OAuth Mercado Livre não concluído: %s", e)
+            return err(str(e))
+        log.info("Mercado Livre conectado (usuário %s)", r.get("user_id"))
+        return JSONResponse({**r, "protecao": sync.creds.protection})
+
+    async def ml_redirect(request):
+        b = await body_json(request)
+        uri = str(b.get("redirect_uri") or "").strip() or ML.DEFAULT_REDIRECT
+        prob = ML.redirect_problem(uri)
+        if prob:
+            return err(prob)
+        save_user_settings({"ml_redirect_uri": uri})
+        return JSONResponse({"ok": True, "redirect_uri": uri})
+
     async def m_youtube(_):
         return JSONResponse(await run_in_threadpool(msv.youtube, sync.store))
 
@@ -593,6 +635,13 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
     async def index(_):
         return FileResponse(frontend_dir / "index.html")
 
+    # v0.7 — Conformidade de Importação + IA local (carregamento sob demanda, nunca na inicialização)
+    import types as _types
+    from .compliance.api import setup as comp_setup
+    comp_state = _types.SimpleNamespace()
+    comp_routes = comp_setup(comp_state, db, data_dir, cfg, lambda: sync.http, save_user_settings,
+                             [Path(p) for p in (cfg.get("_app_dirs") or [])] or [Path(__file__).resolve().parents[2]])
+
     routes = [
         Route("/", index),
         Route("/api/health", health),
@@ -612,6 +661,9 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/export/{kind}.{fmt}", export),
         Route("/api/backup", backup, methods=["POST"]),
         Route("/api/shutdown", shutdown, methods=["POST"]),
+        Route(ML.LOCAL_RETURN, ml_return_page),
+        Route("/api/oauth/mercadolivre/concluir", ml_complete, methods=["POST"]),
+        Route("/api/integrations/mercadolivre/redirect", ml_redirect, methods=["POST"]),
         Route("/api/sync/status", sync_status),
         Route("/api/sync/run", sync_run, methods=["POST"]),
         Route("/api/sync/cancel", sync_cancel, methods=["POST"]),
@@ -643,9 +695,17 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         *v061_routes(db, sync, cfg, data_dir, save_user_settings),
         *report_routes(reports),
         *social_routes(db, sync, cfg),
+        *comp_routes,
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
-    app = Starlette(routes=routes, middleware=[Middleware(HostGuard)])
+    app = Starlette(routes=routes, middleware=[
+        Middleware(BodyLimit, default=2 * 1024 * 1024,
+                   per_path={"/api/import": 50 * 1024 * 1024, "/api/compliance/anexos": 12 * 1024 * 1024,
+                             "/api/compliance/ncm/arquivo": 42 * 1024 * 1024, "/api/compliance/base/pacote": 20 * 1024 * 1024,
+                             "/api/compliance/anatel/arquivo": 310 * 1024 * 1024}),
+        Middleware(HostGuard)])
+    for k, v in vars(comp_state).items():
+        setattr(app.state, k, v)
     app.state.db = db
     app.state.sync = sync
     app.state.reports = reports
