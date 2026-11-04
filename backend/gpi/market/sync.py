@@ -60,8 +60,10 @@ STATES = {  # estado → (rótulo, símbolo); o símbolo garante que o estado n�
     "aguardando": ("Aguardando", "…"), "executando": ("Executando", "⟳"), "concluido": ("Concluído", "✓"),
     "atualizado": ("Atualizado — nada novo a coletar", "="), "em_cache": ("Em cache", "◷"), "ignorado": ("Ignorado", "–"),
     "requer_autorizacao": ("Requer autorização", "🔒"), "erro": ("Erro", "✕"), "limite": ("Limite de API", "⏸"),
-    "cancelado": ("Cancelado", "⊘")}
-DONE = {"concluido", "atualizado", "em_cache", "ignorado", "requer_autorizacao", "erro", "limite", "cancelado"}
+    "cancelado": ("Cancelado", "⊘"), "sem_novidades": ("Coletado — sem novidades", "✓"),
+    "pendente": ("Sem coleta bem-sucedida — nova tentativa agendada", "↻"), "sem_coleta": ("Nunca coletada", "○")}
+DONE = {"concluido", "atualizado", "em_cache", "ignorado", "requer_autorizacao", "erro", "limite", "cancelado",
+        "sem_novidades", "pendente", "sem_coleta"}
 
 
 @dataclass
@@ -73,6 +75,8 @@ class SyncContext:
     content: ContentStore | None = None
     creds: object = None
     force: bool = False                 # "Atualizar agora": planos manuais limitados (respeitam cotas)
+    manual: frozenset = frozenset()     # v0.7.1: fontes com atualização manual pedida pelo usuário
+    obs_counts: dict = None             # v0.7.1: observações gravadas diretamente (search_observations) por fonte
 
 
 def validate_batch(b: Batch):
@@ -122,14 +126,25 @@ class SyncManager:
         r = self.db.query("SELECT * FROM sync_jobs WHERE job_key = ?", (key,))
         return r[0] if r else None
 
-    def _is_due(self, job, now: datetime) -> bool:
+    def _is_due(self, job, now: datetime, source: str = "", manual: bool = False, cheap: bool = False) -> bool:
+        """Job deve rodar agora?
+
+        * pendente/executando (interrompido) → sim;
+        * falhou → após o backoff; com atualização manual, imediatamente (a cota do provedor é respeitada pelo conector);
+        * concluído → só depois do refresh_after; um período fechado (refresh_days=None) não volta, EXCETO quando a
+          fonte nunca teve coleta bem-sucedida gravada (base vazia não é "atualizada") ou quando o usuário pediu
+          atualização manual de uma fonte barata (manual_refresh)."""
         row = self._job_row(job.key)
         if row is None or row["state"] in ("pending", "running"):
             return True
         if row["state"] == "failed":
-            return not row["next_try"] or datetime.fromisoformat(row["next_try"]) <= now
+            return manual or not row["next_try"] or datetime.fromisoformat(row["next_try"]) <= now
         if row["state"] == "done":
-            return bool(row["refresh_after"]) and datetime.fromisoformat(row["refresh_after"]) <= now
+            if row["refresh_after"] and datetime.fromisoformat(row["refresh_after"]) <= now:
+                return True
+            if source and not (self.store.source_status().get(source) or {}).get("last_success"):
+                return True
+            return bool(manual and cheap)
         return True
 
     def _set_job(self, job, state, error=None, connector=""):
@@ -267,7 +282,7 @@ class SyncManager:
                 "resumo": resumo, "contagem": cnt, "fontes": fontes, "estados": STATES,
                 "prioridades": PRIORITY_NAMES}
 
-    def run(self, trigger="manual", only: list[str] | None = None, force: bool = False) -> dict:
+    def run(self, trigger="manual", only: list[str] | None = None, force: bool = False, manual: bool = False) -> dict:
         with self._lock:
             if self.state["rodando"]:
                 return {"erro": "sincronização já em andamento"}
@@ -290,6 +305,8 @@ class SyncManager:
         try:
             ctx = self.context()
             ctx.force = force
+            ctx.manual = frozenset(only or []) if manual else frozenset()
+            ctx.obs_counts = {}
             if hasattr(self.http, "reset_breakers"):
                 self.http.reset_breakers()
             if hasattr(self.http, "source_stats"):
@@ -409,12 +426,20 @@ class SyncManager:
             estado, motivo = "cancelado", "sincronização cancelada pelo usuário"
         elif e == "funcional":
             only_cache = ss.get("requisicoes", 0) == 0 and ss.get("cache", 0) > 0
-            estado = "em_cache" if only_cache else "concluido"
-            motivo = "respostas reaproveitadas do cache local (dentro da validade)" if only_cache else None
+            no_news = not only_cache and not res.get("novas") and not res.get("revisadas") and not res.get("itens")
+            estado = "em_cache" if only_cache else ("sem_novidades" if no_news else "concluido")
+            motivo = ("respostas reaproveitadas do cache local (dentro da validade)" if only_cache else
+                      "coleta executada com sucesso, sem registros novos" if no_news else None)
         elif e == "em dia" and (self.store.source_status().get(c.id) or {}).get("state") == "aguardando":
             estado, motivo = "ignorado", "aguardando dados de outra fonte (dependência) — nada a planejar nesta execução"
         elif e == "em dia":
-            estado, motivo = "atualizado", "dados considerados atualizados pela política de sincronização desta fonte"
+            estado, motivo = "atualizado", "coleta anterior bem-sucedida; o período atual já foi coletado (use Atualizar fonte para repetir)"
+        elif e == "pendente":
+            estado = "pendente"
+            motivo = (f"nenhuma coleta bem-sucedida ainda; última falha: {str(res.get('ultimo_erro_anterior') or '')[:200]}; "
+                      f"nova tentativa automática em {res.get('proxima_tentativa') or '—'} (ou use Atualizar fonte)")
+        elif e == "sem_coleta":
+            estado, motivo = "sem_coleta", "nenhuma coleta registrada e nada planejado — use Diagnosticar"
         elif e == "restrita":
             estado, motivo = "requer_autorizacao", None
         elif e == "falhou":
@@ -461,7 +486,9 @@ class SyncManager:
         seen = set()
         for _round in range(3):                       # planos dependentes (ex.: títulos → visualizações)
             try:
-                jobs = [j for j in c.plan(ctx) if j.key not in seen and self._is_due(j, now)]
+                manual = c.id in (ctx.manual or ())
+                jobs = [j for j in c.plan(ctx) if j.key not in seen and
+                        self._is_due(j, now, c.id, manual, getattr(c, "manual_refresh", False))]
             except Exception as e:  # noqa: BLE001
                 res["ultimo_erro"] = f"planejamento: {e}"
                 break
@@ -484,7 +511,12 @@ class SyncManager:
                     self.http.ctx_local.cur["job"] = j.key
                 self._set_job(j, "running", connector=c.id)
                 try:
+                    if ctx.obs_counts is not None:
+                        ctx.obs_counts[c.id] = {"novas": 0, "revisadas": 0}
                     batches, products = c.run(j, ctx)
+                    direct = (ctx.obs_counts or {}).get(c.id) or {}
+                    res["novas"] += direct.get("novas", 0)
+                    res["revisadas"] += direct.get("revisadas", 0)
                     for b in batches:
                         validate_batch(b)
                     for p in products:
@@ -548,17 +580,26 @@ class SyncManager:
             st = self.store.source_status().get(c.id)
             if st is None:
                 self.store.set_source_status(c.id, "aguardando", "aguardando dados de outras fontes")
-            elif st["validated"]:
+                res["estado"] = "em dia"
+            elif st.get("last_success") and st["validated"]:
+                # há coleta bem-sucedida anterior: aí sim "atualizado" (sem refazer o mesmo período)
                 self.store.set_source_status(c.id, "funcional", "em dia (nada a coletar nesta execução)",
                                              success=True)
-            res["estado"] = "em dia"
+                res["estado"] = "em dia"
+            else:
+                # nunca coletou com sucesso: NÃO é "atualizado" — mostra a falha anterior e a próxima tentativa
+                fail = self.db.query("SELECT last_error, next_try FROM sync_jobs WHERE source = ? AND state = 'failed' "
+                                     "ORDER BY updated_at DESC LIMIT 1", (c.id,))
+                res["estado"] = "pendente" if fail else "sem_coleta"
+                res["ultimo_erro_anterior"] = fail[0]["last_error"] if fail else None
+                res["proxima_tentativa"] = fail[0]["next_try"] if fail else None
         return res
 
     # ------------------------------------------------------------------ thread e agenda
-    def start(self, trigger="abertura", only: list[str] | None = None, force: bool = False):
+    def start(self, trigger="abertura", only: list[str] | None = None, force: bool = False, manual: bool = False):
         if self.state["rodando"]:
             return False
-        self._thread = threading.Thread(target=self.run, args=(trigger, only, force), daemon=True, name="gpi-sync")
+        self._thread = threading.Thread(target=self.run, args=(trigger, only, force, manual), daemon=True, name="gpi-sync")
         self._thread.start()
         return True
 
@@ -572,7 +613,7 @@ class SyncManager:
             return {"iniciada": False, "fontes": [], "mensagem": "nenhuma fonte com falha"}
         for cid in ids:
             self.db.execute("UPDATE sync_jobs SET next_try = NULL WHERE source = ? AND state = 'failed'", (cid,))
-        return {"iniciada": self.start("retentativa", ids), "fontes": ids}
+        return {"iniciada": self.start("retentativa", ids, manual=True), "fontes": ids}
 
     def history(self, limit: int = 30) -> list[dict]:
         out = []

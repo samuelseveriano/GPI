@@ -483,7 +483,8 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         p = integ.provider(request.path_params["pid"])
         if not p:
             return err("integração desconhecida", 404)
-        return JSONResponse({"iniciada": sync.start("manual", p["conectores"])})
+        # v0.7.1: "Sincronizar" da integração = atualização manual controlada (ignora o TTL/backoff local, não as cotas)
+        return JSONResponse({"iniciada": sync.start("manual", p["conectores"], manual=True)})
 
     async def integ_settings(request):
         b = await body_json(request)

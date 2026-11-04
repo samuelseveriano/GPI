@@ -4,7 +4,7 @@ window.GPI_V061 = function (H, PAGES) {
   const { api, post, fmt, escH, loading, main, $ } = H;
   const dt = (s) => s ? escH(String(s).replace('T', ' ').slice(0, 16)) : '—';
   const dur = (s) => s == null ? '—' : s < 60 ? `${fmt(s, 1)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
-  const CLS = { concluido: 'ok', atualizado: 'ok', em_cache: 'ok', executando: 'lbl', aguardando: '', ignorado: '', requer_autorizacao: '', erro: 'bad', limite: 'bad', cancelado: '' };
+  const CLS = { concluido: 'ok', atualizado: 'ok', em_cache: 'ok', sem_novidades: 'ok', pendente: 'bad', sem_coleta: '', executando: 'lbl', aguardando: '', ignorado: '', requer_autorizacao: '', erro: 'bad', limite: 'bad', cancelado: '' };
   const badge = (f) => `<span class="badge st-${escH(f.estado)} ${CLS[f.estado] || ''}"><span aria-hidden="true">${escH(f.simbolo || '')}</span> ${escH(f.rotulo || f.estado)}</span>`;
   let SNAP = null, es = null, fails = 0, pollT = null, lastFase = null;
 
@@ -112,11 +112,17 @@ window.GPI_V061 = function (H, PAGES) {
     box.innerHTML = `<div class="panel"><h2>${escH(s.titulo)}${s.percentual != null ? ' — ' + s.percentual + '%' : ''}</h2>${s.rodando ? progress(s) : ''}<p>${escH(s.resumo || '')}</p>
       <div class="form"><button class="primary" data-sp="run" ${s.rodando ? 'disabled' : ''}>Atualizar fontes</button><button data-sp="cancel" ${s.rodando ? '' : 'disabled'}>Cancelar sincronização</button>
       <button data-sp="retry" ${s.rodando ? 'disabled' : ''}>Tentar novamente fontes com falha</button><button data-sp="hist">Ver histórico</button><a class="btn" href="/api/diagnostics/export">Exportar diagnóstico</a></div></div>
-      <div class="panel scroll"><table class="small"><thead><tr><th>Fonte</th><th>Prioridade</th><th>Estado</th><th>Início</th><th>Duração</th><th class="num">Jobs</th><th class="num">Novos</th><th class="num">Atualizados</th><th class="num">Tentativas</th><th>Espera</th><th>Cota</th><th>Última OK</th><th>Próxima</th><th>Motivo</th></tr></thead><tbody>
+      <div class="panel scroll"><table class="small"><thead><tr><th>Fonte</th><th>Prioridade</th><th>Estado</th><th>Início</th><th>Duração</th><th class="num">Jobs</th><th class="num">Novos</th><th class="num">Atualizados</th><th class="num">Tentativas</th><th>Espera</th><th>Cota</th><th>Última OK</th><th>Próxima</th><th>Motivo</th><th>Ações</th></tr></thead><tbody>
       ${fontes.map(([id, f]) => `<tr><td>${escH(f.nome || id)}</td><td>${escH(f.grupo || '')}</td><td>${badge(f)}</td><td>${dt(f.inicio)}</td><td>${dur(f.segundos)}</td>
         <td class="num">${f.jobs_total ? `${f.jobs_feitos || 0}/${f.jobs_total}` : '—'}</td><td class="num">${fmt(f.novos || 0, 0)}</td><td class="num">${fmt(f.atualizados || 0, 0)}</td><td class="num">${f.tentativas || 0}</td>
-        <td>${f.espera_s ? dur(f.espera_s) : '—'}</td><td>${f.cota_unidades != null ? f.cota_unidades + ' un.' : '—'}</td><td>${dt(f.ultima_ok)}</td><td>${f.proxima ? dt(f.proxima) : '—'}</td><td class="wrap ${f.estado === 'erro' ? 'neg' : 'muted'}">${escH((f.motivo || '').slice(0, 160))}</td></tr>`).join('') || '<tr><td colspan="14" class="muted">Nenhuma execução nesta sessão. Clique em "Atualizar fontes" ou veja o histórico.</td></tr>'}</tbody></table></div>`;
+        <td>${f.espera_s ? dur(f.espera_s) : '—'}</td><td>${f.cota_unidades != null ? f.cota_unidades + ' un.' : '—'}</td><td>${dt(f.ultima_ok)}</td><td>${f.proxima ? dt(f.proxima) : '—'}</td><td class="wrap ${f.estado === 'erro' || f.estado === 'pendente' ? 'neg' : 'muted'}">${escH((f.motivo || '').slice(0, 220))}</td>
+        <td><button class="small" data-src="${escH(id)}" ${s.rodando ? 'disabled' : ''} title="Coleta manual desta fonte (respeita as cotas da API)">Atualizar fonte</button> <a class="small" href="#integracoes">Diagnosticar</a></td></tr>`).join('') || '<tr><td colspan="15" class="muted">Nenhuma execução nesta sessão. Clique em "Atualizar fontes" ou veja o histórico.</td></tr>'}</tbody></table></div>`;
     box.querySelectorAll('[data-sp]').forEach((b) => b.onclick = () => (b.dataset.sp === 'hist' ? act('hist') : act(b.dataset.sp)));
+    box.querySelectorAll('[data-src]').forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      try { const r = await post('/api/sync/start', { fontes: [b.dataset.src], manual: true }); if (!r.iniciada) alert('Já existe uma sincronização em andamento.'); }
+      catch (e) { alert(e.message || e); } finally { setTimeout(() => syncPage(true), 800); }
+    });
     keep.forEach((id) => { const d = box.querySelector(`details[data-id="${id}"]`); if (d) d.open = true; });
   }
 

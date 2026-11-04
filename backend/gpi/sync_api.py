@@ -113,7 +113,8 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
     async def run_all(request):
         b = await body(request)
         only = [x for x in (b.get("fontes") or []) if isinstance(x, str)] or None
-        return j({"iniciada": sync.start("manual", only)})
+        # v0.7.1: "Atualizar fonte" (manual=True) ignora o TTL/backoff LOCAL dessas fontes; cotas da API continuam valendo
+        return j({"iniciada": sync.start("manual", only, manual=bool(b.get("manual") and only))})
 
     # ------------------------------------------------------------------ diagnóstico por integração
     def _diagnose(pid: str) -> dict:
