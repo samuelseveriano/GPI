@@ -255,3 +255,7 @@ dl.small dt { font-weight: 600; margin-top: 6px; }
 dl.small dd { margin: 2px 0 0 0; }
 table.wrap { width: 100%; table-layout: fixed; }
 table.wrap td { white-space: normal; word-break: break-word; }
+/* v0.8.1: resultado da sincronização — sem coleta/restrições não aparecem como sucesso */
+#syncbar[data-resultado="sem_coleta"] { background: var(--warn-bg); color: var(--warn-ink); }
+#syncbar[data-resultado="com_restricoes"] { background: color-mix(in srgb, var(--warn-bg) 60%, var(--panel)); }
+#syncbar[data-resultado="com_dados"] { background: color-mix(in srgb, var(--ok) 12%, var(--panel)); }

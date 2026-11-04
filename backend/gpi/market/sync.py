@@ -248,7 +248,8 @@ class SyncManager:
             st = {k: v for k, v in self.state.items() if k != "fontes"}
         tasks = len(fontes) + (1 if st.get("etapas_total") else 0)
         done_frac = 0.0
-        cnt = {"concluidas": 0, "executando": 0, "aguardando": 0, "falhas": 0, "sem_autorizacao": 0}
+        cnt = {"concluidas": 0, "executando": 0, "aguardando": 0, "falhas": 0, "sem_autorizacao": 0,
+               "com_dados": 0, "sem_novidades": 0, "cache": 0, "ignoradas": 0, "pendentes": 0}
         for f in fontes.values():
             e = f.get("estado")
             if e in DONE:
@@ -259,6 +260,17 @@ class SyncManager:
                     cnt["sem_autorizacao"] += 1
                 else:
                     cnt["concluidas"] += 1
+                    # v0.8.1: "concluída" com dados novos × sem novidades × cache/em dia × ignorada × pendente
+                    if e == "concluido" and (f.get("novos") or 0) + (f.get("atualizados") or 0) > 0:
+                        cnt["com_dados"] += 1
+                    elif e in ("concluido", "sem_novidades"):
+                        cnt["sem_novidades"] += 1
+                    elif e in ("em_cache", "atualizado"):
+                        cnt["cache"] += 1
+                    elif e in ("pendente", "sem_coleta"):
+                        cnt["pendentes"] += 1
+                    else:
+                        cnt["ignoradas"] += 1
             elif e in ("executando",):
                 cnt["executando"] += 1
                 if f.get("jobs_total"):
@@ -279,8 +291,20 @@ class SyncManager:
         if pct is not None:
             self._pct_floor = (self.run_id, pct)
         fase = st.get("fase")
-        if not rodando and fase in ("parcial",) or (not rodando and cnt["falhas"] and fase == "concluida"):
+        coletou = cnt["com_dados"] + cnt["sem_novidades"] + cnt["cache"]
+        resultado = None
+        if not rodando and fontes and fase in ("concluida", "parcial"):
+            resultado = ("com_dados" if cnt["com_dados"] and not (cnt["falhas"] or cnt["sem_autorizacao"]) else
+                         "com_restricoes" if cnt["com_dados"] or (coletou and (cnt["falhas"] or cnt["sem_autorizacao"])) else
+                         "sem_novidades" if coletou else "sem_coleta")
+        if resultado == "sem_coleta":
+            # nenhuma fonte elegível foi efetivamente coletada: NÃO é "concluída" (nem verde)
+            titulo = ("Nenhuma fonte coletada — " + (f"{cnt['sem_autorizacao']} exige(m) autorização" if cnt["sem_autorizacao"] else
+                      f"{cnt['falhas']} com falha" if cnt["falhas"] else "nenhuma fonte pronta para coleta"))
+        elif not rodando and fase in ("parcial",) or (not rodando and (cnt["falhas"] or cnt["sem_autorizacao"]) and fase == "concluida"):
             titulo = "Sincronização concluída com restrições"
+        elif resultado == "sem_novidades":
+            titulo = "Sincronização concluída sem novidades"
         elif not rodando and fase == "concluida":
             titulo = "Sincronização concluída"
         elif not rodando and fase == "cancelada":
@@ -292,13 +316,31 @@ class SyncManager:
                       "analisando": "Analisando dados coletados"}.get(fase, "Sincronizando")
         else:
             titulo = "Sem sincronização em andamento"
-        resumo = (f"{cnt['concluidas']} de {len(fontes)} fontes concluídas — {cnt['executando']} em execução — "
-                  f"{cnt['aguardando']} aguardando" + (f" — {cnt['falhas']} com falha" if cnt["falhas"] else "")
-                  + (f" — {cnt['sem_autorizacao']} sem autorização" if cnt["sem_autorizacao"] else "")) if fontes else ""
+        parts = [f"{coletou} de {len(fontes)} fontes concluídas com coleta"]
+        if cnt["com_dados"]:
+            parts.append(f"{cnt['com_dados']} com dados novos")
+        if cnt["sem_novidades"]:
+            parts.append(f"{cnt['sem_novidades']} sem novidades")
+        if cnt["cache"]:
+            parts.append(f"{cnt['cache']} em dia (cache)")
+        if cnt["executando"] or rodando:
+            parts.append(f"{cnt['executando']} em execução")
+        if cnt["aguardando"]:
+            parts.append(f"{cnt['aguardando']} aguardando")
+        if cnt["pendentes"]:
+            parts.append(f"{cnt['pendentes']} pendente(s)")
+        if cnt["ignoradas"]:
+            parts.append(f"{cnt['ignoradas']} ignorada(s)")
+        if cnt["falhas"]:
+            parts.append(f"{cnt['falhas']} com falha")
+        if cnt["sem_autorizacao"]:
+            parts.append(f"{cnt['sem_autorizacao']} sem autorização (não coletadas)")
+        resumo = " — ".join(parts) if fontes else ""
         for k, f in fontes.items():
             lab = STATES.get(f.get("estado"), (f.get("estado"), ""))
             f["rotulo"], f["simbolo"] = lab
         return {**st, "execucao": self.run_id, "percentual": pct, "indeterminado": bool(indeterminado), "titulo": titulo,
+                "resultado": resultado, "contagens": cnt,
                 "resumo": resumo, "contagem": cnt, "fontes": fontes, "estados": STATES,
                 "prioridades": PRIORITY_NAMES}
 
