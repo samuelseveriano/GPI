@@ -1,0 +1,5 @@
+# Os testes usam, de propósito, segredos FICTÍCIOS em logs (para provar a sanitização) e comparações de URL em
+# asserções; não são código de produção. O código do aplicativo continua inteiramente analisado.
+name: GPI CodeQL
+paths-ignore:
+  - tests

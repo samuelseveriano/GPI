@@ -1,5 +1,8 @@
 # Mercado Livre — OAuth com Redirect URI HTTPS (GPI v0.7)
 
+> A página HTTPS (pasta `pages/`) é publicada pelo workflow `pages` a partir da `main`. A conclusão do login no
+> computador (rota local `/oauth/mercadolivre/retorno` e troca do código por token) faz parte do **GPI v0.7** (PR #3).
+
 ## 1. O que a documentação oficial diz (consultada em 03/11/2026)
 | Ponto | Situação oficial | Fonte |
 |---|---|---|
