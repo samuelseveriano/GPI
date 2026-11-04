@@ -1,0 +1,50 @@
+# v0.8 — verificação das fontes regulatórias oficiais (Anatel dados abertos; Inmetro dados abertos/consulta).
+# Somente dados públicos, sem segredos. Não bloqueia nenhum build: documenta o que cada fonte oferece de fato.
+name: regulatory-data
+
+on:
+  push:
+    branches: ["feature/**", "fix/**"]
+    paths:
+      - "scripts/regulatory_probe.py"
+      - "scripts/regulatory_validation.py"
+      - "backend/gpi/regulatory/**"
+      - ".github/workflows/regulatory-data.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sonda:
+    name: Fontes regulatórias oficiais
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Sondar fontes oficiais
+        continue-on-error: true
+        run: |
+          python scripts/regulatory_probe.py regulatory_probe.json 2>&1 | tee probe.log
+          { echo "### Fontes regulatórias (sonda)"; echo '```'; cut -c1-400 probe.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Validação regulatória com dados reais
+        if: hashFiles('scripts/regulatory_validation.py') != ''
+        continue-on-error: true
+        run: |
+          pip install -r requirements.txt
+          python scripts/regulatory_validation.py regulatory_validation.json 2>&1 | tee reg.log
+          { echo "### Validação regulatória (dados reais)"; echo '```'; cut -c1-400 reg.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: fontes-regulatorias
+          path: |
+            regulatory_probe.json
+            regulatory_validation.json
+            probe.log
+            reg.log
+          if-no-files-found: warn
+          retention-days: 30
