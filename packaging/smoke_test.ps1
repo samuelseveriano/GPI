@@ -197,6 +197,26 @@ $mb = @{ fontes = @("bcb_ptax"); manual = $true } | ConvertTo-Json
 $ms = Invoke-RestMethod -Uri "$base/api/sync/start" -Method Post -Headers $hdr -ContentType "application/json" -Body $mb -NoProxy -TimeoutSec 30
 Note "   auditoria: $(@($au.fontes).Count) fontes · banco íntegro (esquema v$($ig.versao_esquema)) · insights: $(@($ins.itens).Count) produtos · atualização manual iniciada: $($ms.iniciada)"
 
+Note "M) v0.8: qualidade dos dados (gates), fusão de evidências, dashboard, dossiê, regulatório e lista de investigação"
+$v8 = Invoke-RestMethod -Uri "$base/api/v08/visao" -NoProxy -TimeoutSec 180
+if ($null -eq $v8.kpis.produtos_monitorados) { Fail "dashboard v0.8 sem KPIs" }
+$q8 = Invoke-RestMethod -Uri "$base/api/v08/qualidade" -NoProxy -TimeoutSec 180
+foreach ($g in @("1", "2", "3", "4", "6", "8")) { if (-not $q8.gates.$g) { Fail "gate $g ausente" } }
+if ($q8.gates."2".status -ne "aprovado") { Fail "Gate 2 (identificação de produtos) reprovado no executável" }
+if ($q8.gates."8".status -ne "aprovado") { Fail "Gate 8 (consistência fim a fim) reprovado no executável" }
+$m8 = Invoke-RestMethod -Uri "$base/api/v08/metricas" -NoProxy -TimeoutSec 30
+if (@($m8.metricas).Count -lt 10) { Fail "catálogo semântico incompleto" }
+$rs = Invoke-RestMethod -Uri "$base/api/regulatorio/status" -NoProxy -TimeoutSec 30
+if (-not $rs.papeis.titular) { Fail "módulo regulatório sem papéis" }
+$ib = @{ produto = "Teste do executável"; motivo = "smoke" } | ConvertTo-Json
+$iv = Invoke-RestMethod -Uri "$base/api/v08/investigacoes" -Method Post -Headers $hdr -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($ib)) -NoProxy -TimeoutSec 30
+if ($iv.estado -ne "Novo sinal") { Fail "lista de investigação não gravou" }
+$invId = $iv.id
+$rp8 = @{ tipo = "executivo"; formato = "pdf"; filtros = @{} } | ConvertTo-Json
+$re8 = Invoke-RestMethod -Uri "$base/api/reports/generate" -Method Post -Headers $hdr -ContentType "application/json" -Body $rp8 -NoProxy -TimeoutSec 300
+if ($re8.status -ne "gerado") { Fail "relatório executivo v0.8: $($re8.erro)" }
+Note "   gates: $(($q8.gates.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value.status)" }) -join ' ') · produtos analisados: $($v8.kpis.produtos_analisados) · métricas: $(@($m8.metricas).Count) · investigação nº $invId · executivo PDF gerado"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -208,8 +228,11 @@ $app = StartApp
 $after = @(GetList "$base/api/skus").Count
 $hist = Invoke-RestMethod -Uri "$base/api/reports" -NoProxy -TimeoutSec 30
 $kept = @($hist.relatorios | Where-Object { $repIds -contains $_.id -and $_.disponivel }).Count
+$inv2 = Invoke-RestMethod -Uri "$base/api/v08/investigacoes/$invId" -NoProxy -TimeoutSec 30
 StopApp $app
 if ($kept -ne 2) { Fail "histórico de relatórios não persistiu após reabrir ($kept de 2)" }
+if ($inv2.produto -ne "Teste do executável") { Fail "lista de investigação não persistiu após reabrir" }
+Note "   reabertura: investigação nº $invId preservada"
 Note "   reabertura: 2 relatórios preservados no histórico"
 if ($after -ne $before) { Fail "persistência: $before SKUs antes, $after depois da reabertura" }
 Note "   reabertura: $after SKUs preservados"
@@ -223,4 +246,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–L)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–M)"

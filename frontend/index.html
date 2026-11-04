@@ -9,14 +9,14 @@
 </head>
 <body>
 <aside id="side">
-  <div class="brand"><b>GPI</b><small class="lbl">Global Product Intelligence · local · v0.7.1</small>
+  <div class="brand"><b>GPI</b><small class="lbl">Global Product Intelligence · local · v0.8</small>
     <button type="button" id="collapse" class="icon-btn" aria-label="Recolher barra lateral" aria-pressed="false" title="Recolher barra lateral">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg></button></div>
   <nav id="nav" aria-label="Navegação principal">
     <div class="grp" data-grp="overview">
       <button type="button" class="grp-h" id="grp-overview-h" aria-expanded="false" aria-controls="grp-overview" data-tip="Visão Geral">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg><span class="lbl">Visão Geral</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
-      <div class="grp-b" id="grp-overview" role="region" aria-labelledby="grp-overview-h"><div class="grp-in"><a href="#dashboard" data-tip="Dashboard"><span class="lbl">Dashboard</span></a><a href="#inteligencia-oportunidades" data-tip="Inteligência de Oportunidades"><span class="lbl">Inteligência de Oportunidades</span></a><a href="#oportunidades-consumo" data-tip="Oportunidades"><span class="lbl">Oportunidades</span></a><a href="#alertas" data-tip="Alertas"><span class="lbl">Alertas</span></a></div></div>
+      <div class="grp-b" id="grp-overview" role="region" aria-labelledby="grp-overview-h"><div class="grp-in"><a href="#dashboard" data-tip="Dashboard"><span class="lbl">Dashboard</span></a><a href="#inteligencia-oportunidades" data-tip="Inteligência de Oportunidades"><span class="lbl">Inteligência de Oportunidades</span></a><a href="#investigacoes" data-tip="Lista de Investigação"><span class="lbl">Lista de Investigação</span></a><a href="#oportunidades-consumo" data-tip="Oportunidades"><span class="lbl">Oportunidades</span></a><a href="#alertas" data-tip="Alertas"><span class="lbl">Alertas</span></a></div></div>
     </div>
     <div class="grp" data-grp="consumer">
       <button type="button" class="grp-h" id="grp-consumer-h" aria-expanded="false" aria-controls="grp-consumer" data-tip="Inteligência de Consumo">
@@ -46,7 +46,7 @@
     <div class="grp" data-grp="compliance">
       <button type="button" class="grp-h" id="grp-compliance-h" aria-expanded="false" aria-controls="grp-compliance" data-tip="Conformidade de Importação">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg><span class="lbl">Conformidade de Importação</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
-      <div class="grp-b" id="grp-compliance" role="region" aria-labelledby="grp-compliance-h"><div class="grp-in"><a href="#conformidade" data-tip="Painel de Conformidade"><span class="lbl">Painel de Conformidade</span></a><a href="#conformidade-analisar" data-tip="Analisar Produto"><span class="lbl">Analisar Produto</span></a><a href="#conformidade-historico" data-tip="Análises Regulatórias"><span class="lbl">Análises Regulatórias</span></a><a href="#conformidade-ncm" data-tip="Classificação NCM"><span class="lbl">Classificação NCM</span></a><a href="#conformidade-certificados" data-tip="Homologações e Certificados"><span class="lbl">Homologações e Certificados</span></a><a href="#conformidade-base" data-tip="Base Regulatória"><span class="lbl">Base Regulatória</span></a><a href="#conformidade-fornecedores" data-tip="Cadastro de Fornecedores"><span class="lbl">Cadastro de Fornecedores</span></a><a href="#conformidade-assistente" data-tip="Assistente Regulatório"><span class="lbl">Assistente Regulatório</span></a><a href="#conformidade-ia" data-tip="IA Local"><span class="lbl">IA Local</span></a></div></div>
+      <div class="grp-b" id="grp-compliance" role="region" aria-labelledby="grp-compliance-h"><div class="grp-in"><a href="#conformidade" data-tip="Painel de Conformidade"><span class="lbl">Painel de Conformidade</span></a><a href="#conformidade-analisar" data-tip="Analisar Produto"><span class="lbl">Analisar Produto</span></a><a href="#conformidade-historico" data-tip="Análises Regulatórias"><span class="lbl">Análises Regulatórias</span></a><a href="#conformidade-ncm" data-tip="Classificação NCM"><span class="lbl">Classificação NCM</span></a><a href="#conformidade-certificados" data-tip="Homologações e Certificados"><span class="lbl">Homologações e Certificados</span></a><a href="#empresas-registros" data-tip="Empresas com Produtos Homologados"><span class="lbl">Empresas com Produtos Homologados</span></a><a href="#conformidade-base" data-tip="Base Regulatória"><span class="lbl">Base Regulatória</span></a><a href="#conformidade-fornecedores" data-tip="Cadastro de Fornecedores"><span class="lbl">Cadastro de Fornecedores</span></a><a href="#conformidade-assistente" data-tip="Assistente Regulatório"><span class="lbl">Assistente Regulatório</span></a><a href="#conformidade-ia" data-tip="IA Local"><span class="lbl">IA Local</span></a></div></div>
     </div>
     <div class="grp" data-grp="reports">
       <button type="button" class="grp-h" id="grp-reports-h" aria-expanded="false" aria-controls="grp-reports" data-tip="Relatórios">
@@ -61,7 +61,7 @@
     <div class="grp" data-grp="system">
       <button type="button" class="grp-h" id="grp-system-h" aria-expanded="false" aria-controls="grp-system" data-tip="Fontes e Sistema">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">Fontes e Sistema</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
-      <div class="grp-b" id="grp-system" role="region" aria-labelledby="grp-system-h"><div class="grp-in"><a href="#integracoes" data-tip="Central de Integrações"><span class="lbl">Central de Integrações</span></a><a href="#sincronizacao" data-tip="Sincronização"><span class="lbl">Sincronização</span></a><a href="#fontes" data-tip="Saúde das Fontes"><span class="lbl">Saúde das Fontes</span></a><a href="#catalogo" data-tip="Catálogo"><span class="lbl">Catálogo</span></a><a href="#desempenho" data-tip="Desempenho"><span class="lbl">Desempenho</span></a><a href="#metodologia" data-tip="Metodologia"><span class="lbl">Metodologia</span></a><a href="#configuracoes" data-tip="Configurações"><span class="lbl">Configurações</span></a></div></div>
+      <div class="grp-b" id="grp-system" role="region" aria-labelledby="grp-system-h"><div class="grp-in"><a href="#integracoes" data-tip="Central de Integrações"><span class="lbl">Central de Integrações</span></a><a href="#sincronizacao" data-tip="Sincronização"><span class="lbl">Sincronização</span></a><a href="#fontes" data-tip="Saúde das Fontes"><span class="lbl">Saúde das Fontes</span></a><a href="#qualidade-dados" data-tip="Qualidade dos Dados"><span class="lbl">Qualidade dos Dados</span></a><a href="#catalogo" data-tip="Catálogo"><span class="lbl">Catálogo</span></a><a href="#desempenho" data-tip="Desempenho"><span class="lbl">Desempenho</span></a><a href="#metodologia" data-tip="Metodologia"><span class="lbl">Metodologia</span></a><a href="#configuracoes" data-tip="Configurações"><span class="lbl">Configurações</span></a></div></div>
     </div>
   </nav>
   <div class="side-foot lbl" id="foot">carregando…</div>
@@ -89,6 +89,7 @@
 <script src="/static/v061.js"></script>
 <script src="/static/v07.js"></script>
 <script src="/static/v071.js"></script>
+<script src="/static/v08.js"></script>
 <script src="/static/shell.js"></script>
 <script src="/static/app.js"></script>
 </body>

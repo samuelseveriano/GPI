@@ -60,3 +60,41 @@ silhouette; com < 6 produtos com evidência suficiente, nada é agrupado. Nomes 
 ## 5. Lead-lag (comparação internacional)
 Correlação cruzada das variações padronizadas, limite de significância e teste de estabilidade em duas metades;
 apresentada como **sinal exploratório** — correlação não implica causalidade.
+
+---
+
+# Auditoria v0.8 (Gate 5)
+
+Script: `scripts/ml_audit_v08.py`. Resultados completos: `docs/ML_AUDIT_v08_resultados.md`. Séries **sintéticas** de
+comportamento conhecido, backtesting de origem móvel em que o treino usa só y[:T].
+
+**A. Modelos individuais.** O melhor modelo foi:
+
+| Tipo de série | Melhor modelo | WAPE | FVA |
+|---|---|---|---|
+| Tendência | Holt-Winters | 1,4% | 54% |
+| Sazonal | ETS automático | 3,9% | 88% |
+| Tendência + sazonalidade | Holt-Winters | 1,9% | 89% |
+| Ruído | Naive (baseline preservado) | — | — |
+| Passeio aleatório | TSB | 3,7% | 14% |
+| Intermitente | média móvel | 132% (MASE 0,54) | — |
+| Mudança estrutural | TSB | 2,5% | — |
+| Anomalias | HistGB | 3,4% | — |
+
+Croston-SBA nunca venceu, nem na série intermitente. RF e HistGB foram péssimos na série intermitente (WAPE de 209% e
+302%). **Nenhum modelo "serve para tudo": a escolha por série no backtesting é necessária.**
+
+**B. Global × individual.** Painel de 36 séries, 3 origens. HistGB global teve WAPE médio de 9,5% contra 14,2% do
+modelo local, mas o local venceu em 13 das 36 séries. O GPI escolhe por série e não presume superioridade do global.
+LightGBM, XGBoost e CatBoost não estavam instalados no ambiente da auditoria (estão no pacote Windows, cujo autoteste
+D executa todos eles).
+
+**C. Clustering.** Com 4 grupos conhecidos e bem separados, K-Means, Ward e HDBSCAN deram ARI = 1,0 (silhouette
+0,625). Com dados reais os grupos são menos nítidos, por isso o silhouette e a qualidade são sempre exibidos.
+
+**D. Detectores.** Anomalias: precisão 69,9%, recall 100%, ou seja, cerca de 30% dos alertas são falsos. Mudança de
+patamar (tolerância de ±2 meses): precisão 77,5%, recall 100%. Por isso anomalias e mudanças de patamar são
+**alertas**, nunca evidência de demanda.
+
+**Elegibilidade (Gate 4).** Previsão só com ≥ 18 meses, ≥ 80% dos meses preenchidos, base suficiente e sem mudança de
+patamar nos últimos 4 meses. Sem isso, a previsão é bloqueada e o motivo é exibido.
