@@ -60,7 +60,9 @@ def candidates(prof: dict, m: int, allow_ml: bool = True) -> list[str]:
     n = prof["n"]
     if prof["padrao"] in ("intermitente", "irregular (lumpy)"):
         return ["naive", "moving_average", "croston_sba", "tsb"]
-    c = ["naive", "ses", "holt_damped"]
+    # v0.7.1 (auditoria): Holt sem amortecimento e ETS automático entram na disputa — em tendência linear limpa o
+    # Holt amortecido subestimava a inclinação e o Naive vencia; a escolha continua sendo do backtesting
+    c = ["naive", "ses", "holt", "holt_damped", "ets_auto"]
     if m > 1 and n >= m + 1:
         c.append("seasonal_naive")
     if m > 1 and n >= 2 * m + 2 and prof["sazonal"]:

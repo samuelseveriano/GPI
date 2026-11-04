@@ -275,7 +275,9 @@ def test_automl_selects_seasonal_model_and_reports_quality():
     r = automl.auto_forecast(_seasonal(), {"source": "comexstat"}, allow_ml=False)
     assert r["status"] == "prevista" and r["tipo"] == "importacao"
     assert r["perfil"]["sazonal"] and "holt_winters" in r["candidatos"]
-    assert r["modelo"] in ("holt_winters", "seasonal_naive") and r["qualidade"] == "boa"
+    # v0.7.1: o ETS automático também disputa; vale se escolher uma especificação sazonal (ex.: AAA)
+    seasonal_ets = r["modelo"] == "ets_auto" and str(r["parametros"].get("spec", "")).endswith("A")
+    assert (r["modelo"] in ("holt_winters", "seasonal_naive") or seasonal_ets) and r["qualidade"] == "boa"
     assert len(r["previsao"]) == 12 and all(l <= p <= h for l, p, h in zip(r["lo80"], r["previsao"], r["hi80"]))
 
 
