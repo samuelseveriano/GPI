@@ -1,7 +1,7 @@
 # Auditoria das APIs — GPI v0.7.1
 
-Fonte dos números: **coleta real** no job 2 do workflow `windows-build`
-(run 41766765441, 04/11/2026, Ubuntu do GitHub, **sem nenhuma credencial**, amostra de até 6 requisições por fonte).
+Fonte dos números: **coleta real** no job 2 do workflow `windows-build`, em duas execuções de 04/11/2026 —
+run 41766765441 (antes das correções desta auditoria) e run 41768724691 (commit final, depois delas) — Ubuntu do GitHub, **sem nenhuma credencial**, amostra de até 6 requisições por fonte).
 A matriz completa (A–F) é regenerada a cada execução em `auditoria_fontes.md` (artefato `validacao-conectores` e
 resumo do job) e, no aplicativo, em **Saúde das Fontes**.
 
@@ -13,21 +13,28 @@ registros ligados a produtos do catálogo.
 
 | Fonte | Estado da sincronização (real) | Registros gravados | Observação |
 |---|---|---|---|
-| Google Trends — Trending Now (RSS) | funcional | 20 (10 BR + 10 US) | 0 termos com produto/comerciais nesta amostra: o feed do dia trazia notícias/esportes, corretamente **não** tratados como produtos |
+| Google Trends — Trending Now (RSS) | funcional | 20 (10 BR + 10 US); resumo: 0 novas → **20 novas** após a correção | 0 termos com produto/comerciais nesta amostra: o feed do dia trazia notícias/esportes, corretamente **não** tratados como produtos |
 | Wikimedia (pageviews) | funcional | 687 | séries ligadas aos produtos do catálogo |
-| Feeds RSS especializados | funcional | 189 | manchetes ligadas a produtos |
+| Feeds RSS especializados | funcional | 189; resumo: 0 novas → **189 novas** após a correção | manchetes ligadas a produtos |
 | BCB PTAX | funcional | 966 | contexto cambial (não é fonte de produto) |
 | Comex Stat (MDIC) | funcional | 86.114 | importações brasileiras por NCM |
 | UN Comtrade | funcional | 120 | endpoint público sem chave; a chave é opcional |
 | IBGE PMC | **falha** | 0 | tempo de conexão esgotado (15 s) com `servicodados.ibge.gov.br` a partir do CI — instabilidade do servidor/rota, não do código; nova tentativa com backoff |
-| GDELT | **falha** | 0 | HTTP 429 ("one every 5 seconds"); o GPI respeitou o limite (63 s de espera) e adiou os jobs, como exigido |
+| GDELT | 1º run: **falha** (0) · 2º run: **funcional, parcial** (39) | 39 | HTTP 429 ("one every 5 seconds"): o GPI respeita o limite, adia o job recusado e grava o que coletou; o resumo informa "1 coleta(s) com falha" |
 
-Resumo da matriz A–F nesse run (fase final, mais exigente que o estado da sincronização): Funcional 2 · Dados armazenados 3 · Falha 2 · Não configurada 13 ·
-Aguardando autorização 1 · Restrita 8 (29 fontes descobertas automaticamente no registro).
+Matriz A–F (fase final, mais exigente que o estado da sincronização), 29 fontes descobertas automaticamente:
+
+| Execução | Funcional | Dados armazenados | Falha | Não configurada | Aguardando autorização | Restrita |
+|---|---|---|---|---|---|---|
+| run 41766765441 (antes) | 2 | 3 | 2 | 13 | 1 | 8 |
+| run 41768724691 (final) | 5 | 2 | 1 (IBGE) | 12 | 1 | 8 |
+
+Fontes públicas validadas com dados reais no commit final: Google Trends RSS, Wikimedia, RSS, BCB PTAX, Comex Stat,
+GDELT, UN Comtrade (7). Falhou: IBGE PMC (rede).
 
 "Dados armazenados" (e não "Funcional") para Trends RSS, PTAX e Comex Stat significa: dados reais gravados, mas
-nenhum ligado a um produto do catálogo nesta amostra — PTAX é contexto por natureza. Nesse run Comtrade ainda
-aparecia em "Não configurada" (defeito 2 abaixo, já corrigido).
+nenhum ligado a um produto do catálogo nesta amostra — PTAX é contexto por natureza. No 1º run Comtrade ainda
+aparecia em "Não configurada" (defeito 2 abaixo); no run final, não.
 
 ### Defeitos encontrados pela própria auditoria e corrigidos
 
