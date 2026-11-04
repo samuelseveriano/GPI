@@ -66,18 +66,20 @@ def audit(db, store, creds, cfg: dict, connectors=None) -> dict:
         n = _counts(db, c.id)
         has_token = bool(saved.get("access_token") or saved.get("refresh_token") or saved.get("api_key"))
         # etapa final, da mais forte para a mais fraca
+        # evidência gravada vem antes da configuração: uma fonte com endpoint público (ex.: Comtrade sem chave) que
+        # coletou de verdade não é "não configurada"
         if tipo == "approval" and not available:
             fase = "restrita"
-        elif not configured:
-            fase = "nao_configurada"
-        elif not available:
-            fase = "aguardando_autorizacao"
-        elif s.get("state") == "falhou" and not n["registros"]:
-            fase = "falha"
         elif n["registros"] and s.get("last_success") and n["ligados_a_produto"]:
             fase = "funcional"
         elif n["registros"]:
             fase = "dados_armazenados"
+        elif not configured:
+            fase = "nao_configurada"
+        elif not available:
+            fase = "aguardando_autorizacao"
+        elif s.get("state") == "falhou":
+            fase = "falha"
         elif s.get("validated"):
             fase = "api_validada"
         elif n["jobs"].get("running") or n["jobs"].get("pending"):

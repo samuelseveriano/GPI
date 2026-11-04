@@ -145,3 +145,45 @@ def test_source_audit_matrix(tmp_path):
     assert r["E_persistencia"]["registros"] == 50 and r["C_coleta"]["ultima_coleta_ok"]
     assert r["A_configuracao"]["exige_autenticacao"] and r["A_configuracao"]["credenciais_configuradas"]
     assert r["fase"] in ("funcional", "dados_armazenados") and "| Mercado Livre" in markdown(a)
+
+
+def test_direct_write_connectors_count_new_rows(tmp_path):
+    """Caso real do CI: Google Trends RSS gravou 20 termos e o resumo dizia '0 novas observações'."""
+    from gpi.connectors.base import Connector, Job
+
+    class Direct(Connector):
+        id, name = "direto_teste", "Fonte que grava direto"
+        manual_refresh = True
+
+        def plan(self, ctx):
+            return [Job(f"{self.id}:{ctx.today.isoformat()}", {}, refresh_days=None)]
+
+        def run(self, job, ctx):
+            with ctx.store.db.transaction():
+                for i in range(20):
+                    ctx.store.db.execute(
+                        "INSERT OR IGNORE INTO search_observations (source, country, region, term, ref_date, period, metric,"
+                        " value, unit, collected_at) VALUES (?, 'BR', '', ?, ?, 'dia', 'trafego_faixa', 1, 'x', 'agora')",
+                        (self.id, f"t{i}", ctx.today.isoformat()))
+            return [], []
+
+    sm, db = _sm(tmp_path, MLHttp(), conns=[Direct()])
+    sm.run("manual", ["direto_teste"], manual=True)
+    assert sm.snapshot()["fontes"]["direto_teste"]["novos"] == 20
+    sm.run("manual", ["direto_teste"], manual=True)                  # mesmas linhas: nada novo
+    f = sm.snapshot()["fontes"]["direto_teste"]
+    assert f["novos"] == 0 and f["estado"] == "sem_novidades"
+
+
+def test_audit_public_endpoint_with_data_is_not_unconfigured(tmp_path):
+    """Caso real do CI: Comtrade (chave opcional) gravou 120 registros sem chave e aparecia como 'Não configurada'."""
+    from gpi.market.audit import audit
+    from test_v05 import Creds as C
+    sm, db = _sm(tmp_path, MLHttp())
+    sm.run("manual", ["ml_trends"])
+    a = audit(db, sm.store, C({}), {}, sm.connectors)                 # sem nenhuma credencial salva
+    r = {x["fonte"]: x for x in a["fontes"]}["ml_trends"]
+    assert not r["A_configuracao"]["credenciais_configuradas"] and r["fase"] in ("funcional", "dados_armazenados")
+    # sem dados e sem credencial continua 'Não configurada'
+    vazio = audit(Database(tmp_path / "v.sqlite"), sm.store.__class__(Database(tmp_path / "v.sqlite")), C({}), {}, sm.connectors)
+    assert {x["fonte"]: x for x in vazio["fontes"]}["ml_trends"]["fase"] == "nao_configurada"

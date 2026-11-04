@@ -66,6 +66,20 @@ DONE = {"concluido", "atualizado", "em_cache", "ignorado", "requer_autorizacao",
         "sem_novidades", "pendente", "sem_coleta"}
 
 
+_DIRECT_TABLES = (("search_observations", "source"), ("content_items", "source"), ("social_observations", "platform"))
+
+
+def _direct_rows(db, source: str) -> int:
+    """Linhas da fonte nas tabelas gravadas diretamente pelos conectores (a chave primária começa pela fonte)."""
+    n = 0
+    for table, col in _DIRECT_TABLES:
+        try:
+            n += int(db.query(f"SELECT COUNT(*) AS n FROM {table} WHERE {col} = ?", (source,))[0]["n"])
+        except Exception:  # noqa: BLE001 — tabela ausente em bancos antigos
+            pass
+    return n
+
+
 @dataclass
 class SyncContext:
     http: HttpClient
@@ -513,10 +527,15 @@ class SyncManager:
                 try:
                     if ctx.obs_counts is not None:
                         ctx.obs_counts[c.id] = {"novas": 0, "revisadas": 0}
+                    before = _direct_rows(self.store.db, c.id)
                     batches, products = c.run(j, ctx)
                     direct = (ctx.obs_counts or {}).get(c.id) or {}
-                    res["novas"] += direct.get("novas", 0)
-                    res["revisadas"] += direct.get("revisadas", 0)
+                    if direct.get("novas") or direct.get("revisadas"):
+                        res["novas"] += direct.get("novas", 0)
+                        res["revisadas"] += direct.get("revisadas", 0)
+                    else:
+                        # conector que grava direto nas tabelas (Trends RSS, RSS, redes…): conta as linhas novas
+                        res["novas"] += max(0, _direct_rows(self.store.db, c.id) - before)
                     for b in batches:
                         validate_batch(b)
                     for p in products:
