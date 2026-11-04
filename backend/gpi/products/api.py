@@ -61,12 +61,13 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
 
     def result() -> dict:
         r = sync.store.load_result("consumer")
-        if r:
+        if r and "testes_multiplos" in r:              # v0.8.1: resultado de versão anterior é recalculado
             return r
+        r = None
         # primeira abertura: mostra imediatamente o que existe localmente (sem previsões)
         with lock:
             r = sync.store.load_result("consumer")
-            if not r:
+            if not r or "testes_multiplos" not in r:
                 from . import trends
                 r = trends.analyze(db, cfg, forecasts=False, today=sync.today_fn())
                 sync.store.save_result("consumer", r)
@@ -111,14 +112,36 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
                   "gerado_em": r["gerado_em"], "metricas": METRICS,
                   "intencao_modelo": r.get("intencao_modelo")})
 
+    def regional(cc: str) -> list[dict]:
+        """Presença por UF/região nos top 25 do Google Trends (BigQuery) — presença, NÃO volume nem participação."""
+        try:
+            rows = db.query("SELECT product_id, region, COUNT(DISTINCT ref_date) AS semanas, MAX(value) AS indice "
+                            "FROM search_observations WHERE source = 'google_trends_bq' AND country = ? AND region <> '' "
+                            "AND product_id IS NOT NULL GROUP BY product_id, region", (cc,))
+        except Exception:  # noqa: BLE001
+            return []
+        by = {}
+        for x in rows:
+            b = by.setdefault(x["product_id"], {"product_id": x["product_id"], "regioes": [], "semanas": 0})
+            b["regioes"].append(x["region"])
+            b["semanas"] = max(b["semanas"], x["semanas"])
+        return sorted(by.values(), key=lambda b: -len(b["regioes"]))[:50]
+
     async def country(request):
-        cc = request.path_params["cc"].upper()
+        raw = request.path_params["cc"]
+        cc = ("LANG:" + raw.split(":", 1)[1].lower()) if raw.upper().startswith("LANG:") else raw.upper()
         r = await run_in_threadpool(result)
         if cc not in r["paises"]:
-            return j({"erro": "país não suportado"}, 404)
+            return j({"erro": "país ou público linguístico não suportado (atualize a análise)"}, 404)
         page = r["paises"][cc]
         aux = [s for s in r["series"] if s["page"] == cc and METRICS[s["metric"]]["tipo"] not in ("busca", "busca_ranking")]
-        return j({**page, "auxiliares": aux[:60], "metricas": METRICS})
+        lang = cc.startswith("LANG:")
+        rel = {"BR": "LANG:pt", "US": "LANG:en", "CN": "LANG:zh"}.get(cc)
+        return j({**page, "auxiliares": aux[:60], "metricas": METRICS, "dimensao": "público linguístico" if lang else "mercado geográfico",
+                  "aviso_dimensao": ("Público linguístico: leitores de uma edição da Wikipédia em qualquer país. NÃO é o mercado de um "
+                                     "país e mede atenção, não demanda." if lang else None),
+                  "publico_linguistico_relacionado": rel,
+                  "regional": [] if lang else await run_in_threadpool(regional, cc)})
 
     def _insights():
         from .insights import build

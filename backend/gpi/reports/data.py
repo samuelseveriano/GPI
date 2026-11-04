@@ -185,7 +185,7 @@ class Collector:
         self.today = today or date.today()
         st = MarketStore(db)
         self.cons = st.load_result("consumer") or {}
-        if not self.cons:
+        if not self.cons or "testes_multiplos" not in self.cons:      # v0.8.1: cache de versão anterior
             from ..products import trends
             self.cons = trends.analyze(db, self.cfg, forecasts=False, today=self.today)
         self.social = st.load_result("social") or {}
@@ -658,7 +658,7 @@ class Collector:
             from ..market.store import MarketStore
             st = MarketStore(self.db)
             r = st.load_result(service.RESULT)
-            if not r:
+            if not r or r.get("versao") != "0.8.1":
                 from ..products.catalog import Catalog
                 prods = {p["product_id"]: p for p in Catalog(self.db, self.cfg).products()}
                 r = service.compute(self.db, self.cons, prods, self.today)
@@ -906,7 +906,7 @@ def exec08_text(v8: dict, f: Filters) -> dict:
                  "custos de importação e fornecedores antes de qualquer decisão."})
     intl = [{"produto": c["produto"], "forca": None, "detalhe": f"{c['indicador']} ({c['fonte']}): {c['mercado_a']} "
              f"{(c['variacao_a'] or 0) * 100:+.0f}% × {c['mercado_b']} {(c['variacao_b'] or 0) * 100:+.0f}%"}
-            for c in v8["comparacao_internacional"][:8] if f.match_product(c["produto_id"])]
+            for c in v8["comparacao_internacional"]["mercados"][:8] if f.match_product(c["produto_id"])]
     lim = ["Pesquisas, rankings e atenção não são unidades vendidas; nenhuma conversão para vendas é feita.",
            "Ranking do Mercado Livre é posição, não volume; Wikipédia e notícias são atenção, não demanda.",
            "Scores priorizam investigação e não são probabilidade de sucesso. Ausência de dados não é baixa demanda.",

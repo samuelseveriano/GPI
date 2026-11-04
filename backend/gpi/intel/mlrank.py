@@ -45,7 +45,8 @@ def load(db) -> list[dict]:
 def term_stats(positions: dict[str, float], weeks: list[str]) -> dict:
     present = [w for w in weeks if w in positions]
     pos = [positions[w] for w in present]
-    out = {"semanas_coletadas": len(weeks), "semanas_presente": len(present),
+    out = {"historico": [[w, positions.get(w)] for w in weeks][-26:],
+           "semanas_coletadas": len(weeks), "semanas_presente": len(present),
            "persistencia": round(len(present) / len(weeks), 3) if weeks else None,
            "melhor_posicao": int(min(pos)) if pos else None, "posicao_media": round(float(np.mean(pos)), 1) if pos else None,
            "ultima_posicao": int(positions[present[-1]]) if present else None, "primeira_semana": present[0] if present else None,

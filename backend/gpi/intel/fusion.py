@@ -38,7 +38,7 @@ INTERMEDIATE = {"NOVO SINAL COMERCIAL", "SINAL EM OBSERVAÇÃO", "INTERESSE RECO
                 "ATENÇÃO PÚBLICA EM ALTA", "VARIAÇÃO NÃO CONFIRMADA"}
 CLASSES = ["NOVO SINAL COMERCIAL", "EMERGENTE", "SINAL EM OBSERVAÇÃO", "INTERESSE RECORRENTE", "SINAL INTERMITENTE",
            "CRESCIMENTO CONSISTENTE", "ACELERAÇÃO", "ESTÁVEL", "SAZONAL", "POSSÍVEL SATURAÇÃO", "VARIAÇÃO NÃO CONFIRMADA",
-           "DECLÍNIO", "ATENÇÃO PÚBLICA EM ALTA", "EVIDÊNCIA INSUFICIENTE"]
+           "POSSÍVEL DECLÍNIO", "MUDANÇA NA FONTE", "DECLÍNIO", "ATENÇÃO PÚBLICA EM ALTA", "EVIDÊNCIA INSUFICIENTE"]
 CLASS_DEF = {
     "NOVO SINAL COMERCIAL": "Primeira presença num ranking comercial (1 semana). Não é crescimento sustentado.",
     "EMERGENTE": "Primeira observação recente numa fonte de pesquisa (≤ 3 meses).",
@@ -51,7 +51,9 @@ CLASS_DEF = {
     "SAZONAL": "Sazonalidade significativa, sem tendência.",
     "POSSÍVEL SATURAÇÃO": "Crescimento com desaceleração > 10 p.p. e nível perto do máximo histórico.",
     "VARIAÇÃO NÃO CONFIRMADA": "Queda > 15% na comparação recente, sem significância estatística nem persistência — não é declínio.",
-    "DECLÍNIO": "Tendência de queda significativa, ou queda > 15% com base suficiente e persistência ≤ 40%.",
+    "DECLÍNIO": "Declínio confirmado NA MÉTRICA OBSERVADA: tendência de queda significativa após correção para múltiplos testes (BH), ou queda > 15% com base suficiente e persistência ≤ 40%.",
+    "POSSÍVEL DECLÍNIO": "Queda > 15% com base suficiente e persistência baixa, sem significância após a correção para múltiplos testes.",
+    "MUDANÇA NA FONTE": "A queda acompanha a queda geral da fonte (mediana dos artigos do mesmo idioma) — não é queda específica do produto.",
     "ATENÇÃO PÚBLICA EM ALTA": "Leituras/notícias acima da mediana dos demais produtos, SEM evidência de pesquisa ou compra.",
     "EVIDÊNCIA INSUFICIENTE": "Sem série elegível de pesquisa ou sinal comercial.",
 }
@@ -67,7 +69,9 @@ NEXT = {
     "SAZONAL": "Planejar a investigação antes do pico sazonal; comparar o mesmo período de anos diferentes.",
     "POSSÍVEL SATURAÇÃO": "Cautela: verificar concorrência e se o crescimento está perdendo força.",
     "VARIAÇÃO NÃO CONFIRMADA": "Aguardar novos períodos: a queda ainda não é estatisticamente confirmada.",
-    "DECLÍNIO": "Baixa prioridade enquanto a queda persistir.",
+    "DECLÍNIO": "Baixa prioridade enquanto a queda persistir (vale para a métrica observada, não para vendas).",
+    "POSSÍVEL DECLÍNIO": "Acompanhar: a queda ainda não é estatisticamente confirmada.",
+    "MUDANÇA NA FONTE": "Desconsiderar como sinal do produto: a fonte inteira mudou de patamar.",
     "ATENÇÃO PÚBLICA EM ALTA": "Atenção não é demanda: verificar volume de buscas ou ranking comercial antes de qualquer conclusão.",
     "EVIDÊNCIA INSUFICIENTE": "Coletar dados de pesquisa ou ranking comercial (mais períodos ou outra fonte).",
 }
@@ -130,7 +134,13 @@ def _evidence(s: dict, cohort: dict, fc: dict) -> dict:
           "mercado": s.get("pais_nome") or s.get("country"), "pais": s.get("country"),
           "periodo": f"{ind.get('primeiro') or '—'} a {ind.get('ultimo') or '—'}", "observacoes_n": ind.get("n"),
           "frequencia": s.get("period"), "elegibilidade": e["metodos"], "motivos_inelegibilidade": e["motivos"],
-          "classe_serie": ind.get("classe")}
+          "classe_serie": ind.get("classe"), "pagina": s.get("page"),
+          "dimensao": "público linguístico" if str(s.get("page", "")).startswith("LANG:") else "mercado geográfico",
+          "completude_n": sum(1 for v in (ind.get("valores") or []) if v),
+          "serie_valores": [round(float(v), 2) for v in (ind.get("valores") or [])[-24:]],
+          "serie_rotulos": (ind.get("labels") or [])[-24:]}
+    from .commercial import evidence_class
+    ev.update(evidence_class(tipo))
     if s.get("market_series_id"):
         labs = ind.get("labels") or []
         ev["observacoes"] = [f"ms:{s['market_series_id']}@{d}-01" for d in labs[-12:]]
@@ -147,7 +157,7 @@ def _evidence(s: dict, cohort: dict, fc: dict) -> dict:
         derived["mudancas_patamar"] = ind.get("pontos_mudanca") or []
         derived["anomalias"] = ind.get("anomalias") or []
         derived["reversao"] = reversal(ind.get("valores"))
-    if e["metodos"].get("sazonalidade"):
+    if e["metodos"].get("sazonalidade") or (ind.get("sazonalidade") or {}).get("classificacao") in ("confirmada", "possível"):
         derived["sazonalidade"] = ind.get("sazonalidade")
     if s["metric"] == "visualizacoes" and ind.get("crescimento") is not None and s["country"] in cohort:
         med = cohort[s["country"]]
@@ -177,8 +187,9 @@ def _demand_status(ev: dict) -> str:
         return "EVIDÊNCIA INSUFICIENTE"
     tt = d.get("tendencia") or {}
     g = d.get("momentum")
-    sig_up = tt.get("significativa") and tt.get("direcao") == "crescimento"
-    sig_dn = tt.get("significativa") and tt.get("direcao") == "queda"
+    sig = tt.get("significativa_bh", tt.get("significativa"))          # v0.8.1: significância ajustada (BH) quando houver
+    sig_up = sig and tt.get("direcao") == "crescimento"
+    sig_dn = sig and tt.get("direcao") == "queda"
     pers = d.get("persistencia")
     if cls == "emergente":
         return "EMERGENTE"
@@ -192,6 +203,10 @@ def _demand_status(ev: dict) -> str:
         return "SINAL EM OBSERVAÇÃO"
     if sig_dn or ((g or 0) < -0.15 and pers is not None and pers <= 0.4 and ev["elegibilidade"].get("aceleracao")):
         return "DECLÍNIO"
+    if cls == "mudança na fonte":
+        return "MUDANÇA NA FONTE"
+    if (g or 0) < -0.15 and cls == "possível declínio":
+        return "POSSÍVEL DECLÍNIO"
     if (g or 0) < -0.15:
         return "VARIAÇÃO NÃO CONFIRMADA"
     if cls == "sazonal":
@@ -232,7 +247,9 @@ def product(pid: str, lst: list[dict], prod: dict, ml: dict | None, fc: dict, sc
                     "motivos_inelegibilidade": {"previsao": "ranking sem volume — avaliado por persistência e posição"},
                     "derivado": {k: ml.get(k) for k in ("semanas_coletadas", "semanas_presente", "persistencia", "melhor_posicao",
                                                        "posicao_media", "ultima_posicao", "variacao_posicao", "entradas", "saidas",
-                                                       "reaparecimentos", "estabilidade", "classe")},
+                                                       "reaparecimentos", "estabilidade", "classe", "primeira_semana", "ultima_semana",
+                                                       "historico")},
+                    "pagina": "BR", "dimensao": "mercado geográfico", "classe": "B", "classe_nome": "Intenção comercial",
                     "observacoes": ml["observacoes"], "termos": ml["termos"], "classe_serie": ml["classe"]})
     by_type = defaultdict(list)
     for e in evs:
@@ -346,11 +363,15 @@ def product(pid: str, lst: list[dict], prod: dict, ml: dict | None, fc: dict, sc
     if mq and not mq["confiavel"]:
         alerts.append({"tipo": "qualidade dos dados", "detalhe": f"apenas {mq['fracao_confirmada']:.0%} dos termos associados ao produto "
                        "têm correspondência confirmada"})
-    return {"produto_id": pid, "identificacao": _ident(pid, prod), "situacao": status, "definicao_situacao": CLASS_DEF[status],
+    out = {"produto_id": pid, "identificacao": _ident(pid, prod), "situacao": status, "definicao_situacao": CLASS_DEF[status],
             "radar": radar, "indices": idx, "indices_motivos": why, "evidencias": evs, "confirmacao_cruzada": cross,
             "alertas": alerts, "correspondencia": mq, "linhagem": lin,
             "fontes": sorted({e["fonte_nome"] for e in evs}), "tipos_evidencia": sorted({e["tipo"] for e in evs if e["tipo"]}),
             "proxima_acao": NEXT[status]}
+    from . import commercial
+    out["pontuacao"] = commercial.scores(out)
+    out["niveis"] = commercial.levels(out)
+    return out
 
 
 def _ident(pid: str, prod: dict) -> dict:

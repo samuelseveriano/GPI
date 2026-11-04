@@ -1,0 +1,68 @@
+# Conjunto rotulado manualmente (v0.8.1, 04/11/2026) para o Product Discovery Engine. Termos no estilo de rankings de
+# marketplace e listas de alta. Escrito ANTES de executar o classificador. colunas: classe	idioma	termo
+produto identificado	pt	cadeira gamer
+produto identificado	pt	carregador usb-c 20w
+produto identificado	pt	fone bluetooth jbl
+produto identificado	pt	air fryer mondial 4 litros
+produto identificado	pt	smartwatch samsung
+produto identificado	pt	fechadura digital biométrica
+produto identificado	pt	aspirador robô
+produto identificado	pt	mini projetor portátil
+produto identificado	pt	ventilador de mesa 40cm
+produto identificado	pt	power bank 20000mah
+produto identificado	pt	câmera de segurança wi-fi
+produto identificado	pt	lâmpada inteligente wi-fi
+produto identificado	pt	controle gamer sem fio
+produto identificado	pt	teclado mecânico redragon
+produto identificado	pt	monitor 27 polegadas
+família de produtos	pt	carregador
+família de produtos	pt	air fryer
+família de produtos	pt	ventilador
+família de produtos	pt	smartwatch
+família de produtos	pt	power bank
+família de produtos	pt	aspirador de pó
+família de produtos	pt	fone de ouvido
+família de produtos	pt	projetor
+família de produtos	pt	patinete elétrico
+família de produtos	pt	ring light
+categoria genérica	pt	eletrônicos
+categoria genérica	pt	eletrodomésticos
+categoria genérica	pt	roupas
+categoria genérica	pt	ofertas
+categoria genérica	pt	black friday
+categoria genérica	pt	ferramentas
+marca	pt	samsung
+marca	pt	xiaomi
+marca	pt	jbl
+marca	pt	apple
+serviço	pt	seguro celular
+serviço	pt	assinatura netflix
+serviço	pt	curso de inglês
+serviço	pt	frete grátis
+serviço	pt	conserto de celular
+entretenimento	pt	trailer filme
+entretenimento	pt	clipe oficial
+entretenimento	pt	gameplay free fire
+entretenimento	pt	novela das nove
+notícia	pt	prefeitura anuncia obras
+notícia	pt	resultado da mega sena
+notícia	pt	previsão do tempo
+notícia	pt	cantor morre
+notícia	pt	jogo do flamengo
+notícia	pt	eleição 2026
+termo ambíguo	pt	monitor
+termo ambíguo	pt	switch
+termo ambíguo	pt	mixer
+termo ambíguo	pt	alarme
+não comercial	pt	como fazer bolo
+não comercial	pt	horóscopo
+não comercial	pt	significado de sonhos
+não comercial	pt	receita de pão
+produto identificado	en	gaming chair
+produto identificado	en	robot vacuum
+produto identificado	en	wireless earbuds
+família de produtos	en	air fryer
+família de produtos	en	projector
+marca	en	anker
+serviço	en	phone insurance
+notícia	en	election results
