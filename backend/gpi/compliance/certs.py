@@ -100,7 +100,13 @@ def load_anatel_zip(db, raw: bytes, origem: str) -> dict:
                 "anatel_sha256": hashlib.sha256(raw).hexdigest(), "anatel_registros": str(n_rows)}
         for k, v in meta.items():
             db.execute("INSERT OR REPLACE INTO ncm_meta VALUES (?, ?)", (k, v))
-    return {"registros": n_rows, "sha256": meta["anatel_sha256"]}
+    out = {"registros": n_rows, "sha256": meta["anatel_sha256"]}
+    try:   # v0.8: tabela completa (titular, CNPJ, certificado, validade, situações, país do fabricante) do MESMO arquivo
+        from ..regulatory.registry import load_anatel_zip_v2
+        out["registros_completos"] = load_anatel_zip_v2(db, raw, origem)["registros"]
+    except Exception as e:  # noqa: BLE001 — arquivo antigo/diferente: a consulta básica continua funcionando
+        out["registros_completos_erro"] = str(e)[:200]
+    return out
 
 
 def _is_utf8(b: bytes) -> bool:

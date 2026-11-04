@@ -1,0 +1,143 @@
+# Conjunto de avaliação ROTULADO MANUALMENTE (v0.8). Independente das regras do motor; não usado para ajustá-las.
+# colunas: grupo	idioma	esperado (núcleo; vazio = NÃO deve associar)	variante	texto
+comercial	pt	air_fryer		air fryer
+comercial	pt	air_fryer		fritadeira elétrica sem óleo
+comercial	pt	air_fryer		comprar air fryer barata
+comercial	pt	charger		carregador turbo
+comercial	pt	power_bank		power bank
+comercial	pt	smartwatch		smartwatch
+comercial	pt	earbuds		fone bluetooth
+comercial	pt	speaker		caixa de som bluetooth
+comercial	pt	projector		mini projetor portátil
+comercial	pt	vacuum		aspirador robô
+comercial	pt	action_camera		câmera de ação
+comercial	pt	helmet		capacete de moto
+comercial	pt	drill		furadeira sem fio
+comercial	pt	ring_light		ring light
+comercial	pt	lock		fechadura inteligente
+comercial	pt	lock		fechadura digital biométrica
+comercial	pt	bulb		lâmpada inteligente wi-fi
+comercial	pt	led_strip		fita led
+comercial	pt	tv_box		tv box
+comercial	pt	game_controller		controle gamer sem fio
+comercial	pt	keyboard		teclado mecânico
+comercial	pt	mouse		mouse gamer
+comercial	pt	monitor		monitor gamer 27 polegadas
+comercial	pt	router		roteador wi-fi 6
+comercial	pt	ssd		ssd 1tb
+comercial	pt	dash_cam		câmera veicular
+comercial	pt	tire_inflator		compressor de ar portátil para pneu
+comercial	pt	hair_dryer		secador de cabelo
+comercial	pt	hair_straightener		chapinha
+comercial	pt	toothbrush		escova de dentes elétrica
+comercial	pt	scale		balança de bioimpedância
+comercial	pt	oximeter		oxímetro de dedo
+comercial	pt	drone		drone com câmera
+comercial	pt	scooter		patinete elétrico
+comercial	pt	pet_fountain		fonte de água para gatos
+comercial	pt	solar_panel		painel solar
+comercial	pt	power_station		estação de energia portátil
+comercial	pt	fan		ventilador de mesa
+comercial	pt	humidifier		umidificador de ar
+comercial	pt	blender		liquidificador portátil
+comercial	pt	coffee_maker		cafeteira elétrica
+comercial	pt	kettle		chaleira elétrica
+comercial	pt	baby_monitor		babá eletrônica
+comercial	pt	gimbal		estabilizador gimbal para celular
+comercial	pt	microphone		microfone de lapela sem fio
+comercial	pt	soundbar		soundbar
+comercial	pt	webcam		webcam full hd
+comercial	pt	phone_case		capinha para iphone
+comercial	pt	screen_protector		película de vidro
+variante	pt	charger	20w	carregador usb-c 20w
+variante	pt	charger	65w	carregador usb-c 65w
+variante	pt	charger	140w	carregador 140w gan
+variante	pt	power_bank	20000mah	power bank 20000mah
+variante	pt	power_bank	10000mah	carregador portátil 10000mah
+variante	pt	ssd	512gb	ssd nvme 512gb
+variante	pt	monitor	24pol	monitor 24 polegadas
+variante	pt	projector	4k	projetor 4k
+variante	en	charger	20w	20W USB-C charger
+variante	en	charger	100w	100W GaN charger
+variante	en	power_bank	20000mah	20000mAh power bank
+variante	pt	air_fryer	4l	air fryer 4 litros
+variante	pt	air_fryer	12l	air fryer oven 12 litros
+sinonimo	pt	earbuds		fone de ouvido sem fio
+sinonimo	pt	earbuds		fone tws
+sinonimo	pt	smartwatch		relógio inteligente
+sinonimo	pt	power_bank		bateria externa
+sinonimo	pt	speaker		caixinha de som
+sinonimo	pt	dash_cam		dashcam
+sinonimo	pt	scooter		patinete
+sinonimo	pt	lock		fechadura eletrônica
+sinonimo	pt	vacuum		robô aspirador
+sinonimo	pt	charger		fonte de celular
+multilingue	en	air_fryer		air fryer review
+multilingue	en	earbuds		wireless earbuds
+multilingue	en	lock		smart lock
+multilingue	en	vacuum		robot vacuum
+multilingue	en	action_camera		action camera
+multilingue	en	power_station		portable power station
+multilingue	en	smartwatch		best smartwatch under 100
+multilingue	es	air_fryer		freidora de aire
+multilingue	es	earbuds		audífonos inalámbricos
+multilingue	es	lock		cerradura inteligente
+multilingue	zh	lock		智能门锁
+multilingue	zh	charger		氮化镓充电器
+multilingue	zh	power_bank		充电宝
+multilingue	zh	air_fryer		空气炸锅
+multilingue	zh	vacuum		扫地机器人
+multilingue	zh	earbuds		蓝牙耳机
+video	pt	air_fryer		REVIEW: Air fryer Mondial vale a pena? Teste completo
+video	pt	earbuds		Unboxing fone bluetooth QCY T13 – teste de áudio
+video	pt	vacuum		Robô aspirador barato: vale a pena? Análise honesta
+video	pt	projector		Mini projetor HY300 review: o melhor custo benefício?
+video	en	smartwatch		Amazfit Bip 5 smartwatch review after 30 days
+video	en	power_station		EcoFlow River 2 portable power station unboxing
+video	pt	action_camera		Teste da câmera de ação SJCAM no trilha de moto
+video	pt			MC Kevin – Lancei a Brabo (Videoclipe Oficial)
+video	pt			Gameplay ao vivo: Free Fire com os inscritos
+video	pt			React: assistindo trailer do novo filme da Marvel
+video	en			Official Music Video - Summer Hits 2026
+video	pt			Melhores momentos: Flamengo x Palmeiras
+video	pt			Podcast Flow #500 com convidado especial
+video	pt	charger		Carregador original vs paralelo: teste de velocidade
+video	pt	drone		Drone DJI Mini 4 Pro review completo
+noticia	pt			Câmara dos Deputados aprova projeto de lei sobre impostos
+noticia	pt			Nintendo Switch 2 tem novos jogos anunciados
+noticia	pt			Black Mirror: nova temporada estreia na Netflix
+noticia	pt			Toy Story 5 ganha data de lançamento
+noticia	pt			Cantor morre aos 45 anos após show
+noticia	pt			Eleição: candidatos fazem debate na TV
+noticia	pt	air_fryer		Air fryer: Procon alerta para riscos de modelos sem certificação
+noticia	pt	scooter		Patinetes elétricos ganham novas regras de circulação em São Paulo
+noticia	en	earbuds		Apple unveils new wireless earbuds with better noise cancelling
+noticia	pt	drone		Anatel atualiza regras para homologação de drones
+nao_comercial	pt			como fazer bolo de cenoura
+nao_comercial	pt			previsão do tempo amanhã
+nao_comercial	pt			resultado da mega sena
+nao_comercial	pt			horóscopo de hoje
+nao_comercial	pt			jogo do brasil hoje
+nao_comercial	pt			black friday
+nao_comercial	en			weather tomorrow
+nao_comercial	pt			whatsapp web
+nao_comercial	pt			netflix
+nao_comercial	pt			bbb 26
+ambiguo	pt			switch
+ambiguo	pt			monitor
+ambiguo	pt			mirror
+ambiguo	pt			plug
+ambiguo	pt			sensor
+ambiguo	en			fan
+ambiguo	pt			lock
+ambiguo	pt			scale
+ambiguo	pt			mixer
+ambiguo	en			safe
+ambiguo	pt			fã clube do cantor
+ambiguo	pt			plug and play
+ambiguo	pt			dj mixer profissional
+ambiguo	pt	switch		interruptor inteligente wi-fi
+ambiguo	pt	plug		tomada inteligente
+ambiguo	pt	motion_sensor		sensor de presença
+ambiguo	pt	fan		ventilador de teto
+ambiguo	en	mixer		stand mixer for baking

@@ -1,0 +1,84 @@
+# Conjunto de TESTE (holdout) rotulado manualmente em 04/11/2026, escrito ANTES de qualquer execução do motor sobre ele
+# e NUNCA usado para ajustar regras. O número reportado para este conjunto é a medida honesta da v0.8.
+# colunas: grupo	idioma	esperado (núcleo; vazio = NÃO deve associar)	variante	texto
+comercial	pt	air_fryer		air fryer 5 litros mondial
+comercial	pt	smartwatch		smartwatch feminino à prova d'água
+comercial	pt	earbuds		fone de ouvido bluetooth com cancelamento de ruído
+comercial	pt	power_bank		bateria portátil para celular
+comercial	pt	charger		carregador rápido samsung
+comercial	pt	cable		cabo usb-c 2 metros
+comercial	pt	phone_holder		suporte de celular para carro
+comercial	pt	ring_light		ring light com tripé
+comercial	pt	microphone		microfone condensador usb
+comercial	pt	keyboard		teclado sem fio para notebook
+comercial	pt	router		roteador mesh
+comercial	pt	pendrive		pendrive 64gb
+comercial	pt	usb_hub		hub usb-c
+comercial	pt	webcam		webcam para live
+comercial	pt	lamp		luminária de mesa led
+comercial	pt	flashlight		lanterna tática recarregável
+comercial	pt	vacuum		aspirador vertical sem fio
+comercial	pt	air_purifier		purificador de ar
+comercial	pt	diffuser		difusor de aromas ultrassônico
+comercial	pt	pressure_washer		lavadora de alta pressão
+comercial	pt	multimeter		multímetro digital
+comercial	pt	soldering_iron		ferro de solda
+comercial	pt	saw		serra tico-tico
+comercial	pt	laser_level		nível a laser
+comercial	pt	jump_starter		auxiliar de partida para carro
+comercial	pt	gps		gps para moto
+comercial	pt	shaver		barbeador elétrico
+comercial	pt	massager		massageador elétrico
+comercial	pt	thermometer		termômetro infravermelho
+comercial	pt	blood_pressure		medidor de pressão digital
+comercial	pt	water_bottle		garrafa térmica
+comercial	pt	tent		barraca de camping 4 pessoas
+comercial	pt	pet_feeder		comedouro automático para gatos
+comercial	pt	inverter		inversor solar
+comercial	pt	doorbell		campainha inteligente com câmera
+comercial	pt	camera		câmera de segurança wi-fi
+comercial	pt	plug		tomada inteligente wi-fi
+comercial	pt	motion_sensor		sensor de movimento
+comercial	pt	heater		aquecedor elétrico
+comercial	pt	dehumidifier		desumidificador
+variante	pt	charger	30w	carregador 30w usb-c
+variante	pt	charger	45w	carregador gan 45w
+variante	pt	power_bank	5000mah	power bank 5000mah magsafe
+variante	pt	ssd	2tb	ssd 2tb
+variante	pt	monitor	27pol	monitor 27 polegadas 165hz
+variante	en	charger	65w	65W laptop charger
+variante	en	projector	4k	4K projector for home theater
+sinonimo	pt	earbuds		fone in-ear sem fio
+sinonimo	pt	smartwatch		pulseira inteligente
+sinonimo	pt	speaker		alto-falante bluetooth
+sinonimo	pt	soundbar		barra de som
+sinonimo	pt	phone_case		capa de celular
+multilingue	en	vacuum		cordless vacuum cleaner
+multilingue	en	speaker		portable bluetooth speaker
+multilingue	en	dash_cam		dash cam 4k
+multilingue	es	smartwatch		reloj inteligente para mujer
+multilingue	es	speaker		altavoz bluetooth portátil
+multilingue	es	vacuum		aspiradora robot
+multilingue	zh	smartwatch		智能手表
+multilingue	zh	projector		投影仪
+multilingue	zh	drone		无人机
+video	pt	air_fryer		Testei a air fryer mais barata da Shopee
+video	pt	smartwatch		Smartwatch de 100 reais presta? Review sincero
+video	en	earbuds		Best budget earbuds 2026 - tested and ranked
+video	pt			Clipe oficial - Pagode do verão ao vivo
+video	pt			Gameplay completo do novo jogo de terror
+video	en			Movie trailer reaction with friends
+noticia	pt			Fã clube organiza encontro para estreia do filme
+noticia	pt			Prefeitura anuncia nova linha de ônibus
+noticia	pt	smartphone		Celulares sem homologação da Anatel são apreendidos em operação
+noticia	en			Election results announced in several states
+nao_comercial	pt			receita de pão de queijo
+nao_comercial	pt			horário do jogo do corinthians
+nao_comercial	pt			cotação do dólar hoje
+nao_comercial	en			how to learn english fast
+nao_comercial	pt			concurso público 2026
+ambiguo	pt			alarme
+ambiguo	pt			espelho
+ambiguo	en			speaker
+ambiguo	pt			nintendo switch 2
+ambiguo	en			toy story

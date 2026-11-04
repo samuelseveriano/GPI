@@ -228,9 +228,18 @@ def indicators(s: dict, today: date) -> dict:
         first = min(days) if days else None
         ind["dias_historico"] = (today - first).days + 1 if first else 0
         ind["emergente"] = bool(first and (today - first).days <= 30)
-        ind["crescimento"] = ind.get("crescimento_30d")
-        ind["classe"] = "emergente" if ind["emergente"] else ("crescimento" if (ind["crescimento"] or 0) > 0.15
-                                                               else "declínio" if (ind["crescimento"] or 0) < -0.15 else "estável")
+        from ..intel.semantics import METRICS as SEM
+        if not SEM.get(s["metric"], {}).get("crescimento_pct", True):
+            # v0.8: posição em ranking, lista de alta e índice relativo NÃO geram % de crescimento de volume
+            for w in (7, 30, 90):
+                ind.pop(f"crescimento_{w}d", None)
+            ind["crescimento"] = None
+            ind["sem_crescimento_pct"] = "métrica de presença/posição: avaliada por persistência, não por variação percentual"
+            ind["classe"] = "emergente" if ind["emergente"] else ("presença recorrente" if ind["dias_em_alta_30d"] >= 3 else "estável")
+        else:
+            ind["crescimento"] = ind.get("crescimento_30d")
+            ind["classe"] = "emergente" if ind["emergente"] else ("crescimento" if (ind["crescimento"] or 0) > 0.15
+                                                                   else "declínio" if (ind["crescimento"] or 0) < -0.15 else "estável")
         ind["valores_semanais"] = _weekly(days, today)
         return ind
     m = _monthly(s["points"], today)
