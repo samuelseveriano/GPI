@@ -51,10 +51,17 @@ METRICS = {
                        "mede": "Artigos de notícias no mundo que citam o produto — repercussão, NÃO consumo",
                        "tipo": "popularidade", "peso_conf": 0.4},
 }
-COUNTRY_NAMES = {"BR": "Brasil", "US": "Estados Unidos", "CN": "China", "GLOBAL:pt": "Leitores em português (global)",
+COUNTRY_NAMES = {"LANG:pt": "Público em português (global)", "LANG:en": "Público em inglês (global)",
+                 "LANG:zh": "Público em chinês (global — não é a China continental)", "BR": "Brasil", "US": "Estados Unidos", "CN": "China", "GLOBAL:pt": "Leitores em português (global)",
                  "GLOBAL:en": "Leitores em inglês (global)", "GLOBAL:zh": "Leitores em chinês (global — não é a China continental)",
                  "GLOBAL:news": "Imprensa mundial (GDELT)"}
-PAGE_OF = {"BR": "BR", "US": "US", "CN": "CN", "GLOBAL:pt": "BR", "GLOBAL:en": "US", "GLOBAL:zh": "CN", "GLOBAL:news": "GLOBAL"}
+# v0.8.1: idioma NÃO é país — edições da Wikipédia são "públicos linguísticos" (LANG:xx), nunca Brasil/EUA/China
+PAGE_OF = {"BR": "BR", "US": "US", "CN": "CN", "GLOBAL:pt": "LANG:pt", "GLOBAL:en": "LANG:en", "GLOBAL:zh": "LANG:zh",
+           "GLOBAL:news": "GLOBAL"}
+GEO_PAGES = ("BR", "US", "CN")
+LANG_PAGES = ("LANG:pt", "LANG:en", "LANG:zh")
+LANG_NAMES = {"LANG:pt": "Público em português (global)", "LANG:en": "Público em inglês (global)",
+              "LANG:zh": "Público em chinês (global — não é a China continental)"}
 SOURCE_NAMES = {"ml_trends": "Mercado Livre Trends", "google_trends_bq": "Google Trends (BigQuery)", "gdelt": "GDELT",
                 "msads_kp": "Microsoft Advertising", "ebay": "eBay",
                 "google_ads_kp": "Google Ads (Planejador)", "google_trends_rss": "Google Trends — Trending Now",
@@ -259,7 +266,7 @@ def indicators(s: dict, today: date) -> dict:
     tail = y[-24:]
     tt = trend_test(tail) if len(tail) >= 6 else {}
     ind["tendencia"] = {k: tt.get(k) for k in ("direcao", "significativa", "p_valor", "inclinacao_relativa")} if tt else None
-    seas = seasonality_strength(y[-60:], 12) if len(y) >= 24 else None
+    seas = robust_seasonality(y[-60:], [p.month for p in m.index[-60:]], s["metric"]) if len(y) >= 24 else None
     ind["sazonalidade"] = seas
     if seas:
         prof = pd.Series(y[-60:]).groupby(np.arange(len(y[-60:])) % 12).mean()
@@ -312,8 +319,12 @@ def indicators(s: dict, today: date) -> dict:
         cls = "crescimento consistente"
     elif (g or 0) > 0.15:
         cls = "crescimento"
-    elif sig_dn or (g or 0) < -0.15:
+    elif sig_dn and base_ok:
         cls = "declínio"
+    elif (g or 0) < -0.15 and base_ok and ind.get("persistencia") is not None and ind["persistencia"] <= 0.4:
+        cls = "possível declínio"
+    elif (g or 0) < -0.15:
+        cls = "variação não confirmada"
     elif seas and seas.get("significativa"):
         cls = "sazonal"
     else:
@@ -321,6 +332,117 @@ def indicators(s: dict, today: date) -> dict:
     ind["classe"] = cls
     ind["crescimento"] = g
     return ind
+
+
+def robust_seasonality(y, months: list[int], metric: str) -> dict | None:
+    """Sazonalidade declarada só com evidência adequada (v0.8.1):
+    * ≥ 36 meses (3 ciclos) para CONFIRMAR; 24–35 meses → no máximo "possível sazonalidade";
+    * teste de Kruskal–Wallis significativo (p < 0,05) e força F_s ≥ 0,3;
+    * autocorrelação no lag 12 da série sem tendência acima de 1,96/√n;
+    * pico ESTÁVEL: o mês de maior valor (±1) se repete em ≥ 2/3 dos anos completos;
+    * ≤ 20% de meses sem valor.
+    Em métricas de atenção (Wikipédia, notícias), o padrão é "sazonalidade de atenção" — nunca sazonalidade comercial."""
+    y = np.asarray(y, float)
+    n = len(y)
+    base = seasonality_strength(y, 12)
+    if base is None:
+        return None
+    out = dict(base)
+    out["periodo"] = 12
+    out["ciclos"] = n // 12
+    zeros = float(np.mean(y <= 0)) if n else 1.0
+    det = pd.Series(y) - pd.Series(y).rolling(12, center=True, min_periods=6).mean()
+    det = det.dropna().values
+    acf = None
+    if len(det) > 14 and np.std(det) > 0:
+        acf = float(np.corrcoef(det[:-12], det[12:])[0, 1])
+    out["acf12"] = None if acf is None or not np.isfinite(acf) else round(acf, 3)
+    peaks = []
+    for k in range(n // 12):
+        blk = y[k * 12:(k + 1) * 12]
+        mb = months[k * 12:(k + 1) * 12]
+        if len(blk) == 12 and np.max(blk) > 0:
+            peaks.append(int(mb[int(np.argmax(blk))]))
+    stab = None
+    if len(peaks) >= 2:
+        ref = max(set(peaks), key=peaks.count)
+        stab = sum(1 for p in peaks if min(abs(p - ref), 12 - abs(p - ref)) <= 1) / len(peaks)
+        out["pico_mes"] = ref
+    out["estabilidade"] = None if stab is None else round(stab, 2)
+    kw_ok = bool(base.get("significativa")) and (base.get("fs") or 0) >= 0.3
+    acf_ok = out["acf12"] is not None and out["acf12"] > 1.96 / math.sqrt(max(1, n))
+    stab_ok = stab is not None and stab >= 2 / 3
+    ok = kw_ok and acf_ok and stab_ok and zeros <= 0.2
+    if ok and n >= 36:
+        cls = "confirmada"
+    elif ok or (kw_ok and (acf_ok or stab_ok)):
+        cls = "possível"
+    else:
+        cls = "não detectada"
+    out["classificacao"] = cls
+    out["significativa_teste"] = bool(base.get("significativa"))
+    out["significativa"] = cls == "confirmada"             # só a confirmada vale como "sazonal" no restante do GPI
+    out["tipo_indicador"] = "atenção" if metric in ("visualizacoes", "mencoes", "noticias_gdelt") else "pesquisa"
+    out["criterios"] = {"ciclos_ok": n >= 36, "teste_ok": kw_ok, "autocorrelacao_ok": acf_ok, "pico_estavel_ok": stab_ok,
+                        "lacunas_ok": zeros <= 0.2}
+    return out
+
+
+def bh_adjust(pvals: list[float]) -> list[float]:
+    """Benjamini–Hochberg (controle da taxa de falsas descobertas entre muitas séries testadas ao mesmo tempo)."""
+    m = len(pvals)
+    if not m:
+        return []
+    order = sorted(range(m), key=lambda i: pvals[i])
+    adj = [0.0] * m
+    prev = 1.0
+    for rank in range(m, 0, -1):
+        i = order[rank - 1]
+        prev = min(prev, pvals[i] * m / rank)
+        adj[i] = prev
+    return adj
+
+
+def apply_multiple_testing(series: list[dict]) -> dict:
+    """Ajusta a significância das tendências mensais pelo BH (q = 0,05) e rebaixa classes que dependiam do teste.
+    Na Wikipédia, quedas iguais às da coorte do idioma viram "mudança na fonte" (queda geral da plataforma)."""
+    # em série sazonal confirmada a tendência é julgada ano contra ano (não pelo p-valor): fica fora do BH
+    tested = [s for s in series if s.get("period") == "mes" and (s["ind"].get("tendencia") or {}).get("p_valor") is not None
+              and not (s["ind"].get("sazonalidade") or {}).get("significativa")]
+    adj = bh_adjust([s["ind"]["tendencia"]["p_valor"] for s in tested])
+    changed = defaultdict(int)
+    for s, q in zip(tested, adj):
+        tt = s["ind"]["tendencia"]
+        tt["p_ajustado_bh"] = round(q, 4)
+        tt["significativa_bh"] = q < 0.05
+        cls = s["ind"].get("classe")
+        if not tt["significativa_bh"]:
+            g = s["ind"].get("crescimento") or 0
+            if cls in ("crescimento consistente", "crescimento acelerado"):
+                s["ind"]["classe"] = "crescimento" if g > 0.15 else "estável"
+                changed[cls + " → não confirmado (BH)"] += 1
+            elif cls == "declínio":
+                s["ind"]["classe"] = "possível declínio"
+                changed["declínio → possível declínio (BH)"] += 1
+    by = defaultdict(list)
+    for s in series:
+        g = s["ind"].get("crescimento")
+        if s.get("metric") == "visualizacoes" and g is not None and s["ind"].get("base_suficiente"):
+            by[s["country"]].append(g)
+    med = {k: float(np.median(v)) for k, v in by.items() if len(v) >= 5}
+    for s in series:
+        if s.get("metric") != "visualizacoes" or s["country"] not in med:
+            continue
+        g = s["ind"].get("crescimento")
+        if g is None:
+            continue
+        rel = (1 + g) / (1 + med[s["country"]]) - 1 if (1 + med[s["country"]]) > 0 else None
+        s["ind"]["mediana_coorte"] = med[s["country"]]
+        s["ind"]["variacao_relativa_coorte"] = rel
+        if s["ind"].get("classe") in ("declínio", "possível declínio", "variação não confirmada") and rel is not None and rel > -0.15:
+            changed[s["ind"]["classe"] + " → mudança na fonte (coorte)"] += 1
+            s["ind"]["classe"] = "mudança na fonte"
+    return {"testes": len(tested), "medianas_coorte": med, "reclassificacoes": dict(changed)}
 
 
 def _weekly(days: dict, today: date) -> dict:
@@ -385,6 +507,37 @@ def lead_lag(a: list[float], b: list[float], max_lag: int = 6) -> dict | None:
             "aviso": "Sinal exploratório: correlação temporal não implica causalidade nem garante que a tendência se repetirá."}
 
 
+LL_CLASSES = ["sinal internacional consistente", "relação exploratória", "relação instável", "sem evidência de antecedência",
+              "séries não comparáveis"]
+
+
+def classify_lead_lag(ll: dict, dim: str, metric: str) -> dict:
+    """v0.8.1: significância estatística não é relevância. Consistente exige: dois MERCADOS geográficos, mesma métrica
+    de pesquisa, n ≥ 24, |r| ≥ 0,4 (r² ≥ 16%), estabilidade entre as metades e ganho fora da amostra > 5%."""
+    r = abs(ll.get("correlacao") or 0)
+    why = []
+    if dim != "geografica":
+        cls = "séries não comparáveis" if dim == "mista" else ("relação exploratória" if ll.get("significativa") and ll.get("estavel")
+                                                               else "relação instável" if ll.get("significativa") else
+                                                               "sem evidência de antecedência")
+        why.append("públicos linguísticos (idiomas) não são mercados nacionais" if dim == "linguistica"
+                   else "um lado é país e o outro é idioma")
+    elif not ll.get("significativa"):
+        cls = "sem evidência de antecedência"
+    elif not ll.get("estavel"):
+        cls = "relação instável"
+        why.append("defasagem muda entre as metades da série")
+    elif r >= 0.4 and (ll.get("ganho_backtest") or 0) > 0.05 and ll.get("n", 0) >= 24 and METRICS.get(metric, {}).get("tipo") in ("busca",):
+        cls = "sinal internacional consistente"
+    else:
+        cls = "relação exploratória"
+        if r < 0.4:
+            why.append(f"correlação {r:.2f} explica só {r * r:.0%} da variação")
+        if (ll.get("ganho_backtest") or 0) <= 0.05:
+            why.append("sem ganho de previsão fora da amostra")
+    return {"classe_antecedencia": cls, "r2": round(r * r, 3), "motivos_classe": why}
+
+
 # ============================================================================ análise completa
 def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: bool = True, state: dict | None = None) -> dict:
     cfg = cfg or {}
@@ -402,6 +555,7 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
         s["metrica"] = METRICS[s["metric"]]
         s["pais_nome"] = COUNTRY_NAMES.get(s["country"], s["country"])
         s["fonte_nome"] = SOURCE_NAMES.get(s["source"], s["source"])
+    mt = apply_multiple_testing(series)          # v0.8.1: BH entre séries + coorte da Wikipédia
 
     # previsões (somente séries mensais elegíveis; unidades preservadas)
     fc = {}
@@ -461,16 +615,19 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
                     common = sorted(set(la) & set(lb))
                     ll = lead_lag([la[k] for k in common], [lb[k] for k in common])
                     if ll:
+                        dim = "geografica" if A["page"] in GEO_PAGES and B["page"] in GEO_PAGES else \
+                            "linguistica" if A["page"] in LANG_PAGES and B["page"] in LANG_PAGES else "mista"
                         res.append({"metrica": METRICS[metric]["rotulo"], "metrica_id": metric,
                                     "fonte": SOURCE_NAMES.get(source, source), "a": A["country"],
-                                    "b": B["country"], "a_nome": A["pais_nome"], "b_nome": B["pais_nome"], **ll})
+                                    "b": B["country"], "a_nome": A["pais_nome"], "b_nome": B["pais_nome"], **ll,
+                                    "dimensao": dim, **classify_lead_lag(ll, dim, metric)})
         if res:
             comps[pid] = res
 
     # scores por produto (foco: Brasil)
     scores = {pid: product_scores(pid, lst, prods.get(pid, {}), fc, comps.get(pid, []), db) for pid, lst in by_prod.items()}
 
-    pages = {cc: country_page(cc, series, scores, today) for cc in ("BR", "US", "CN")}
+    pages = {cc: country_page(cc, series, scores, today) for cc in GEO_PAGES + LANG_PAGES}
     alerts = build_alerts(series, today)
     sources = db.query("SELECT source, metric, country, COUNT(*) AS n, MIN(ref_date) AS de, MAX(ref_date) AS ate "
                        "FROM search_observations GROUP BY source, metric, country")
@@ -478,6 +635,7 @@ def analyze(db, cfg: dict | None = None, today: date | None = None, forecasts: b
         "gerado_em": today.isoformat(), "menções_novas": ing,
         "series": [{k: v for k, v in s.items() if k not in ("points",)} for s in series],
         "previsoes": fc, "comparacoes": comps, "scores": scores, "paises": pages, "alertas": alerts,
+        "testes_multiplos": mt,
         "fontes_observacoes": sources,
         "kpis": {"produtos_monitorados": sum(1 for p in prods.values() if p["level"] == "produto"),
                  "variantes": sum(1 for p in prods.values() if p["level"] == "variante"),
@@ -522,10 +680,21 @@ def international_signal(lst: list[dict], comps: list[dict]) -> dict | None:
 
 
 def product_scores(pid, lst, prod, fc, comps, db) -> dict:
+    # v0.8.1: o score só considera evidência de DEMANDA (pesquisa e rankings comerciais) em MERCADOS geográficos.
+    # Atenção pública (Wikipédia, notícias) e idiomas não entram; sem evidência de demanda o score NÃO é calculado.
+    all_lst = lst
+    lst = [s for s in lst if METRICS[s["metric"]]["tipo"] in ("busca", "busca_ranking") and s["page"] in GEO_PAGES]
+    if not lst:
+        return {"opportunity_score": None, "score_status": "evidência insuficiente", "evidence_coverage": 0.0,
+                "forecast_confidence": None, "import_readiness": None, "componentes": {},
+                "motivo": ("apenas atenção pública (Wikipédia/notícias) ou públicos linguísticos: não há evidência de pesquisa "
+                           "ou de ranking comercial" if all_lst else "sem séries"),
+                "riscos": ["sem evidência de demanda: dados de atenção não medem procura comercial"],
+                "aviso": "Score para priorizar investigação, não recomendação de compra nem estimativa de margem."}
     br = [s for s in lst if s["page"] == "BR"]
     intl = [s for s in lst if s["page"] in ("US", "CN")]
 
-    def best_growth(group, kinds=("busca", "atencao", "popularidade")):
+    def best_growth(group, kinds=("busca", "busca_ranking")):
         for kind in kinds:
             vals = [s["ind"].get("crescimento") for s in group if METRICS[s["metric"]]["tipo"] == kind
                     and s["ind"].get("crescimento") is not None]
@@ -597,7 +766,9 @@ def product_scores(pid, lst, prod, fc, comps, db) -> dict:
         lead = next(c for c in comps if c.get("significativa") and c.get("estavel"))
     else:
         lead = None
+    growth_known = "crescimento_brasil" in comp or "crescimento_internacional" in comp
     return {"opportunity_score": None if score is None else round(score, 1), "componentes": comp,
+            "score_status": "calculável" if growth_known and cov >= 0.5 else "parcial" if growth_known else "evidência insuficiente",
             "sinal_internacional": international_signal(lst, comps),
             "evidence_coverage": round(evid, 1), "forecast_confidence": round(fconf, 1),
             "import_readiness": round(readiness, 1), "checklist_importacao": checklist, "riscos": risks,
