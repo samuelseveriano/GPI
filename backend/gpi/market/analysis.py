@@ -26,6 +26,7 @@ def make_analyzer(cfg: dict | None = None):
                 out[name] = {"erro": str(e)}
                 state["erros"].append(f"análise/{name}: {e}")
 
+        step("consumo_rapido", lambda: _consumer(store, cfg, state, forecasts=False))
         step("descoberta", lambda: _discovery(store, cfg))
         step("derivadas", lambda: intel.build_derived(store))
         step("conteudo", lambda: content_intel.process(store, ContentStore(store.db)))
@@ -33,10 +34,74 @@ def make_analyzer(cfg: dict | None = None):
         # e o ranking é recalculado ao fim para incorporar as previsões novas
         step("oportunidades", lambda: _intel(store))
         step("previsoes", lambda: _forecasts(store, cfg, state))
+        step("consumo", lambda: _consumer(store, cfg, state, forecasts=True))
+        step("social", lambda: _social(store, cfg))
+        step("oportunidades3", lambda: _opportunity3(store))
+        if cfg.get("ml_global_enabled", False):
+            step("ml_avancado", lambda: _advanced(store, cfg, state))
+        step("ml_social", lambda: _ml_social(store))
         out["segundos"] = round(time.time() - t0, 1)
         return out
 
+    def quick(store: MarketStore, state: dict) -> dict:
+        """Entre as etapas da coleta: atualiza o painel de consumo com o que já chegou (sem previsões)."""
+        return _consumer(store, cfg, state, forecasts=False)
+
+    analyze.quick = quick
     return analyze
+
+
+def _advanced(store, cfg, state):
+    from ..forecasting import advanced
+    cons = store.load_result("consumer") or {}
+    res = advanced.run_all(cons, cfg, store.load_result("ml_models"), state)
+    store.save_result("ml_models", res)
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with store.db.transaction():
+        for e in res["drift"]:
+            store.db.execute("INSERT OR IGNORE INTO drift_events (series_id, detector, ref_date, direction, detail, created_at)"
+                             " VALUES (?, ?, ?, ?, ?, ?)", (e["serie"], e["detector"], e["data"], e["direcao"], e.get("nome"), now))
+    return {"grupos": len(res["grupos"]), "mudancas": len(res["drift"]), "segundos": res["segundos"]}
+
+
+def _social(store, cfg):
+    """Social Product Intelligence (v0.6): retenção, séries por plataforma, Social Trend Score, radar."""
+    from ..social import analysis as social
+    res = social.analyze(store.db, cfg, consumer=store.load_result("consumer") or {})
+    store.save_result("social", res)
+    return {"series": len(res["series"]), "produtos": len(res["scores"]), "removidas_retencao": res["retencao"]["removidas"]}
+
+
+def _opportunity3(store):
+    from ..products import opportunity3
+    res = opportunity3.build(store.load_result("consumer") or {}, store.load_result("social"), store.load_result("reviews2"),
+                             store.load_result("competition"), store.db)
+    store.save_result("opportunity3", res)
+    return {"produtos": len(res["produtos"])}
+
+
+def _ml_social(store):
+    from ..forecasting import social_ablation
+    res = social_ablation.run(store.load_result("consumer") or {}, store.load_result("social") or {})
+    store.save_result("ml_social", res)
+    return {"grupos": len(res["grupos"])}
+
+
+def _consumer(store, cfg, state, forecasts: bool):
+    from ..products import trends
+    t0 = time.time()
+    res = trends.analyze(store.db, cfg, forecasts=forecasts, state=state)
+    prev = store.load_result("consumer") or {}
+    if not forecasts and prev.get("previsoes"):
+        res["previsoes"] = prev["previsoes"]          # análise rápida não descarta as previsões anteriores
+    res["segundos_analise"] = round(time.time() - t0, 2)
+    store.save_result("consumer", res)
+    from ..products.catalog import Catalog
+    from . import reviews2
+    store.save_result("reviews2", reviews2.review_intelligence(store.db, Catalog(store.db, cfg)))
+    store.save_result("competition", reviews2.competition(store.db))
+    return {"series": len(res["series"]), "produtos": res["kpis"]["produtos_monitorados"],
+            "segundos": res["segundos_analise"]}
 
 
 def _discovery(store, cfg):

@@ -157,6 +157,7 @@ class RssFeeds(Connector):
 
 class GoogleNews(Connector):
     id, name, order = "google_news", "Google Notícias (RSS)", 72
+    stage = 2          # consultas montadas a partir dos produtos descobertos na etapa 1
     reliability = "B"
     docs_url = "https://news.google.com/"
     description = "Notícias recentes sobre os produtos identificados (busca por palavra-chave)."
@@ -188,6 +189,7 @@ class GoogleNews(Connector):
 # --------------------------------------------------------------------------- YouTube
 class YouTube(Connector):
     id, name, order = "youtube", "YouTube Data API v3", 74
+    stage = 2          # consultas montadas a partir dos produtos descobertos na etapa 1
     reliability = "B"
     docs_url = "https://developers.google.com/youtube/v3/docs"
     description = ("Vídeos de review, unboxing, comparativos, testes e lançamentos sobre os produtos identificados, "
@@ -274,6 +276,7 @@ class YouTube(Connector):
 # --------------------------------------------------------------------------- Reddit
 class Reddit(Connector):
     id, name, order = "reddit", "Reddit (discussões de consumidores)", 76
+    stage = 2          # consultas montadas a partir dos produtos descobertos na etapa 1
     reliability = "B"
     docs_url = "https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki"
     description = "Publicações e comentários públicos sobre os produtos, usados na análise de opiniões."

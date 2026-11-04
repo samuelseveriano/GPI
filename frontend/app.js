@@ -413,6 +413,10 @@
     abcxyz: pageAbc, estoque: pageStock, dados: pageData, metodologia: () => { main.innerHTML = METHODOLOGY(); }, sistema: pageSystem };
   Object.assign(PAGES, window.GPI_MARKET({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }));
   Object.assign(PAGES, window.GPI_MARKET3({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }));
+  Object.assign(PAGES, window.GPI_CONSUMER({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }));
+  Object.assign(PAGES, window.GPI_V05({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
+  Object.assign(PAGES, window.GPI_V06({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
+
 
   async function refresh() {
     STATUS = await api('/api/status');
@@ -427,10 +431,13 @@
     }
     const [page, ...rest] = id.split('/');
     const arg = rest.length ? decodeURIComponent(rest.join('/')) : undefined;
-    const key = PAGES[page] ? page : 'painel';
-    const navKey = key === 'produto' ? 'oportunidades' : key;
+    const key = PAGES[page] ? page : 'dashboard';
+    const navKey = key === 'produto' ? 'oportunidades' : key === 'produto-consumo' ? 'dashboard'
+      : key === 'consumo' ? 'consumo/' + ((arg || 'BR').toUpperCase())
+      : (key === 'social' || key === 'relatorios') && arg ? key + '/' + arg : key;
     document.title = 'GPI — ' + ((document.querySelector(`#nav a[href="#${navKey}"]`) || {}).textContent || 'Global Product Intelligence');
-    document.querySelectorAll('#nav a[href]').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + navKey));
+    window.GPI_SHELL.onRoute(navKey);
+    if (window.GPI_EXPORT) window.GPI_EXPORT.onRoute(key, arg);
     try { if (!STATUS) await refresh(); await PAGES[key](arg); window.scrollTo(0, 0); }
     catch (e) { main.innerHTML = `<h1>Erro</h1>${errBox(e)}<p class="muted">Se o problema persistir, consulte data/logs/gpi.log.</p>`; }
   }

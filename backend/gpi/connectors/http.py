@@ -4,7 +4,13 @@ Cliente HTTP para coleta de fontes públicas (biblioteca padrão — sem depend�
   * Retry com backoff exponencial + jitter em 429, 5xx, timeouts e falhas de rede;
     respeita o cabeçalho Retry-After.
   * Rate limiting por host (intervalo mínimo entre requisições).
-  * Cache em disco com validade (evita coleta duplicada).
+  * Cache em disco com validade (evita coleta duplicada) e revalidação condicional com
+    ETag / Last-Modified (HTTP 304 reaproveita o conteúdo sem novo download).
+  * Respostas comprimidas (gzip/deflate) são descomprimidas uma única vez, conforme o
+    cabeçalho Content-Encoding ou a assinatura do gzip (0x1f 0x8b) — o urllib não descomprime.
+  * Disjuntor (circuit breaker) por host: após falhas transitórias consecutivas o host é
+    suspenso até o fim da sincronização, sem insistir.
+  * Métricas por host: requisições, cache, bytes, tempo de resposta e erros.
   * Proxy corporativo: usa o configurado em config/gpi.json ("proxy") ou as
     variáveis HTTPS_PROXY do sistema. Nunca tenta contornar o proxy.
   * TLS sempre verificado. Se a cadeia do certificado não for reconhecida (ex.:
@@ -13,6 +19,7 @@ Cliente HTTP para coleta de fontes públicas (biblioteca padrão — sem depend�
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import logging
@@ -23,12 +30,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger("gpi.http")
 
-USER_AGENT = "GPI-GlobalProductIntelligence/0.2 (uso analitico local; contato: configure 'contact' em config/gpi.json)"
+USER_AGENT = "GPI-GlobalProductIntelligence/0.4 (uso analitico local; contato: configure 'contact' em config/gpi.json)"
 
 
 class SourceError(Exception):
@@ -52,6 +60,37 @@ class HttpConfig:
     proxy: str | None = None
     ca_bundle: str | None = None
     contact: str | None = None
+    breaker_threshold: int = 3         # falhas transitórias consecutivas que suspendem o host
+
+
+def decode_body(raw: bytes, encoding: str | None) -> bytes:
+    """Descomprime o corpo conforme Content-Encoding. Se o cabeçalho faltar mas o corpo tiver a
+    assinatura do gzip (1f 8b), descomprime também (alguns servidores, como o do IBGE, enviam gzip
+    sem o cliente pedir). Corpo já descomprimido nunca é descomprimido de novo."""
+    enc = (encoding or "").lower().strip()
+    try:
+        if "gzip" in enc or raw[:2] == b"\x1f\x8b":
+            return gzip.decompress(raw) if raw[:2] == b"\x1f\x8b" else raw
+        if "deflate" in enc:
+            try:
+                return zlib.decompress(raw)
+            except zlib.error:
+                return zlib.decompress(raw, -zlib.MAX_WBITS)      # deflate "cru" (sem cabeçalho zlib)
+    except (OSError, EOFError, zlib.error) as e:
+        raise SourceError(f"resposta comprimida corrompida ({e})", "formato") from e
+    return raw
+
+
+def parse_json_body(raw: bytes, ctype: str | None = None):
+    text = raw.decode("utf-8-sig", "strict") if raw else ""
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        head = text.lstrip()[:200].lower()
+        if head.startswith("<!doctype html") or head.startswith("<html") or "text/html" in (ctype or ""):
+            raise SourceError("a fonte devolveu uma página HTML em vez de JSON (manutenção, bloqueio ou "
+                              "endereço alterado)", "formato") from e
+        raise SourceError(f"resposta não é JSON válido ({e})", "formato") from e
 
 
 class HttpClient:
@@ -72,6 +111,19 @@ class HttpClient:
         self.ua = USER_AGENT if not self.cfg.contact else USER_AGENT.replace(
             "configure 'contact' em config/gpi.json", self.cfg.contact)
         self.stats = {"requests": 0, "cache_hits": 0, "retries": 0}
+        self.host_stats: dict[str, dict] = {}
+        self._fails: dict[str, int] = {}          # falhas transitórias consecutivas por host
+        self._open: dict[str, str] = {}           # hosts com disjuntor aberto → motivo
+
+    def reset_breakers(self):
+        with self._lock:
+            self._fails.clear()
+            self._open.clear()
+
+    def _hs(self, host) -> dict:
+        with self._lock:
+            return self.host_stats.setdefault(host, {"requisicoes": 0, "cache": 0, "revalidadas_304": 0, "bytes": 0,
+                                                     "segundos": 0.0, "erros": 0, "retentativas": 0})
 
     # ------------------------------------------------------------------ cache
     def _ckey(self, method, url, body):
@@ -86,11 +138,29 @@ class HttpClient:
                 return None
         return None
 
-    def _cache_put(self, key, data):
+    def _cache_stale(self, key):
+        """Conteúdo vencido + validadores (ETag/Last-Modified) para revalidação condicional."""
+        f, m = self.cache_dir / f"{key}.json", self.cache_dir / f"{key}.meta"
+        if not (f.exists() and m.exists()):
+            return None, {}
+        try:
+            return json.loads(f.read_text(encoding="utf-8")), json.loads(m.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None, {}
+
+    def _cache_put(self, key, data, validators: dict | None = None):
         try:
             tmp = self.cache_dir / f"{key}.tmp"
             tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
             tmp.replace(self.cache_dir / f"{key}.json")
+            if validators:
+                (self.cache_dir / f"{key}.meta").write_text(json.dumps(validators), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _touch(self, key):
+        try:
+            (self.cache_dir / f"{key}.json").touch()
         except OSError:
             pass
 
@@ -105,18 +175,22 @@ class HttpClient:
 
     # ------------------------------------------------------------------ request
     def request_text(self, url: str, headers: dict | None = None, ttl: float | None = None,
-                     min_interval: float | None = None, max_bytes: int = 5_000_000) -> str:
-        """GET de conteúdo textual (ex.: RSS/XML). Cacheado como {"_text": ...}."""
-        out = self.request_json(url, headers={"Accept": "application/rss+xml, application/xml, text/xml, */*",
-                                              **(headers or {})}, ttl=ttl, min_interval=min_interval,
-                                _raw=True, _max_bytes=max_bytes)
+                     min_interval: float | None = None, max_bytes: int = 5_000_000, timeout: float | None = None,
+                     method: str = "GET", data: bytes | None = None) -> str:
+        """Conteúdo textual (RSS/XML, ou POST SOAP com `data`). Cacheado como {"_text": ...}."""
+        out = self.request_json(url, method, headers={"Accept": "application/rss+xml, application/xml, text/xml, */*",
+                                                      **(headers or {})}, ttl=ttl, min_interval=min_interval,
+                                _raw=True, _max_bytes=max_bytes, timeout=timeout, _body=data)
         return out["_text"]
 
     def request_json(self, url: str, method: str = "GET", body: dict | None = None,
                      headers: dict | None = None, ttl: float | None = None,
                      min_interval: float | None = None, form: dict | None = None,
-                     _raw: bool = False, _max_bytes: int = 50_000_000):
-        if form is not None:
+                     _raw: bool = False, _max_bytes: int = 50_000_000, timeout: float | None = None,
+                     _body: bytes | None = None):
+        if _body is not None:
+            data = _body
+        elif form is not None:
             data = urllib.parse.urlencode(form).encode()
         else:
             data = json.dumps(body).encode() if body is not None else None
@@ -129,8 +203,20 @@ class HttpClient:
             self.stats["cache_hits"] += 1
             return cached
         host = urllib.parse.urlsplit(url).netloc
-        h = {"User-Agent": self.ua, "Accept": "application/json"}
-        if data is not None:
+        hs = self._hs(host)
+        if host in self._open:
+            raise SourceError(f"{host} suspenso nesta sincronização após falhas consecutivas "
+                              f"({self._open[host]})", "rede", False)
+        h = {"User-Agent": self.ua, "Accept": "application/json", "Accept-Encoding": "gzip, deflate"}
+        stale, validators = (None, {})
+        if ttl and method == "GET":
+            stale, validators = self._cache_stale(key)
+            if stale is not None:
+                if validators.get("etag"):
+                    h["If-None-Match"] = validators["etag"]
+                if validators.get("last_modified"):
+                    h["If-Modified-Since"] = validators["last_modified"]
+        if data is not None and _body is None:
             h["Content-Type"] = "application/x-www-form-urlencoded" if form is not None else "application/json"
         h.update(headers or {})
         last_err = None
@@ -140,24 +226,35 @@ class HttpClient:
             self._wait_turn(host, self.cfg.min_interval if min_interval is None else min_interval)
             req = urllib.request.Request(url, data=data, method=method, headers=h)
             self.stats["requests"] += 1
+            hs["requisicoes"] += 1
             retry_after = None
+            t0 = time.monotonic()
             try:
-                with self.opener.open(req, timeout=self.cfg.timeout) as r:
+                with self.opener.open(req, timeout=timeout or self.cfg.timeout) as r:
                     raw = r.read(_max_bytes + 1)
+                    enc, ctype = r.headers.get("Content-Encoding"), r.headers.get("Content-Type")
+                    new_val = {"etag": r.headers.get("ETag"), "last_modified": r.headers.get("Last-Modified")}
+                hs["segundos"] += time.monotonic() - t0
+                hs["bytes"] += len(raw)
                 if len(raw) > _max_bytes:
                     raise SourceError("resposta maior que o limite permitido", "formato")
+                raw = decode_body(raw, enc)
                 if _raw:
                     out = {"_text": raw.decode("utf-8", "replace")}
                 else:
-                    try:
-                        out = json.loads(raw.decode("utf-8-sig"))
-                    except ValueError as e:
-                        raise SourceError(f"resposta não é JSON válido ({e})", "formato") from e
+                    out = parse_json_body(raw, ctype)
                 if ttl:
-                    self._cache_put(key, out)
+                    self._cache_put(key, out, {k: v for k, v in new_val.items() if v} or None)
+                self._fails[host] = 0
                 return out
             except urllib.error.HTTPError as e:
+                hs["segundos"] += time.monotonic() - t0
                 status = e.code
+                if status == 304 and stale is not None:
+                    hs["revalidadas_304"] += 1
+                    self._touch(key)                       # conteúdo inalterado: renova a validade local
+                    self._fails[host] = 0
+                    return stale
                 try:
                     detail = e.read()[:300].decode("utf-8", "replace")
                 except Exception:  # noqa: BLE001
@@ -189,10 +286,18 @@ class HttpClient:
                 last_err = SourceError(f"falha de rede: {e.reason}", "rede", True)
             except (TimeoutError, ConnectionError, OSError) as e:
                 last_err = SourceError(f"falha de rede: {e}", "rede", True)
+            hs["erros"] += 1
             if attempt < self.cfg.max_attempts:
                 self.stats["retries"] += 1
+                hs["retentativas"] += 1
                 delay = retry_after or min(self.cfg.backoff_max, self.cfg.backoff_base * 2 ** (attempt - 1))
                 delay *= 1 + random.random() * 0.25
                 log.info("tentativa %d falhou para %s (%s); nova tentativa em %.1fs", attempt, host, last_err, delay)
                 self._sleep(delay)
-        raise last_err or SourceError("falha desconhecida", "rede", True)
+        err = last_err or SourceError("falha desconhecida", "rede", True)
+        with self._lock:
+            self._fails[host] = self._fails.get(host, 0) + 1
+            if self._fails[host] >= self.cfg.breaker_threshold and err.kind in ("rede", "http"):
+                self._open[host] = str(err)[:120]
+                log.warning("disjuntor aberto para %s após %d falhas consecutivas", host, self._fails[host])
+        raise err

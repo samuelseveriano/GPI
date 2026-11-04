@@ -8,7 +8,7 @@ import pytest
 from openpyxl import Workbook
 
 from gpi.analytics import classification as cl
-from gpi.db import Database
+from gpi.db import MIGRATIONS, Database
 from gpi.importer import ImportErrorGPI, import_file, parse_number
 from gpi.series import build_series
 from gpi.supply_chain.inventory import plan
@@ -67,7 +67,7 @@ def test_persistence_after_reopen(tmp_path):
     d.close()
     d2 = Database(tmp_path / "p.sqlite")
     assert d2.query("SELECT COUNT(*) AS n FROM sales")[0]["n"] == 1
-    assert d2.schema_version() == 3
+    assert d2.schema_version() == len(MIGRATIONS)
     d2.close()
 
 

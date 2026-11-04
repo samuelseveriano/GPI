@@ -281,6 +281,7 @@ class ComexStat(Connector):
 # =========================================================================== UN Comtrade
 class UnComtrade(Connector):
     id = "comtrade"
+    stage = 2          # depende das posições SH4 descobertas no Comex Stat (etapa 1)
     name = "UN Comtrade — importações de outros países vindas da China"
     reliability = "A"
     docs_url = "https://comtradedeveloper.un.org/"
@@ -291,6 +292,7 @@ class UnComtrade(Connector):
     order = 60
     REPORTERS = {842: "Estados Unidos", 276: "Alemanha", 484: "México"}
     URL = "https://comtradeapi.un.org/public/v1/preview/C/M/HS"
+    URL_KEY = "https://comtradeapi.un.org/data/v1/get/C/M/HS"   # requer chave gratuita (comtradedeveloper.un.org)
 
     def plan(self, ctx):
         heads = ctx.store.load_result("discovery_headings")
@@ -300,17 +302,39 @@ class UnComtrade(Connector):
         codes = [h["codigo"] for h in heads.get("prioritarias", [])][:20]
         if not codes:
             return []
-        # A API pública 'preview' aceita só 1 período por chamada: um job por país e mês.
+        # Sem chave: endpoint público 'preview' aceita 1 período por chamada → um job por país e mês.
+        # Com chave gratuita de desenvolvedor (Central de Integrações): endpoint 'data/v1/get' com até
+        # 12 períodos por chamada → um job por país e ano. Meses com mais de 6 meses ficam fechados.
+        key = self.api_key(ctx)
         jobs = []
         first = date(ctx.today.year - 2, ctx.today.month, 1)
+        months = []
         d = first
         while d < ctx.today.replace(day=1):
-            recent = (ctx.today.year - d.year) * 12 + ctx.today.month - d.month <= 6
-            for rep in self.REPORTERS:
-                jobs.append(Job(f"{self.id}:{rep}:{d:%Y%m}:{len(codes)}", {"reporter": rep, "period": f"{d:%Y%m}",
-                                                                          "codes": codes}, 7 if recent else None, priority=4))
+            months.append(d)
             d = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
+        recent = lambda m: (ctx.today.year - m.year) * 12 + ctx.today.month - m.month <= 6
+        for rep in self.REPORTERS:
+            if key:
+                for y in sorted({m.year for m in months}):
+                    ms = [m for m in months if m.year == y]
+                    per = ",".join(f"{m:%Y%m}" for m in ms)
+                    jobs.append(Job(f"{self.id}:k:{rep}:{y}:{len(ms)}:{len(codes)}",
+                                    {"reporter": rep, "period": per, "codes": codes, "key": True},
+                                    7 if any(recent(m) for m in ms) else None, priority=4))
+            else:
+                for m in months:
+                    jobs.append(Job(f"{self.id}:{rep}:{m:%Y%m}:{len(codes)}", {"reporter": rep, "period": f"{m:%Y%m}",
+                                                                              "codes": codes}, 7 if recent(m) else None,
+                                    priority=4))
         return jobs
+
+    @staticmethod
+    def api_key(ctx):
+        try:
+            return (ctx.creds.get("comtrade") or {}).get("api_key") if ctx.creds else None
+        except Exception:  # noqa: BLE001
+            return None
 
     @staticmethod
     def parse(payload):
@@ -330,8 +354,13 @@ class UnComtrade(Connector):
     def run(self, job, ctx):
         rep, per, codes = job.params["reporter"], job.params["period"], job.params["codes"]
         q = {"reporterCode": rep, "period": per, "partnerCode": 156, "cmdCode": ",".join(codes), "flowCode": "M"}
-        url = self.URL + "?" + urllib.parse.urlencode(q)
-        rows = self.parse(ctx.http.request_json(url, min_interval=3.0))
+        key = self.api_key(ctx) if job.params.get("key") else None
+        if job.params.get("key") and not key:
+            raise SourceError("chave do UN Comtrade removida; os jobs voltam ao endpoint público", "restrita")
+        base = self.URL_KEY if key else self.URL
+        url = base + "?" + urllib.parse.urlencode(q)
+        hdr = {"Ocp-Apim-Subscription-Key": key} if key else None
+        rows = self.parse(ctx.http.request_json(url, headers=hdr, min_interval=1.5 if key else 3.0))
         by = defaultdict(list)
         for r in rows:
             by[r["code"]].append((r["date"], r["value"]))
@@ -340,7 +369,8 @@ class UnComtrade(Connector):
             meta = dict(source=self.id, indicator="Importação da China — valor", kind="observado",
                         product_key=tx.heading_key(code), product_name=None, category=tx.category_for_heading(code),
                         country=f"China → {self.REPORTERS[rep]}", unit="US$", currency="USD", freq="M",
-                        origin_url=self.URL, method="API pública UN Comtrade (preview, sem chave, 1 período por chamada)",
+                        origin_url=base, method=("API UN Comtrade data/v1 (chave gratuita, até 12 períodos por chamada)"
+                                                 if key else "API pública UN Comtrade (preview, sem chave, 1 período por chamada)"),
                         reliability="A")
             batches.append(Batch(f"comtrade:{rep}:{code}:value", meta, obs))
         return batches, []

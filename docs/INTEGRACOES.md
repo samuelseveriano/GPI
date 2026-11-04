@@ -37,7 +37,57 @@ O ambiente onde o código foi desenvolvido **não tinha acesso de rede** às API
 
 Scraping não é usado em nenhuma fonte. Nenhum login, CAPTCHA, limite ou bloqueio é contornado.
 
+## Fase 4 — fontes de interesse de busca e níveis de conexão
+
+A Central de Integrações agrupa as fontes em três níveis:
+
+| Nível | Significado | Fontes |
+|---|---|---|
+| 1 — Conexão automática | públicas, sem credencial | BCB, Comex Stat, IBGE, UN Comtrade (preview), Wikimedia, RSS, **Google Trends — Trending Now** |
+| 2 — Conexão assistida | chave gratuita, ID de aplicativo, OAuth ou aceite de termos | **Google Ads — Planejador de palavras-chave**, **UN Comtrade (chave gratuita)**, YouTube, Reddit, Mercado Livre, Google Notícias |
+| 3 — Acesso restrito | aprovação, contrato ou sem API pública | **Google Trends API (alfa)**, **Baidu Index**, **巨量算数**, **Alibaba/1688**, **Microsoft Advertising**, Amazon, Shopee, AliExpress, Taobao, Trustpilot, Reclame Aqui, comparadores |
+
+| Fonte | Situação verificada (out/2026) | O que o GPI faz |
+|---|---|---|
+| Google Trends API oficial | alfa, acesso por inscrição e aprovação (interesse relativo, escala consistente, 5 anos, ISO 3166-2) | marcada como restrita, com link de inscrição; nenhum endpoint é presumido |
+| Google Trends — Trending Now (RSS) | exportação pública oficial, tráfego em faixas | coleta diária BR e EUA; NLP + filtro comercial; limite inferior da faixa, nunca volume exato |
+| Google Ads — KeywordPlanIdeaService | exige conta, developer token (acesso Básico ou superior) e OAuth | botão "Conectar"; volumes tratados como aproximados; China não consultada |
+| Baidu Index / 巨量算数 / Alibaba | sem API aberta a terceiros; ferramentas existentes usam cookies de sessão | não implementado (seria contornar autenticação) |
+| Microsoft Advertising | exige conta e developer token; API SOAP | não implementado nesta fase |
+
 ## Lista de conectores validados com resposta real
+
+### v0.5 (02/11/2026 — GitHub Actions, execução 41565156801)
+
+| Fonte | Situação |
+|---|---|
+| GDELT (DOC 2.0) | ✅ validada — 48 registros mensais; 2 consultas receberam HTTP 429 (limite de 1 consulta a cada 5 s) → intervalo ajustado para 6,5 s |
+| Google Trends Trending Now, BCB PTAX, Wikimedia, Comex Stat, UN Comtrade, RSS | ✅ validadas novamente (20 / 964 / 687 / 86.114 / 120 / 189 registros) |
+| IBGE PMC | ❌ tempo esgotado a partir dos EUA (rede); validar numa rede brasileira |
+| Mercado Livre Trends, Google Trends BigQuery, eBay Browse, Google Ads, Microsoft Advertising, UN Comtrade com chave | ⏸ implementadas e testadas com respostas no formato documentado; **não validadas** — exigem credenciais do usuário (Central de Integrações) |
+| Microsoft Advertising | ⚠️ além de não validada, a chamada SOAP foi escrita a partir da documentação e pode precisar de ajuste na primeira conexão real |
+| Baidu Index, 巨量算数, Alibaba/1688, JD.com, Taobao | 🚫 restritas — sem API aberta a terceiros |
+
+### Fase 4 (31/10/2026 — GitHub Actions, runner Ubuntu nos EUA, execução 41156252313)
+
+| Fonte | Situação | Registros na amostra |
+|---|---|---|
+| Google Trends — Trending Now (RSS) | ✅ validada | 20 buscas em alta (10 BR, 10 EUA). Nenhuma dessas 20 era termo de produto com intenção comercial (eram notícias/esportes) — o filtro as manteve fora dos rankings, como esperado |
+| BCB PTAX | ✅ validada | 962 |
+| Wikimedia | ✅ validada | 681 |
+| Comex Stat | ✅ validada | 86.114 |
+| UN Comtrade (público, 1 período/chamada) | ✅ validada | 120 |
+| Feeds RSS | ✅ validada | 190 itens |
+| IBGE PMC | ❌ tempo esgotado a partir dos EUA (rede). O erro "byte 0x8b" relatado numa rede brasileira (resposta gzip) foi corrigido e testado com servidor local; falta a confirmação real numa rede brasileira | 0 |
+| Google Ads — Planejador | ⏸ não testada (exige credenciais do usuário) | — |
+| UN Comtrade com chave | ⏸ não testada (exige chave do usuário) | — |
+
+**Desempenho da coleta (mesma amostra, cache vazio, mesmo computador):** sequencial (Fase 3) 343 s;
+fontes em paralelo (Fase 4) 228 s — 34% menos. O tempo paralelo é dominado pelo IBGE, que aguarda o
+tempo-limite; sem ele, as demais fontes terminam em ~100 s (Comex Stat, com 12 s entre chamadas por
+limite da API, é a mais lenta).
+
+### Fase 3
 
 Resultado da coleta real no GitHub Actions (job *2. Validação real dos conectores*, runner Ubuntu nos EUA,
 31/10/2026; artefato `validacao-conectores`). Amostra de até 6 requisições por fonte — a sincronização

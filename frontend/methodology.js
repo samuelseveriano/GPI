@@ -264,6 +264,57 @@ ${F('\\text{cobertura} = \\sum_{c \\in C} w_{c} \\qquad \\text{confiança} = \\b
 ${F('\\phi(B) \\Phi(B^{m}) (1 - B)^{d} (1 - B^{m})^{D} y_{t} = \\theta(B) \\Theta(B^{m}) \\varepsilon_{t}')}
 <p><b>LightGBM e XGBoost</b>: mesma formulação em razão ao nível recente da seção 16, com 1 thread. Todos entram como candidatos do AutoML somente se a biblioteca estiver instalada e são escolhidos apenas se vencerem no backtesting.</p>
 <p><b>Surto</b> (tendência emergente): média dos últimos 3 meses &gt; média + 2 desvios-padrão dos 24 meses anteriores.</p>
-<p><b>Tipos de previsão, nunca convertidos entre si</b>: vendas (planilhas próprias), importação (US$/kg importados), interesse (visualizações), popularidade (menções), indicador (câmbio, varejo).</p></div>
+<p><b>Tipos de previsão, nunca convertidos entre si</b>: vendas (planilhas próprias), importação (US$/kg importados), interesse (visualizações), popularidade (menções), indicador (câmbio, varejo), busca (volume aproximado do Google Ads).</p></div>
+
+<div class="panel" id="m-consumo"><h2>21. Inteligência de consumo: produtos, buscas e intenção</h2>
+<p><b>Três dimensões separadas</b>: (A) consumo — interesse por produtos específicos (buscas, leitura de artigos, menções); (B) comércio exterior — valor e peso importados por SH4; (C) mercado — preços, avaliações e conteúdo. Volume de buscas, vendas e importações nunca são somados ou comparados diretamente.</p>
+<p><b>Catálogo canônico</b> Categoria → Família → Produto → Variante. Cada termo vira um conjunto de conceitos do léxico pt/en/zh; a <b>chave do produto</b> é esse conjunto, independente de idioma e ordem:</p>
+${F('\\text{chave}(t) = \\{\\text{núcleo}(t)\\} \\cup Q(t), \\qquad \\text{“wireless charger”} \\equiv \\text{“carregador sem fio”} \\equiv \\text{“无线充电器”} = \\{charger, wireless\\}')}
+<p>Atributos numéricos (potência, capacidade, armazenamento, tela) não entram na chave: geram <b>variantes</b> (carregador USB-C 20W ≠ 140W, mesma família). Pipeline: limpeza → idioma (escrita CJK; pistas pt/en) → tokens (máxima correspondência em chinês) → conceitos (correspondência mais longa primeiro) → núcleo (1º em pt/zh; último antes de “for/with” em inglês) → atributos (regex) → chave → variante → categoria. SH4 só é associado quando a classificação do núcleo é inequívoca.</p>
+<p><b>Descoberta</b>: um termo observado com produto ainda não catalogado vira candidato; é promovido com ≥ 2 ocorrências, ≥ 2 fontes, ou 1 ocorrência em fonte de busca (Trends, Google Ads). Limites configuráveis evitam consumo excessivo de memória.</p>
+<p><b>Intenção</b> (compra, comparação, review, problema técnico, manutenção, informação, entretenimento, notícia): regras em pt/en/zh com prioridade; modelo supervisionado (TF-IDF de caracteres + regressão logística, nomes de produto mascarados) só é usado com ≥ 40 rótulos, ≥ 3 classes e acurácia em validação cruzada ≥ 0,60 — caso contrário, apenas regras. Termo sem sinal = “informação”, nunca demanda de compra. Comerciais: compra, comparação, review.</p>
+<p><b>Buscas em alta (Google Trends — Trending Now)</b>: o tráfego vem em faixas (“2.000+”); registra-se o limite inferior e o rótulo da faixa. Só termos com produto identificado e intenção diferente de notícia/entretenimento entram nos rankings. Sem histórico retroativo: a série se forma com as coletas diárias. <b>Google Ads</b>: volumes mensais arredondados pelo Google — tratados como aproximados. <b>China</b>: sem fonte autorizada de buscas (Baidu Index, 巨量算数, Alibaba); Wikipédia em chinês não representa buscas na China.</p>
+<p class="muted">Código: <code>backend/gpi/products/lexicon.py, nlp.py, intent.py, catalog.py</code>, <code>connectors/search.py</code></p></div>
+
+<div class="panel" id="m-tendprod"><h2>22. Tendências por produto, rankings, antecedência e scores</h2>
+<p><b>Crescimento</b>: com ≥ 15 meses, último trimestre contra o mesmo trimestre do ano anterior (não confunde sazonalidade com tendência); senão, contra o trimestre anterior; buscas em alta: 30 dias contra os 30 anteriores.</p>
+${F('g = \\frac{\\bar{y}_{T-2..T}}{\\bar{y}_{T-14..T-12}} - 1 \\qquad a = g_{3m}(T) - g_{3m}(T-3)')}
+<p><b>Classes</b>: emergente (primeira observação ≤ 30 dias ou ≤ 3 meses), crescimento consistente (Mann–Kendall p &lt; 0,05 e g &gt; 0; em série sazonal: ≥ 75% das variações anuais positivas e mediana &gt; 5%), crescimento (g &gt; 15%), declínio (queda significativa ou g &lt; −15%), sazonal (Kruskal–Wallis p &lt; 0,05), estável.</p>
+<p><b>Pontos de mudança</b>: segmentação binária da média de log(1+y), aceitando a divisão quando a redução do erro quadrático supera a penalidade</p>
+${F('\\beta = 2 \\ln(n) \\, \\hat{\\sigma}^{2}, \\qquad \\hat{\\sigma} = 1{,}4826 \\cdot \\text{MAD}(\\Delta y) / \\sqrt{2}')}
+<p><b>Anomalias</b>: |z| &gt; 3,5 com z = (y − mediana móvel)/(1,4826·MAD dos resíduos).</p>
+<p><b>Antecedência entre mercados (lead-lag)</b>: correlação cruzada das variações padronizadas de log(1+y), defasagens −6…+6; significativa se |ρ| &gt; 1,96/√n; estável se a melhor defasagem se repete (±1) nas duas metades; backtest: Δb(t) previsto por Δa(t−k) contra “sem variação”.</p>
+${F('\\rho_{k} = \\text{corr}(\\Delta a_{t}, \\Delta b_{t+k}), \\qquad \\text{ganho} = 1 - \\frac{\\sum |\\Delta b_{t} - \\hat{\\alpha} - \\hat{\\beta} \\Delta a_{t-k}|}{\\sum |\\Delta b_{t}|}')}
+<p>É um sinal exploratório: correlação não é causalidade, e não se afirma que uma tendência chegará ao Brasil.</p>
+<p><b>Rankings</b> declaram o que medem. “Mais pesquisados” usa somente volume de buscas; sem essa fonte, fica vazio com a explicação.</p>
+<p><b>Scores</b> (0–100, separados): <b>Opportunity</b> = média ponderada dos componentes disponíveis (crescimento Brasil 0,22; internacional 0,14; persistência 0,14; intenção de compra 0,16; concorrência baixa 0,10; estabilidade sazonal 0,06; baixa volatilidade 0,08; qualidade dos dados 0,10), sem penalizar fontes ausentes; <b>Evidence Coverage</b> = 50·(peso disponível) + 50·min(1, fontes/4); <b>Forecast Confidence</b> = qualidade no backtesting × fator de histórico (0 sem previsão validada); <b>Import Readiness</b> = fração de verificações concluídas (NCM fundamentado, importações monitoradas, volume de buscas, previsão validada, intenção de compra, preços). Margem, rentabilidade e quantidade de compra não são estimadas.</p>
+<p class="muted">Código: <code>backend/gpi/products/trends.py</code></p></div>
+
+<div class="panel" id="m-v05"><h2>23. Versão 0.5: modelo global, intervalos conformais, mudanças e viabilidade</h2>
+<p><b>Modelo global multi-série</b> (mesma ideia do MLForecast): um modelo por métrica, treinado com todas as séries elegíveis. Alvo e defasagens em razão ao nível recente:</p>
+${F('\\tilde{y}_{i,t} = \\frac{y_{i,t}}{\\bar{y}_{i,t-3..t-1}}, \\qquad \\hat{y}_{i,t} = \\bar{y}_{i,t-3..t-1} \\cdot f(\\tilde{y}_{i,t-1}, \\tilde{y}_{i,t-2}, \\tilde{y}_{i,t-3}, \\tilde{y}_{i,t-6}, \\tilde{y}_{i,t-12}, m_t, \\text{família}, \\text{categoria}, \\text{país}, \\text{fonte})')}
+<p>f = HistGradientBoosting, LightGBM, XGBoost ou CatBoost. Comparação com o modelo local nas mesmas origens de backtesting; em cada série vale o de menor WAPE.</p>
+<p><b>Intervalos conformais</b>: erros relativos e<sub>h</sub> = (y − ŷ)/ŷ das origens antigas; quantil com correção de amostra finita; cobertura medida na origem mais recente.</p>
+${F('q_{h}^{(1-\\alpha)} = \\text{Quantil}_{⌈(n+1)(1-\\alpha)⌉/n} \\left( |e_{h}| \\right), \\qquad \\left[\\hat{y}/(1+q), \\quad \\hat{y}(1+q)\\right]')}
+<p><b>Mudanças de comportamento</b> — ADWIN: corta a janela quando |μ₀ − μ₁| &gt; ε; Page-Hinkley: alarme quando a soma acumulada dos desvios passa de λ.</p>
+${F('\\varepsilon_{cut} = \\sqrt{\\frac{1}{2m} \\ln\\frac{4n}{\\delta}}, \\quad m = 1 / (1/n_{0} + 1/n_{1}) \\qquad m_{T} = \\sum_{t \\le T} (x_{t} - \\bar{x}_{t} - \\delta), \\quad m_{T} - \\min m > \\lambda')}
+<p><b>Reconciliação hierárquica</b> (só volumes aditivos): ỹ = S·P·ŷ, com P de Bottom-Up, Top-Down (proporções históricas), MinT-OLS P = (SᵀS)⁻¹Sᵀ ou MinT-WLS P = (SᵀW⁻¹S)⁻¹SᵀW⁻¹, W = diag(S·1).</p>
+<p><b>Discovery 2.0</b>: correção de grafia por similaridade ≥ 88 (palavras ≥ 5 letras); alias por similaridade ≥ 92 só com o mesmo núcleo e nenhum atributo numérico divergente.</p>
+<p><b>Early Trend Detection</b>: persistência = fração de variações positivas (ano contra ano em série sazonal); base mínima por métrica para entrar em rankings de crescimento; possível saturação = crescimento &gt; 0, aceleração &lt; −10 p.p. e média recente ≥ 90% do máximo; confiança da classificação = 0,4·min(1, n/36) + 0,3·[p &lt; 0,05] + 0,3·cobertura.</p>
+<p><b>Viabilidade de importação</b>: custo nacionalizado com ICMS “por dentro”; Monte Carlo com distribuições triangulares (mín, base, máx) informadas pelo usuário; pedido ótimo:</p>
+${F('Q^{*} = \\arg\\max_{Q \\ge MOQ, Q \\cdot c \\le B} \; \\frac{1}{N}\\sum_{k} \\left[ \\min(Q, D_{k}) \\, p_{k} - Q \\, c_{k} \\right]')}
+<p class="muted">Código: <code>backend/gpi/forecasting/advanced.py</code>, <code>products/discovery.py</code>, <code>market/viability.py</code>, <code>market/reviews2.py</code></p></div>
+<div class="panel" id="m-v06"><h2>24. Versão 0.6: redes sociais, oportunidades 3.0 e relatórios</h2>
+<p><b>Normalização por plataforma.</b> Para cada plataforma p e métrica m, o crescimento g de cada produto vira o seu percentil entre os produtos daquela mesma plataforma e métrica (empates recebem a média). Curtidas, visualizações e publicações nunca são somadas entre plataformas.</p>
+${F('\\pi_{i}^{(p,m)} = \\frac{\\text{posto}(g_{i}^{(p,m)})}{N^{(p,m)} - 1}')}
+<p><b>Social Trend Score</b> (0–100, exploratório): média ponderada dos componentes disponíveis, renormalizada pela cobertura — crescimento (média, entre plataformas, do maior percentil de cada uma) 35%, persistência 20%, engajamento relativo (percentil do nível) 15%, diversidade de plataformas 15%, intenção comercial 15%.</p>
+${F('STS_{i} = 100 \\cdot \\frac{\\sum_{k \\in K_{i}} w_{k} c_{i,k}}{\\sum_{k \\in K_{i}} w_{k}}')}
+<p><b>Viral Product Radar</b>: emergente = primeira observação recente; viralização recente = mais que dobrou em 7 dias ou anomalia no último período, com persistência &lt; 50%; sustentado = crescimento &gt; 15% com persistência ≥ 50%; saturação = desaceleração perto do máximo; declínio = queda &gt; 15%; demais = estável. Crescimento em uma única plataforma é sinalizado.</p>
+<p><b>Search vs. Social</b>: Search Growth, Social Growth e Marketplace Signals ficam separados. A consistência compara só a direção (s ∈ {−1, 0, +1}, zona neutra de ±5%) entre os tipos de fonte; com ≥ 8 meses comuns, também a correlação de Spearman.</p>
+${F('CSC_{i} = \\frac{2}{k(k-1)} \\sum_{a<b} s_{a} s_{b}')}
+<p><b>Opportunity Engine 3.0</b>: busca 25%, social 10%, marketplace 15%, persistência 15%, (100 − concorrência) 10%, (100 − risco de qualidade) 10%, previsão 5%, prontidão 10%; dimensões sem dados não entram. Prioridade "Evidência insuficiente" se cobertura &lt; 40 ou menos de duas dimensões de demanda; "Alta" exige índice ≥ 65 e dois tipos de fonte independentes em alta.</p>
+<p><b>Sinais sociais no ML</b>: mesmo modelo global, com e sem defasagens sociais (t−1, t−2); origem móvel, 1 passo à frente. Adoção só se o WAPE cair ≥ 2% no total e em ≥ 75% das origens.</p>
+<p><b>Relatórios</b>: cada tabela declara a natureza do dado (observado, estimado, projeção, derivado); recortes de período recalculam os indicadores mensais só com os meses do recorte; um snapshot dos dados acompanha cada arquivo para reprodução.</p>
+<p class="muted">Código: <code>backend/gpi/social/</code>, <code>products/opportunity3.py</code>, <code>forecasting/social_ablation.py</code>, <code>reports/</code></p></div>
 </div>`;
 };

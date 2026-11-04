@@ -41,10 +41,10 @@ PROVIDERS = [
                    "para uso não comercial; uso comercial exige contrato com o Reddit.",
      "como_obter": "reddit.com/prefs/apps → 'create app' → tipo 'installed app' → copie o ID abaixo do nome.",
      "link": "https://www.reddit.com/prefs/apps", "documentacao": "https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki"},
-    {"id": "mercadolivre", "nome": "Mercado Livre", "tipo": "oauth", "conectores": ["mercadolivre"],
+    {"id": "mercadolivre", "nome": "Mercado Livre", "tipo": "oauth", "conectores": ["mercadolivre", "ml_trends"],
      "campos": [{"nome": "client_id", "rotulo": "App ID", "secreto": False},
                 {"nome": "client_secret", "rotulo": "Secret Key", "secreto": True}],
-     "descricao": "Tendências de busca do Mercado Livre Brasil.",
+     "descricao": "Tendências de busca do Mercado Livre Brasil (termos mais buscados, com histórico de cada coleta).",
      "permissoes": "Login na página oficial do Mercado Livre (o GPI não vê sua senha), com PKCE. Somente leitura. "
                    "No DevCenter, cadastre a URL de redirecionamento exibida abaixo; se o Mercado Livre não aceitar "
                    "endereço http://127.0.0.1, a conexão OAuth não é possível nesta instalação.",
@@ -53,6 +53,15 @@ PROVIDERS = [
      "documentacao": "https://developers.mercadolivre.com.br/pt_br/autenticacao-e-autorizacao",
      "auth_url": "https://auth.mercadolivre.com.br/authorization",
      "token_url": "https://api.mercadolibre.com/oauth/token"},
+    {"id": "comtrade", "nome": "UN Comtrade (chave gratuita opcional)", "tipo": "api_key", "conectores": ["comtrade"],
+     "campos": [{"nome": "api_key", "rotulo": "Primary key da assinatura 'comtrade - v1' (gratuita)", "secreto": True}],
+     "descricao": "Sem chave, o GPI já usa o endpoint público (1 mês por chamada). Com a chave gratuita, cada chamada "
+                  "traz até 12 meses: a coleta fica ~12× mais rápida e a cota é maior.",
+     "permissoes": "Somente leitura de estatísticas públicas de comércio. Plano gratuito: cota diária de chamadas; "
+                   "o GPI não usa endpoints pagos.",
+     "como_obter": "comtradedeveloper.un.org → Sign up → Products → 'comtrade - v1' (free) → Subscribe → "
+                   "Profile → copie a Primary key.",
+     "link": "https://comtradedeveloper.un.org/", "documentacao": "https://comtradedeveloper.un.org/apis"},
     {"id": "rss", "nome": "Feeds RSS de sites especializados", "tipo": "auto", "conectores": ["rss"],
      "descricao": "Manchetes de sites de tecnologia e reviews (lista editável). Apenas título, resumo curto e link.",
      "permissoes": "Leitura de feeds publicados pelos próprios sites para distribuição. O GPI guarda manchete e "
@@ -62,11 +71,118 @@ PROVIDERS = [
      "permissoes": "Os feeds do Google Notícias têm termos de uso próprios (uso pessoal/não comercial). "
                    "Fica desativado até você confirmar que o uso é permitido para a sua empresa.",
      "documentacao": "https://policies.google.com/terms"},
-    {"id": "google_trends", "nome": "Google Trends", "tipo": "approval", "conectores": ["google_trends"],
-     "descricao": "Interesse de busca no Google.",
-     "permissoes": "A API oficial está em acesso restrito (alfa) mediante inscrição. Sem acesso aprovado, o GPI "
-                   "usa a Wikimedia para medir interesse público.",
-     "link": "https://developers.google.com/search/apis/trends"},
+    {"id": "google_trends_rss", "nome": "Google Trends — Trending Now (RSS oficial)", "tipo": "auto",
+     "conectores": ["google_trends_rss"],
+     "descricao": "Buscas em alta no Google no Brasil e nos EUA, com tráfego em faixas. Conectado automaticamente.",
+     "permissoes": "Leitura do feed público oficial do Google Trends. Os dados são exibidos com a atribuição "
+                   "'Fonte: Google Trends'.", "link": "https://trends.google.com/trending?geo=BR"},
+    {"id": "google_ads", "nome": "Google Ads — Planejador de palavras-chave", "tipo": "oauth", "conectores": ["google_ads_kp"],
+     "campos": [{"nome": "developer_token", "rotulo": "Developer token (Central da API do Google Ads)", "secreto": True},
+                {"nome": "customer_id", "rotulo": "ID da conta Google Ads (ex.: 123-456-7890)", "secreto": False},
+                {"nome": "login_customer_id", "rotulo": "ID da conta de administrador (MCC), se houver", "secreto": False},
+                {"nome": "client_id", "rotulo": "OAuth Client ID (tipo 'App para computador')", "secreto": False},
+                {"nome": "client_secret", "rotulo": "OAuth Client secret", "secreto": True}],
+     "descricao": "Volume mensal de buscas (aproximado) e histórico de 12 meses por produto, no Brasil e nos EUA.",
+     "permissoes": "Login na página oficial do Google (o GPI não vê sua senha) com o escopo "
+                   "'https://www.googleapis.com/auth/adwords' — permite ler e gerenciar a conta de anúncios; o GPI usa "
+                   "SOMENTE o planejador de palavras-chave (nenhum anúncio é criado ou alterado). O developer token "
+                   "precisa estar aprovado (acesso Básico ou superior) para dados de contas reais.",
+     "como_obter": "1) ads.google.com: crie/acesse uma conta (não precisa veicular anúncios). 2) Ferramentas → Central "
+                   "da API: solicite o developer token. 3) console.cloud.google.com: ative a 'Google Ads API' e crie "
+                   "credenciais OAuth do tipo 'App para computador'. 4) Preencha os campos e clique em Conectar.",
+     "link": "https://developers.google.com/google-ads/api/docs/get-started/introduction",
+     "documentacao": "https://developers.google.com/google-ads/api/docs/keyword-planning/generate-keyword-ideas",
+     "auth_url": "https://accounts.google.com/o/oauth2/v2/auth", "token_url": "https://oauth2.googleapis.com/token",
+     "scope": "https://www.googleapis.com/auth/adwords", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
+    {"id": "google_trends", "nome": "Google Trends API (séries históricas, alfa)", "tipo": "approval",
+     "conectores": ["google_trends"],
+     "descricao": "Interesse de busca relativo com escala consistente, 5 anos, por país e região (ISO 3166-2).",
+     "permissoes": "Acesso em alfa mediante inscrição e aprovação do Google. Enquanto não houver acesso, o GPI usa o "
+                   "Trending Now (RSS) e o Planejador do Google Ads.",
+     "alternativas": "Trending Now (automático) · Planejador de palavras-chave do Google Ads (conexão assistida)",
+     "link": "https://developers.google.com/search/blog/2025/07/trends-api"},
+    {"id": "china_search", "nome": "Busca na China (Baidu Index, 巨量算数, Alibaba, JD.com)", "tipo": "approval",
+     "conectores": ["baidu_index", "ocean_engine", "alibaba_insights", "jd_com"],
+     "descricao": "Interesse de busca de consumidores na China continental.",
+     "permissoes": "Nenhuma dessas fontes oferece API aberta a terceiros: exigem login chinês, contrato pago ou "
+                   "empresa registrada. O GPI não raspa nem contorna essas proteções. Visualizações da Wikipédia em "
+                   "chinês NÃO equivalem a buscas na China e não são apresentadas como tal.",
+     "alternativas": "Sinais de oferta (exportações chinesas via UN Comtrade/Comex Stat), claramente identificados",
+     "link": "https://index.baidu.com/"},
+    {"id": "google_bigquery", "nome": "Google Trends no BigQuery (conjunto público)", "tipo": "oauth",
+     "conectores": ["google_trends_bq"],
+     "campos": [{"nome": "project_id", "rotulo": "ID do projeto Google Cloud (onde as consultas são contabilizadas)", "secreto": False},
+                {"nome": "client_id", "rotulo": "OAuth Client ID (tipo 'App para computador')", "secreto": False},
+                {"nome": "client_secret", "rotulo": "OAuth Client secret", "secreto": True}],
+     "descricao": "Top 25 e em alta por país, região (ISO 3166-2) e área de mercado nos EUA, com histórico semanal de interesse relativo.",
+     "permissoes": "Escopo somente leitura do BigQuery. As consultas usam o projeto informado: a camada gratuita do "
+                   "BigQuery cobre 1 TB de consultas por mês; o GPI mede cada consulta antes (dry run) e não executa as que "
+                   "passarem do limite definido em Configurações (padrão 2 GB). O GPI não ativa serviços pagos.",
+     "como_obter": "console.cloud.google.com: crie um projeto, ative a 'BigQuery API' e crie credenciais OAuth do tipo "
+                   "'App para computador'. Informe os dados e clique em Entrar.",
+     "link": "https://console.cloud.google.com/bigquery", "documentacao": "https://cloud.google.com/blog/products/data-analytics/international-google-trends-datasets-in-bigquery",
+     "auth_url": "https://accounts.google.com/o/oauth2/v2/auth", "token_url": "https://oauth2.googleapis.com/token",
+     "scope": "https://www.googleapis.com/auth/bigquery.readonly", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
+    {"id": "ebay", "nome": "eBay — Browse API", "tipo": "api_key", "conectores": ["ebay"],
+     "campos": [{"nome": "client_id", "rotulo": "App ID (Client ID) de produção", "secreto": False},
+                {"nome": "client_secret", "rotulo": "Cert ID (Client Secret) de produção", "secreto": True}],
+     "descricao": "Anúncios ativos, preços e marcas por produto no eBay EUA — base da análise de concorrência.",
+     "permissoes": "Token de aplicativo (sem login de usuário) com o escopo público de leitura. Quantidade de anúncios não é venda.",
+     "como_obter": "developer.ebay.com → criar conta → Application Keys → criar keyset de Production → copie App ID e Cert ID.",
+     "link": "https://developer.ebay.com/my/keys", "documentacao": "https://developer.ebay.com/api-docs/buy/browse/overview.html"},
+    {"id": "msads", "nome": "Microsoft Advertising — volume de buscas no Bing", "tipo": "oauth", "conectores": ["msads_kp"],
+     "campos": [{"nome": "developer_token", "rotulo": "Developer token", "secreto": True},
+                {"nome": "customer_id", "rotulo": "Customer ID", "secreto": False},
+                {"nome": "account_id", "rotulo": "Account ID", "secreto": False},
+                {"nome": "client_id", "rotulo": "Application (client) ID do registro no Microsoft Entra", "secreto": False}],
+     "descricao": "Volume mensal de buscas no Bing por palavra-chave (Brasil e EUA).",
+     "permissoes": "Login na página oficial da Microsoft com o escopo msads.manage; o GPI usa apenas a consulta de volume "
+                   "histórico (nenhuma campanha é criada). Implementado segundo a documentação; ainda não validado com conta real.",
+     "como_obter": "ads.microsoft.com: crie a conta → Developer Portal: solicite o developer token → portal do Azure: registre "
+                   "um aplicativo (cliente público, redirecionamento http://127.0.0.1) → informe os IDs e clique em Entrar.",
+     "link": "https://developers.ads.microsoft.com/", "documentacao": "https://learn.microsoft.com/advertising/ad-insight-service/gethistoricalsearchvolume",
+     "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+     "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+     "scope": "https://ads.microsoft.com/msads.manage offline_access"},
+    {"id": "gdelt", "nome": "GDELT — notícias globais", "tipo": "auto", "conectores": ["gdelt"],
+     "descricao": "Repercussão dos produtos na imprensa mundial (artigos por mês). Conectado automaticamente.",
+     "permissoes": "API pública e gratuita do GDELT Project; o GPI respeita o intervalo de 5 s entre consultas.",
+     "link": "https://www.gdeltproject.org/"},
+    {"id": "tiktok", "nome": "TikTok API for Business — Discovery", "tipo": "oauth", "oauth_especial": "tiktok",
+     "conectores": ["tiktok"],
+     "campos": [{"nome": "client_id", "rotulo": "App ID (portal TikTok API for Business)", "secreto": False},
+                {"nome": "client_secret", "rotulo": "Secret do app", "secreto": True},
+                {"nome": "auth_url", "rotulo": "URL de autorização de anunciante (copiada do portal, opcional)", "secreto": False},
+                {"nome": "auth_url_conta", "rotulo": "URL de autorização de conta TikTok (copiada do portal, opcional)", "secreto": False},
+                {"nome": "access_token", "rotulo": "OU: token de acesso de longo prazo gerado no portal", "secreto": True},
+                {"nome": "advertiser_id", "rotulo": "Advertiser ID (hashtags populares)", "secreto": False},
+                {"nome": "business_id", "rotulo": "Business ID / open_id da conta TikTok (termos de busca em alta)", "secreto": False}],
+     "descricao": "Hashtags populares por país (com visualizações e publicações), 20 termos de busca em alta no TikTok e "
+                  "termos recomendados por produto — recursos oficiais de descoberta (Discovery API).",
+     "permissoes": "Login nas páginas oficiais da TikTok (o GPI não pede sua senha). Exige conta TikTok for Business e app "
+                   "aprovado com acesso à Discovery API. A TikTok Research API NÃO é usada: é restrita a pesquisa acadêmica. "
+                   "Posição e visualizações medem atenção na plataforma — não são compras.",
+     "como_obter": "1) business-api.tiktok.com → My Apps → criar app (Marketing API) e solicitar os escopos de Discovery. "
+                   "2) Cadastre a URL de redirecionamento exibida abaixo. 3) Copie o App ID, o Secret e a URL de autorização "
+                   "do app. 4) Clique em Conectar (anunciante) e/ou Conectar conta TikTok. Se o portal exigir URL https, gere "
+                   "um token de longo prazo no portal e informe-o com o Advertiser ID/Business ID.",
+     "link": "https://business-api.tiktok.com/portal/apps", "documentacao": "https://business-api.tiktok.com/portal/docs"},
+    {"id": "meta", "nome": "Meta — Instagram, Facebook e Biblioteca de Anúncios", "tipo": "oauth", "oauth_especial": "meta",
+     "conectores": ["instagram", "facebook", "meta_ads"],
+     "campos": [{"nome": "client_id", "rotulo": "App ID (Meta for Developers)", "secreto": False},
+                {"nome": "client_secret", "rotulo": "App Secret", "secreto": True},
+                {"nome": "ig_user_id", "rotulo": "ID da conta profissional do Instagram (preenchido ao conectar)", "secreto": False}],
+     "descricao": "Central Meta: um login compartilhado para três conectores independentes — hashtags do Instagram, "
+                  "páginas comerciais do Facebook e Biblioteca de Anúncios (UE).",
+     "permissoes": "Login do Facebook na página oficial da Meta com as permissões instagram_basic, pages_show_list, "
+                   "pages_read_engagement e ads_read (somente leitura). Hashtags exigem o recurso Instagram Public Content "
+                   "Access; páginas públicas de terceiros exigem Page Public Content Access; a Biblioteca de Anúncios exige "
+                   "identidade verificada. Cada recurso depende da revisão do app pela Meta. O token de longo prazo vale ~60 dias.",
+     "como_obter": "developers.facebook.com → Meus apps → criar app (tipo Empresa) → adicionar 'Login do Facebook' e "
+                   "'Instagram Graph API' → cadastrar a URL de redirecionamento exibida abaixo → solicitar os recursos na "
+                   "revisão do app → informar App ID e App Secret → Conectar.",
+     "link": "https://developers.facebook.com/apps/", "documentacao": "https://developers.facebook.com/docs/instagram-platform",
+     "scope": "instagram_basic,pages_show_list,pages_read_engagement,ads_read,business_management"},
     {"id": "amazon", "nome": "Amazon Brasil / EUA", "tipo": "approval", "conectores": ["amazon_br", "amazon_us"],
      "descricao": "Preços e rankings de produtos.", "permissoes": "Product Advertising API: exige conta aprovada no "
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
@@ -88,6 +204,93 @@ PROVIDERS = [
      "permissoes": "Sem API pública para consulta de preços de terceiros; exige licença/parceria.",
      "link": "https://www.buscape.com.br/"},
 ]
+
+
+CATEGORIAS = {"pesquisas": "Pesquisas", "marketplaces": "Marketplaces", "redes_sociais": "Redes Sociais",
+              "dados_publicos": "Dados Públicos", "conteudo": "Notícias e Avaliações"}
+CATEGORIA_DE = {
+    "google_trends_rss": ["pesquisas"], "google_ads": ["pesquisas"], "google_bigquery": ["pesquisas"], "google_trends": ["pesquisas"],
+    "msads": ["pesquisas"], "china_search": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
+    "ebay": ["marketplaces"], "amazon": ["marketplaces"], "shopee": ["marketplaces"], "china_marketplaces": ["marketplaces"],
+    "comparadores": ["marketplaces"], "tiktok": ["redes_sociais"], "meta": ["redes_sociais"], "youtube": ["redes_sociais"],
+    "reddit": ["redes_sociais"], "publicas": ["dados_publicos"], "comtrade": ["dados_publicos"], "gdelt": ["dados_publicos"],
+    "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"], "reclame_aqui": ["conteudo"],
+}
+NIVEL = {"auto": 1, "api_key": 2, "client_id": 2, "oauth": 2, "optin": 2, "approval": 3}
+NIVEL_NOME = {1: "Conexão automática", 2: "Conexão assistida", 3: "Acesso restrito"}
+for _p in PROVIDERS:
+    _p["nivel"] = NIVEL[_p["tipo"]]
+    _p["nivel_nome"] = NIVEL_NOME[_p["nivel"]]
+    _p["categorias"] = CATEGORIA_DE.get(_p["id"], ["conteudo"])
+
+TT_HOSTS = ("business-api.tiktok.com", "ads.tiktok.com", "www.tiktok.com", "open.tiktokapis.com")
+
+
+def tiktok_authorize_url(c: dict, mode: str, redirect_uri: str, state: str) -> str:
+    """Usa a URL de autorização copiada do portal da TikTok (não inventa endereço) e só aceita hosts da TikTok."""
+    import urllib.parse as up
+    base = (c.get("auth_url_conta") if mode == "conta" else c.get("auth_url")) or ""
+    u = up.urlsplit(base)
+    if u.scheme != "https" or u.hostname not in TT_HOSTS:
+        raise SourceError("informe a URL de autorização copiada do portal TikTok API for Business (https://business-api.tiktok.com/...)",
+                          "restrita")
+    q = dict(up.parse_qsl(u.query))
+    q.update({"state": state, "redirect_uri": redirect_uri})
+    q.setdefault("app_id" if mode != "conta" else "client_key", c.get("client_id", ""))
+    return up.urlunsplit((u.scheme, u.netloc, u.path, up.urlencode(q), ""))
+
+
+def tiktok_exchange(http, creds, code: str, mode: str, redirect_uri: str) -> dict:
+    c = creds.get("tiktok")
+    if mode == "conta":
+        r = http.request_json("https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/token/", "POST",
+                              {"client_id": c.get("client_id"), "client_secret": c.get("client_secret"), "grant_type": "authorization_code",
+                               "auth_code": code, "redirect_uri": redirect_uri}, ttl=0)
+    else:
+        r = http.request_json("https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/", "POST",
+                              {"app_id": c.get("client_id"), "secret": c.get("client_secret"), "auth_code": code}, ttl=0)
+    if not isinstance(r, dict) or r.get("code") != 0:
+        raise SourceError(f"TikTok não emitiu token: {(r or {}).get('message') if isinstance(r, dict) else r}", "restrita")
+    d = r.get("data") or {}
+    if mode == "conta":
+        vals = {"access_token": d.get("access_token"), "business_id": d.get("open_id"), "refresh_token": d.get("refresh_token")}
+    else:
+        adv = d.get("advertiser_ids") or []
+        vals = {"access_token": d.get("access_token"), "advertiser_id": str(adv[0]) if adv else c.get("advertiser_id", "")}
+    creds.set("tiktok", {k: v for k, v in vals.items() if v})
+    return vals
+
+
+def meta_authorize_url(c: dict, ver: str, redirect_uri: str, state: str) -> str:
+    import urllib.parse as up
+    return f"https://www.facebook.com/{ver}/dialog/oauth?" + up.urlencode({
+        "client_id": c.get("client_id", ""), "redirect_uri": redirect_uri, "state": state, "response_type": "code",
+        "scope": provider("meta")["scope"]})
+
+
+def meta_exchange(http, creds, code: str, redirect_uri: str, ver: str) -> dict:
+    """Código → token curto → token de longo prazo (~60 dias) → detecta a conta profissional do Instagram."""
+    import urllib.parse as up
+    c = creds.get("meta")
+    g = f"https://graph.facebook.com/{ver}/"
+    r = http.request_json(g + "oauth/access_token?" + up.urlencode({"client_id": c.get("client_id"), "redirect_uri": redirect_uri,
+                                                                      "client_secret": c.get("client_secret"), "code": code}), ttl=0)
+    if not r.get("access_token"):
+        raise SourceError(f"Meta não emitiu token: {(r.get('error') or {}).get('message', r)}", "restrita")
+    ll = http.request_json(g + "oauth/access_token?" + up.urlencode({"grant_type": "fb_exchange_token", "client_id": c.get("client_id"),
+                                                                       "client_secret": c.get("client_secret"),
+                                                                       "fb_exchange_token": r["access_token"]}), ttl=0)
+    tok = ll.get("access_token") or r["access_token"]
+    vals = {"access_token": tok, "expires_at": str(time.time() + float(ll.get("expires_in", r.get("expires_in", 3600))))}
+    try:
+        acc = http.request_json(g + "me/accounts?" + up.urlencode({"fields": "name,instagram_business_account", "access_token": tok}), ttl=0)
+        ig = next((a["instagram_business_account"]["id"] for a in acc.get("data", []) if a.get("instagram_business_account")), None)
+        if ig and not c.get("ig_user_id"):
+            vals["ig_user_id"] = ig
+    except SourceError:
+        pass
+    creds.set("meta", vals)
+    return vals
 
 
 def provider(pid: str) -> dict | None:
@@ -116,6 +319,53 @@ def test_connection(pid: str, http, creds, cfg: dict) -> tuple[bool, str]:
             tok = ml_token(http, creds)
             me = http.request_json("https://api.mercadolibre.com/users/me", headers={"Authorization": f"Bearer {tok}"}, ttl=0)
             return True, f"conectado como {me.get('nickname', me.get('id'))}"
+        if pid == "google_trends_rss":
+            from ..connectors.search import parse_trending
+            res = []
+            for geo in ("BR", "US"):
+                items = parse_trending(http.request_text(f"https://trends.google.com/trending/rss?geo={geo}", ttl=0))
+                res.append(f"{geo}: {len(items)} buscas em alta")
+            return True, "; ".join(res)
+        if pid == "google_ads":
+            from ..connectors.search import gads_call
+            r = gads_call(http, creds, ":generateKeywordIdeas", {
+                "language": "languageConstants/1014", "geoTargetConstants": ["geoTargetConstants/2076"],
+                "keywordPlanNetwork": "GOOGLE_SEARCH", "keywordSeed": {"keywords": ["air fryer"]}})
+            n = len(r.get("results", []))
+            return (n > 0, f"API respondeu ({creds.get('google_ads').get('api_version')}): {n} ideias de palavras-chave"
+                    if n else "a API respondeu sem ideias (verifique o nível de acesso do developer token)")
+        if pid == "ebay":
+            from ..connectors.sources5 import EbayBrowse, ebay_token, parse_ebay
+            tok = ebay_token(http, creds)
+            r = http.request_json(EbayBrowse.URL + "?q=air+fryer&limit=3", ttl=0,
+                                  headers={"Authorization": f"Bearer {tok}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"})
+            return True, f"token obtido; {len(parse_ebay(r))} anúncio(s) retornado(s) para 'air fryer'"
+        if pid == "google_bigquery":
+            from ..connectors.sources5 import google_token
+            tok = google_token(http, creds, "google_bigquery")
+            c = creds.get("google_bigquery")
+            r = http.request_json(f"https://bigquery.googleapis.com/bigquery/v2/projects/{c.get('project_id')}/queries", "POST",
+                                  {"query": "SELECT 1", "useLegacySql": False, "dryRun": True}, ttl=0,
+                                  headers={"Authorization": f"Bearer {tok}"})
+            return True, f"projeto {c.get('project_id')} aceitou consultas (teste sem custo: dry run)"
+        if pid == "gdelt":
+            from ..connectors.sources5 import Gdelt, parse_gdelt_timeline
+            pts = parse_gdelt_timeline(http.request_json(Gdelt.URL + '?query=%22air%20fryer%22&mode=timelinevolraw&format=json&timespan=1m', ttl=0))
+            return True, f"GDELT respondeu ({len(pts)} dias)"
+        if pid == "msads":
+            from ..connectors.sources5 import ms_token
+            ms_token(http, creds)
+            return True, "token Microsoft obtido (a consulta de volume é validada na primeira sincronização)"
+        if pid == "comtrade":
+            key = creds.get("comtrade").get("api_key")
+            if not key:
+                return False, "informe a chave"
+            r = http.request_json("https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode=76&period=2023"
+                                  "&partnerCode=156&cmdCode=TOTAL&flowCode=M", ttl=0,
+                                  headers={"Ocp-Apim-Subscription-Key": key})
+            n = len(r.get("data") or []) if isinstance(r, dict) else 0
+            return (n > 0, f"chave válida ({n} registro retornado: importações do Brasil vindas da China, 2023)"
+                    if n else f"a API respondeu sem dados: {str(r)[:200]}")
         if pid == "rss":
             from ..connectors.content import RSS_DEFAULT, parse_feed
             feeds = cfg.get("rss_feeds") or RSS_DEFAULT
@@ -133,6 +383,38 @@ def test_connection(pid: str, http, creds, cfg: dict) -> tuple[bool, str]:
             items = parse_feed(http.request_text(
                 "https://news.google.com/rss/search?q=eletr%C3%B4nicos&hl=pt-BR&gl=BR&ceid=BR:pt-419", ttl=0))
             return True, f"{len(items)} notícias retornadas"
+        if pid == "tiktok":
+            c = creds.get("tiktok")
+            if not c.get("access_token"):
+                return False, "conecte pelo OAuth ou informe o token de acesso gerado no portal"
+            from ..social.connectors import TT_API, _tt_check
+            msgs = []
+            if c.get("advertiser_id"):
+                d = _tt_check(http.request_json(TT_API + "discovery/trending_list/?advertiser_id=" + c["advertiser_id"] +
+                                                "&discovery_type=HASHTAG&country_code=BR&date_range=7DAY", ttl=0,
+                                                headers={"Access-Token": c["access_token"]}))
+                msgs.append(f"{len(d.get('list') or [])} hashtags populares (BR)")
+            if c.get("business_id"):
+                d = _tt_check(http.request_json(TT_API + cfg.get("tiktok_search_path", "discovery/search/") + "?business_id=" +
+                                                c["business_id"], ttl=0, headers={"Access-Token": c["access_token"]}))
+                msgs.append(f"{len(d.get('search_keywords') or [])} termos de busca em alta")
+            return (bool(msgs), "; ".join(msgs) or "informe o Advertiser ID ou o Business ID")
+        if pid == "meta":
+            c = creds.get("meta")
+            if not c.get("access_token"):
+                return False, "use 'Conectar' para entrar com a conta Meta"
+            import urllib.parse as up
+            g = f"https://graph.facebook.com/{cfg.get('meta_graph_version', 'v23.0')}/"
+            me = http.request_json(g + "me?" + up.urlencode({"fields": "id,name", "access_token": c["access_token"]}), ttl=0)
+            if me.get("error"):
+                return False, f"Meta: {me['error'].get('message')}"
+            msg = f"token válido ({me.get('name', me.get('id'))})"
+            if c.get("ig_user_id"):
+                ig = http.request_json(g + c["ig_user_id"] + "?" + up.urlencode({"fields": "username", "access_token": c["access_token"]}), ttl=0)
+                msg += f"; Instagram: {ig.get('username') or (ig.get('error') or {}).get('message')}"
+            else:
+                msg += "; nenhuma conta profissional do Instagram vinculada"
+            return True, msg
         if pid == "publicas":
             r = http.request_json("https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/Moedas?$format=json", ttl=0)
             return (True, f"Banco Central respondeu ({len(r.get('value', []))} moedas)") if "value" in r else (False, "resposta inesperada")
@@ -166,6 +448,17 @@ def ml_token(http, creds) -> str:
         "refresh_token": c["refresh_token"]})
     store_ml_token(creds, r)
     return r["access_token"]
+
+
+def store_oauth_token(creds, pid: str, r: dict):
+    if pid == "mercadolivre":
+        return store_ml_token(creds, r)
+    if not r.get("access_token"):
+        raise SourceError(f"o provedor não emitiu token: {r.get('error_description') or r.get('error')}", "restrita")
+    data = {"access_token": r["access_token"], "expires_at": str(time.time() + float(r.get("expires_in", 3600)))}
+    if r.get("refresh_token"):
+        data["refresh_token"] = r["refresh_token"]
+    creds.set(pid, data)
 
 
 def store_ml_token(creds, r: dict):

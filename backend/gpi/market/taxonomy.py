@@ -89,6 +89,20 @@ CONCEPTS = {
     "Screen protector": ("Acessórios tecnológicos", ["3919"]),
     "Selfie stick": ("Acessórios tecnológicos", ["9620"]),
     "Ring light": ("Acessórios tecnológicos", ["9405"]),
+    # Fase 4 — produtos de consumo de referência
+    "Motorcycle helmet": ("Moto e automotivo", ["6506"]),
+    "Wing mirror": ("Moto e automotivo", ["7009"]),
+    "Electronic lock": ("Casa inteligente", ["8301"]),
+    "IP camera": ("Casa inteligente", ["8525"]),
+    "Motion detector": ("Casa inteligente", ["8531"]),
+    "Mechanical fan": ("Eletrodomésticos", ["8414"]),
+    "Humidifier": ("Eletrodomésticos", ["8479"]),
+    "Drill": ("Ferramentas", ["8467"]),
+    "Battery charger": ("Acessórios tecnológicos", ["8504"]),
+    "Dashcam": ("Moto e automotivo", ["8525"]),
+    "Electric toothbrush": ("Beleza e cuidados pessoais", ["8509"]),
+    "Hair dryer": ("Beleza e cuidados pessoais", ["8516"]),
+    "Electric scooter": ("Esporte e lazer", ["8711"]),
 }
 
 STOP = {"de", "da", "do", "das", "dos", "e", "para", "com", "em", "a", "o", "as", "os", "uso",

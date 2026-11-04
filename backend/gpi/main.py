@@ -36,6 +36,9 @@ HOST = "127.0.0.1"
 APP_ID = "gpi-global-product-intelligence"
 DEFAULTS = {"port": 8765, "port_range": 10, "open_browser": True, "data_dir": None, "telemetry": False,
             "log_level": "INFO", "auto_sync": True, "history_start_year": 2016, "proxy": None,
+            "sync_workers": 4, "trends_geos": ["BR", "US"], "catalog_max_products": 5000, "catalog_max_candidates": 20000,
+            "kp_max_products": 200, "trend_forecast_max": 20, "gdelt_max_products": 30, "ebay_max_products": 30,
+            "bq_max_gb": 2.0, "ml_global_enabled": True, "ml_tuning_trials": 15, "ml_tuning_seconds": 120,
             "ca_bundle": None, "contact": None, "mercadolivre_access_token": None, "automl_budget_s": 420,
             "youtube_daily_units": 3000}
 
@@ -297,7 +300,7 @@ def control_window(url: str, server, on_close):
 
 # ---------------------------------------------------------------------- autoteste dos modelos
 SELFTEST_REQUIRED = ("naive", "seasonal_naive", "holt_winters", "ets_auto", "croston_sba", "random_forest", "hist_gb",
-                     "sarima", "lightgbm", "xgboost")
+                     "sarima", "lightgbm", "xgboost", "hist_gb_global", "lightgbm_global", "xgboost_global", "catboost_global")
 
 
 def selftest(data: Path) -> int:
@@ -310,7 +313,8 @@ def selftest(data: Path) -> int:
     t = np.arange(48)
     y = 100 + 0.8 * t + 15 * np.sin(2 * np.pi * t / 12) + np.random.default_rng(0).normal(0, 3, 48)
     out = {"versao": __version__, "bibliotecas": {}, "modelos": {}}
-    for lib in ("numpy", "scipy", "pandas", "sklearn", "statsmodels", "lightgbm", "xgboost", "starlette", "uvicorn"):
+    for lib in ("numpy", "scipy", "pandas", "sklearn", "statsmodels", "lightgbm", "xgboost", "catboost", "river",
+                "rapidfuzz", "optuna", "starlette", "uvicorn"):
         try:
             mod = __import__(lib)
             out["bibliotecas"][lib] = getattr(mod, "__version__", "?")
@@ -326,6 +330,24 @@ def selftest(data: Path) -> int:
                                    "previsao": [round(float(v), 2) for v in f]}
         except Exception as e:  # noqa: BLE001
             out["modelos"][key] = {"ok": False, "erro": f"{type(e).__name__}: {e}"}
+    # v0.5: modelos globais multi-série (treino e previsão mínimos num painel sintético de teste)
+    from .forecasting import advanced as adv
+    rng = np.random.default_rng(1)
+    panel = [{"id": f"t{i}", "y": 100 + 10 * np.sin(np.arange(40) / 2) + rng.normal(0, 1, 40) + i, "months": [k % 12 + 1 for k in range(40)],
+              "meta": {"family": "f", "category": "c", "country": "BR", "source": "teste"}} for i in range(4)]
+    X, yv = adv.panel(panel)
+    for name, fac in adv.make_models().items():
+        t0 = time.time()
+        try:
+            fm = adv.fit(name, fac, X, yv)
+            f = adv.forecast_series(fm, panel[0], 3)
+            out["modelos"][name] = {"ok": bool(np.all(np.isfinite(f))), "segundos": round(time.time() - t0, 2),
+                                    "previsao": [round(float(v), 2) for v in f]}
+        except Exception as e:  # noqa: BLE001
+            out["modelos"][name] = {"ok": False, "erro": f"{type(e).__name__}: {e}"}
+    from .products import discovery
+    out["descoberta"] = discovery.status()
+    out["drift"] = "river" if adv.libs()["river"] else "interno"
     missing = [k for k in SELFTEST_REQUIRED if not out["modelos"].get(k, {}).get("ok")]
     out["exigidos_com_falha"] = missing
     out["ok"] = not missing
@@ -373,7 +395,9 @@ def main(argv=None) -> int:
     log.info("GPI %s — programa em %s; dados em %s", __version__, app_dir(), data)
 
     # 1. integridade
+    t_int = time.time()
     ok, probs = verify_integrity(app_dir(), data / "integrity.json")
+    log.info("verificação de integridade: %.1f s", time.time() - t_int)
     if not ok:
         fatal("Arquivos do GPI ausentes ou alterados — extraia novamente o pacote.\n\n" + "\n".join(probs[:10]))
         return 4
@@ -406,8 +430,11 @@ def main(argv=None) -> int:
         return 2
 
     # 3. servidor
+    t_app = time.time()
+    log.info("carregando bibliotecas do servidor…")
     import uvicorn
     from .app import create_app
+    log.info("bibliotecas carregadas em %.1f s", time.time() - t_app)
 
     holder = {}
 
@@ -416,6 +443,7 @@ def main(argv=None) -> int:
 
     app = create_app(data, resource_dir() / "frontend", shutdown_cb=shutdown, cfg=cfg,
                      start_sync=cfg.get("auto_sync", True) and not args.smoke)
+    log.info("aplicação carregada em %.1f s (importação + banco)", time.time() - t_app)
     (data / "gpi.run.json").write_text(json.dumps({"port": port, "pid": os.getpid()}))
     server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning", access_log=False,
                                            workers=1, log_config=None,

@@ -1,5 +1,5 @@
 # Testes do GPI.exe empacotado (usados no CI e utilizáveis manualmente no Windows).
-#   A inicialização · B servidor local · C interface · D modelos de ML dentro do pacote
+#   I relatórios XLSX/PDF · A inicialização · B servidor local · C interface · D modelos de ML dentro do pacote
 #   E persistência · F encerramento e liberação da porta · G integridade · H distribuição limpa
 # Cada resultado é gravado em smoke_resultados.txt (anexado ao relatório de build).
 param([string]$Exe = "dist/GPI/GPI.exe", [string]$Report = "smoke_resultados.txt")
@@ -135,6 +135,24 @@ foreach ($k in $fc.modelos.PSObject.Properties.Name) {
   if ($e) { Note ("   modelo {0,-15} não aplicável a esta série: {1}" -f $k, $e) }
 }
 
+Note "I) Relatórios: Excel e PDF gerados pelo executável (sem Excel/Word/LibreOffice, sem internet)"
+$repIds = @()
+foreach ($fmt in "xlsx", "pdf") {
+  $rb = @{ tipo = "executivo"; formato = $fmt; filtros = @{} } | ConvertTo-Json
+  $rr = Invoke-RestMethod -Method Post -Uri "$base/api/reports/generate" -Headers $hdr -ContentType "application/json" -Body $rb -NoProxy -TimeoutSec 300
+  if ($rr.status -ne "gerado") { Fail "relatório $fmt não gerado: $($rr.erro)" }
+  $out = Join-Path $tmp "gpi-relatorio.$fmt"
+  Invoke-WebRequest -Uri "$base/api/reports/$($rr.id)/download" -OutFile $out -UseBasicParsing -NoProxy -TimeoutSec 60
+  $bytes = [IO.File]::ReadAllBytes($out)
+  $magic = [Text.Encoding]::ASCII.GetString($bytes, 0, 4)
+  if ($fmt -eq "pdf" -and $magic -ne "%PDF") { Fail "PDF inválido (cabeçalho '$magic')" }
+  if ($fmt -eq "xlsx" -and $magic.Substring(0, 2) -ne "PK") { Fail "XLSX inválido (cabeçalho '$magic')" }
+  if ($bytes.Length -lt 2000) { Fail "relatório $fmt muito pequeno ($($bytes.Length) bytes)" }
+  $repIds += $rr.id
+  Note ("   {0}: {1} bytes · {2}" -f $fmt.ToUpper(), $bytes.Length, $rr.arquivo)
+}
+if ($fmt -eq "pdf") { Copy-Item $out (Join-Path (Split-Path $Report) "exemplo_relatorio_exe.pdf") -Force }
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -144,7 +162,11 @@ Note "   processo encerrado; porta 8765 liberada"
 
 $app = StartApp
 $after = @(GetList "$base/api/skus").Count
+$hist = Invoke-RestMethod -Uri "$base/api/reports" -NoProxy -TimeoutSec 30
+$kept = @($hist.relatorios | Where-Object { $repIds -contains $_.id -and $_.disponivel }).Count
 StopApp $app
+if ($kept -ne 2) { Fail "histórico de relatórios não persistiu após reabrir ($kept de 2)" }
+Note "   reabertura: 2 relatórios preservados no histórico"
 if ($after -ne $before) { Fail "persistência: $before SKUs antes, $after depois da reabertura" }
 Note "   reabertura: $after SKUs preservados"
 
@@ -157,4 +179,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–H)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–I)"

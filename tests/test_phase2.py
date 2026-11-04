@@ -227,7 +227,7 @@ def test_proxy_block_not_retried_and_run_partial(tmp_path):
     sm.run("teste")
     st = sm.store.source_status()
     assert all(st[s]["state"] == "falhou" for s in ("bcb_ptax", "wikimedia", "comexstat", "ibge_pmc"))
-    assert len(http.calls) == 5                 # uma tentativa por fonte (4 públicas + RSS), sem insistência
+    assert len(http.calls) == 6                 # uma tentativa por fonte (4 públicas + RSS + Trends), sem insistência
     assert db.query("SELECT state FROM sync_runs")[0]["state"] == "parcial"
     assert sm.due()                             # semana não conta como concluída
 

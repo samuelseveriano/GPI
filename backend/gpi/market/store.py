@@ -37,21 +37,22 @@ class MarketStore:
             raise ValueError(f"metadados obrigatórios ausentes: {missing}")
         if meta["kind"] not in KINDS:
             raise ValueError(f"tipo de série inválido: {meta['kind']}")
-        ts = now_iso()
-        row = self.db.query("SELECT id FROM market_series WHERE series_key = ?", (series_key,))
-        vals = [meta.get(f) for f in SERIES_FIELDS]
-        if row:
-            sid = row[0]["id"]
-            sets = ", ".join(f"{f} = ?" for f in SERIES_FIELDS)
-            self.db.execute(f"UPDATE market_series SET {sets}, last_collected = ? WHERE id = ?",
-                            (*vals, ts, sid))
+        with self.db.lock:          # leitura + inserção atômicas (fontes coletam em paralelo)
+            ts = now_iso()
+            row = self.db.query("SELECT id FROM market_series WHERE series_key = ?", (series_key,))
+            vals = [meta.get(f) for f in SERIES_FIELDS]
+            if row:
+                sid = row[0]["id"]
+                sets = ", ".join(f"{f} = ?" for f in SERIES_FIELDS)
+                self.db.execute(f"UPDATE market_series SET {sets}, last_collected = ? WHERE id = ?",
+                                (*vals, ts, sid))
+                return sid
+            sid = self.db.next_id("market_series")
+            self.db.execute(
+                f"INSERT INTO market_series (id, series_key, {', '.join(SERIES_FIELDS)}, first_collected, last_collected)"
+                f" VALUES (?, ?, {', '.join('?' * len(SERIES_FIELDS))}, ?, ?)",
+                (sid, series_key, *vals, ts, ts))
             return sid
-        sid = self.db.next_id("market_series")
-        self.db.execute(
-            f"INSERT INTO market_series (id, series_key, {', '.join(SERIES_FIELDS)}, first_collected, last_collected)"
-            f" VALUES (?, ?, {', '.join('?' * len(SERIES_FIELDS))}, ?, ?)",
-            (sid, series_key, *vals, ts, ts))
-        return sid
 
     def upsert_obs(self, series_id: int, obs: list[tuple[str, float]]) -> dict:
         """Insere ou revisa observações. Retorna contagem de novas/revisadas/iguais."""
@@ -133,6 +134,14 @@ class MarketStore:
                                "FROM content_items WHERE source = ?", (source,))[0]
         except Exception:  # noqa: BLE001 — banco anterior à migração v3
             cs = {"n": 0}
+        try:
+            ss = self.db.query("SELECT COUNT(*) AS n, MIN(ref_date) AS a, MAX(ref_date) AS b FROM search_observations "
+                               "WHERE source = ?", (source,))[0]
+        except Exception:  # noqa: BLE001 — banco anterior à migração v4
+            ss = {"n": 0}
+        if ss["n"]:
+            cs = {"n": cs["n"] + ss["n"], "a": min(x for x in (cs.get("a"), ss["a"]) if x) if (cs.get("a") or ss["a"]) else None,
+                  "b": max(x for x in (cs.get("b"), ss["b"]) if x) if (cs.get("b") or ss["b"]) else None}
         if cs["n"]:
             stats = {"n": stats["n"] + cs["n"], "a": min(x for x in (stats["a"], cs["a"]) if x) if (stats["a"] or cs["a"]) else None,
                      "b": max(x for x in (stats["b"], cs["b"]) if x) if (stats["b"] or cs["b"]) else None}

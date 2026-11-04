@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest>=8
+pdfplumber>=0.11   # testes do PDF (texto, posições, páginas)
+pypdf>=4
