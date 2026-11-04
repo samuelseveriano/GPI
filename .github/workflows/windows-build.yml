@@ -23,7 +23,7 @@ jobs:
   testes:
     name: 1. Testes automatizados
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 50          # a suíte (365 testes) leva ~30 min no runner Windows; 30 min cortava no limite
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
