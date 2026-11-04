@@ -49,6 +49,17 @@ log = logging.getLogger("gpi")
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 
 
+async def _reject(request, msg: str):
+    """403 sem resetar a conexão: lê (até 1 MB) o corpo ainda não lido antes de responder. Sem isso o Windows
+    pode abortar o socket do cliente (WinError 10053) em vez de entregar o 403. Corpos maiores não são lidos."""
+    try:
+        if int(request.headers.get("content-length") or 0) <= 1_000_000:
+            await request.body()
+    except Exception:  # noqa: BLE001 — cliente já desconectou / content-length inválido
+        pass
+    return JSONResponse({"erro": msg}, 403, headers={"Connection": "close"})
+
+
 class HostGuard(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         host = (request.headers.get("host") or "").split(":")[0]
@@ -60,9 +71,9 @@ class HostGuard(BaseHTTPMiddleware):
                 and request.url.path != "/api/shutdown":
             origin = request.headers.get("origin")
             if request.headers.get("x-gpi") != "1":
-                return JSONResponse({"erro": "requisição recusada (cabeçalho de segurança ausente)"}, 403)
+                return await _reject(request, "requisição recusada (cabeçalho de segurança ausente)")
             if origin and urlsplit(origin).hostname not in ALLOWED_HOSTS:
-                return JSONResponse({"erro": "origem não permitida"}, 403)
+                return await _reject(request, "origem não permitida")
         resp = await call_next(request)
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
