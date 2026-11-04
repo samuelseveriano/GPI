@@ -1,0 +1,7 @@
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f6f7f9;color:#1d2330;margin:0}
+main{max-width:640px;margin:40px auto;padding:24px;background:#fff;border:1px solid #dde1e7;border-radius:10px}
+h1{font-size:1.25rem}h2{font-size:1rem;margin-top:28px}
+.botao{display:inline-block;background:#2457c5;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none}
+textarea{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:.85rem}
+.nota{color:#5b6475;font-size:.8rem;margin-top:32px}
+@media (prefers-color-scheme:dark){body{background:#15181e;color:#e6e9ef}main{background:#1d2129;border-color:#2c323d}.nota{color:#9aa3b2}}

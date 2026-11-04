@@ -1,0 +1,106 @@
+# GitHub Pages do GPI — publica SOMENTE a pasta pages/ (página estática de retorno OAuth do Mercado Livre).
+# Endereço: https://samuelseveriano.github.io/GPI/oauth/mercadolivre/
+#
+# * validar   — roda também em pull requests (sem permissões de escrita e sem deploy): confere a lista de arquivos
+#               permitidos, procura segredos, testa a lógica de segurança da página e gera o manifesto SHA-256.
+# * publicar  — só na branch main (push) ou execução manual; usa o ambiente github-pages (pages: write, id-token: write).
+# * verificar — faz requisições HTTPS ao endereço publicado e testa o JavaScript efetivamente servido.
+# Pré-requisito (uma vez, dono do repositório): Settings → Pages → Build and deployment → Source: "GitHub Actions".
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["pages/**", ".github/workflows/pages.yml", ".github/pages/**"]
+  pull_request:
+    paths: ["pages/**", ".github/workflows/pages.yml", ".github/pages/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validar:
+    name: Validar arquivos da página
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Somente arquivos estáticos permitidos e sem segredos
+        run: |
+          set -euo pipefail
+          test -f pages/oauth/mercadolivre/index.html
+          test -f pages/oauth/mercadolivre/relay.js
+          test -f pages/.nojekyll
+          bad=$(find pages -type f ! \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '.nojekyll' \) -print)
+          if [ -n "$bad" ]; then echo "::error title=pages::arquivos não permitidos: $bad"; exit 1; fi
+          if grep -rEIl '(client_secret|refresh_token|access_token|APP_USR-|GOCSPX-|AIza[0-9A-Za-z_-]{35}|BEGIN [A-Z ]*PRIVATE KEY)' pages; then
+            echo "::error title=pages::possível segredo na pasta pages/"; exit 1; fi
+          grep -q "default-src 'none'" pages/oauth/mercadolivre/index.html
+          grep -q 'no-referrer' pages/oauth/mercadolivre/index.html
+          find pages -type f -exec sha256sum {} \; | sort -k2 | tee pages-sha256.txt
+          { echo "### Arquivos publicados"; echo '```'; cat pages-sha256.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Lógica de segurança da página (state, porta, redirecionamento aberto, código malformado)
+        run: node .github/pages/verify_relay.js pages/oauth/mercadolivre/relay.js
+      - name: Artefato para o GitHub Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: pages
+
+  publicar:
+    name: Publicar no GitHub Pages
+    needs: validar
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  verificar:
+    name: Verificar o endereço publicado
+    needs: publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Requisição HTTPS e conteúdo da página
+        env:
+          BASE: ${{ needs.publicar.outputs.url }}
+        run: |
+          set -u
+          URL="${BASE%/}/oauth/mercadolivre/"
+          echo "Verificando $URL"
+          for i in $(seq 1 20); do
+            code=$(curl -sS -o page.html -w '%{http_code}' "$URL" || echo 000)
+            [ "$code" = "200" ] && grep -q 'relay.js' page.html && break
+            echo "tentativa $i: HTTP $code"; sleep 15
+          done
+          if [ "$code" != "200" ]; then echo "::error title=pages::$URL respondeu HTTP $code"; exit 1; fi
+          grep -q "default-src 'none'" page.html || { echo "::error::CSP ausente na página publicada"; exit 1; }
+          curl -sSf -o relay.js "${URL}relay.js"
+          cmp relay.js pages/oauth/mercadolivre/relay.js || { echo "::error::relay.js publicado difere do repositório"; exit 1; }
+          node .github/pages/verify_relay.js relay.js
+          hdr=$(curl -sSI "$URL" | tr -d '\r')
+          echo "$hdr" | head -15
+          echo "::notice title=pages::$URL respondeu HTTP 200 com a página de retorno e o relay.js verificado"
+          { echo "### Callback HTTPS publicado"; echo "$URL — HTTP 200"; echo '```'; sha256sum relay.js page.html; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
