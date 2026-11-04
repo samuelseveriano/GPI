@@ -82,7 +82,7 @@ class ReportService:
         last = {r["tipo"]: r for r in self.db.query(
             "SELECT tipo, MAX(created_at) AS quando FROM reports WHERE status = 'gerado' GROUP BY tipo")}
         return [{"id": k, "nome": v["nome"], "descricao": v["descricao"], "formatos": D.FORMATS, "grupo": v["grupo"],
-                 "exige_produto": bool(v.get("exige_produto")), "exige_analise": bool(v.get("exige_analise")), "ultima_geracao": (last.get(k) or {}).get("quando")}
+                 "exige_produto": bool(v.get("exige_produto")), "exige_analise": bool(v.get("exige_analise")), "exige_pesquisa": bool(v.get("exige_pesquisa")), "ultima_geracao": (last.get(k) or {}).get("quando")}
                 for k, v in D.TYPES.items()]
 
     def filter_options(self) -> dict:

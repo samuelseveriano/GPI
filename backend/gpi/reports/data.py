@@ -60,9 +60,19 @@ TYPES = {
                 "grupo": "produtos", "exige_produto": True},
     "executivo": {"nome": "Relatório Executivo de Oportunidades",
                   "titulo": "Global Product Intelligence — Relatório Executivo de Oportunidades",
-                  "descricao": "Síntese para a gerência: panorama, produtos em destaque, tendências internacionais, "
-                               "evidências, oportunidades, riscos, limitações e próximas investigações.",
-                  "secoes": ["executivo", "ranking", "paises", "social", "oportunidades", "fontes"], "grupo": "executivo"},
+                  "descricao": "Decisões e oportunidades em 3 a 6 páginas: resumo, panorama, produtos para investigação, "
+                               "tendências emergentes, evidências comerciais, riscos e próximas ações.",
+                  "secoes": ["exec08"], "grupo": "executivo"},
+    "tecnico": {"nome": "Relatório Técnico de Inteligência de Produtos",
+                "titulo": "Global Product Intelligence — Relatório Técnico",
+                "descricao": "Análise completa: fontes, dados, metodologia, qualidade (gates), modelos, backtesting, métricas, "
+                             "intervalos, clusters, séries históricas e limitações.",
+                "secoes": ["executivo", "qualidade08", "ranking", "paises", "previsoes", "modelos", "clusters08", "oportunidades",
+                           "historico", "social", "fontes"], "grupo": "executivo"},
+    "homologacoes": {"nome": "Relatório de Pesquisa de Homologações e Registros",
+                     "descricao": "Produto, especificações, órgão, empresas (titular × fabricante), modelos, registros, situação, "
+                                  "correspondência, fontes oficiais, datas, limitações e próximas verificações.",
+                     "secoes": ["homologacoes"], "grupo": "conformidade", "exige_pesquisa": True},
     "regulatorio": {"nome": "Relatório de Análise Regulatória de Produto",
                     "descricao": "Identificação, informações técnicas, finalidade, NCM, Anatel, Inmetro, tratamento "
                                  "administrativo, outros órgãos, evidências, normas, faltantes, riscos, checklist, próximas "
@@ -641,6 +651,21 @@ class Collector:
         return tables, {"produto": p, "familia": fam, "score": sc}
 
     # ---------------------------------------------------------------- relatório executivo (texto)
+    def intel08(self) -> dict:
+        """Resultado ÚNICO da v0.8 (o mesmo do dashboard e do dossiê — Gate 8)."""
+        if getattr(self, "_v8", None) is None:
+            from ..intel import service
+            from ..market.store import MarketStore
+            st = MarketStore(self.db)
+            r = st.load_result(service.RESULT)
+            if not r:
+                from ..products.catalog import Catalog
+                prods = {p["product_id"]: p for p in Catalog(self.db, self.cfg).products()}
+                r = service.compute(self.db, self.cons, prods, self.today)
+                st.save_result(service.RESULT, r)
+            self._v8 = r
+        return self._v8
+
     def executive_text(self, f: Filters, series, ranking_rows, opp_rows, social_rows) -> dict:
         k = self.cons.get("kpis", {})
         paises = {COUNTRY_LABEL.get(c, c) for c in k.get("paises_com_buscas", [])}
@@ -756,13 +781,30 @@ def build(db, tipo: str, filtros: dict | None = None, cfg: dict | None = None, t
             ds["secoes"].append(("Produto", t))
             ds["graficos"] += c.chart_series(series)
             ds["texto"]["produto"] = info
+        elif sec == "exec08":
+            v8 = c.intel08()
+            ds["texto"]["executivo"] = exec08_text(v8, f)
+            ds["compacto"] = True
+            ds["secoes"] += exec08_sections(v8, f)
+        elif sec == "qualidade08":
+            ds["secoes"].append(("Qualidade dos Dados (gates)", quality08_tables(c, db)))
+        elif sec == "clusters08":
+            ds["secoes"].append(("Clusters de Produtos", [clusters08_table(c.intel08())]))
+        elif sec == "homologacoes":
+            from ..regulatory.api import search_all
+            q = {k: v for k, v in (filtros or {}).items() if k in ("produto", "marca", "modelo", "fabricante", "titular", "numero",
+                                                                    "tipo", "orgao", "de", "ate", "cnpj", "situacao")}
+            if not any(q.get(k) for k in q if k != "orgao"):
+                raise ValueError("informe produto, marca, modelo, fabricante, titular, número ou tipo para o relatório de homologações")
+            ds["titulo"] = "Global Product Intelligence — Pesquisa de Homologações e Registros"
+            ds["secoes"] += homologacoes_sections(search_all(db, q), q)
         elif sec == "executivo":
             opp = c.sec_oportunidades(f)
             soc = c.sec_social(f)[1]
             ds["texto"]["executivo"] = c.executive_text(f, series, ranking["linhas"], opp["linhas"], soc["linhas"])
             ds["graficos"] += c.chart_series(series, 5)
     # v0.7.1: Insights do GPI (determinísticos) — situação, crescimento, confiança, cobertura, modelo e limitações
-    if tipo in ("radar_global", "mais_pesquisados", "tendencias_pais", "previsoes", "oportunidades", "produto", "executivo"):
+    if tipo in ("radar_global", "mais_pesquisados", "tendencias_pais", "previsoes", "oportunidades", "produto", "tecnico"):
         try:
             from ..products.catalog import Catalog
             from ..products.insights import build as build_insights
@@ -818,10 +860,140 @@ def build(db, tipo: str, filtros: dict | None = None, cfg: dict | None = None, t
 def main_table(ds: dict) -> dict:
     """Tabela principal (para CSV e exportações simples)."""
     pref = {"radar_global": "ranking", "mais_pesquisados": "pesquisados", "tendencias_pais": "ranking", "social": "social_ranking",
-            "previsoes": "previsoes", "oportunidades": "oportunidades", "produto": "historico", "executivo": "ranking",
+            "previsoes": "previsoes", "oportunidades": "oportunidades", "produto": "historico", "executivo": "investigar",
+            "tecnico": "ranking", "homologacoes": "registros",
             "regulatorio": "anatel", "checklist_fornecedor": "checklist"}.get(ds["tipo"], "resumo")
     for _, tables in ds["secoes"]:
         for t in tables:
             if t["id"] == pref:
                 return t
     return ds["resumo"]
+
+
+# ============================================================================ v0.8: executivo curto, técnico e homologações
+def _f_ok(f: Filters, pid: str, cat: str | None) -> bool:
+    return f.match_product(pid) and (not f.categoria or cat == f.categoria)
+
+
+def exec08_text(v8: dict, f: Filters) -> dict:
+    k, P = v8["kpis"], v8["produtos"]
+    inv = [r for r in v8["ranking"] if r["nivel"] == "investigar" and _f_ok(f, r["produto_id"], P[r["produto_id"]]["identificacao"]["categoria"])]
+    obs = [r for r in v8["ranking"] if r["nivel"] == "observar" and _f_ok(f, r["produto_id"], P[r["produto_id"]]["identificacao"]["categoria"])]
+    resumo = [f"O GPI monitora {k['produtos_monitorados']} produtos; {k['produtos_analisados']} têm evidências coletadas e "
+              f"{k['cobertura_real']:.0f}% têm evidência elegível de pesquisa ou sinal comercial ({k['fontes_funcionais']} fonte(s) funcionais)."]
+    if inv:
+        resumo.append(f"{len(inv)} produto(s) reúnem evidências suficientes para INVESTIGAÇÃO: "
+                      + ", ".join(r["produto"] for r in inv[:6]) + ".")
+    else:
+        resumo.append("Nenhum produto atinge, por enquanto, os critérios de investigação confirmada (prioridade ≥ 55, cobertura ≥ 40, "
+                      "situação de crescimento e correspondência confirmada). Os critérios não foram reduzidos para preencher a lista.")
+    if obs:
+        resumo.append(f"{len(obs)} produto(s) têm sinais interessantes ainda insuficientes e seguem EM OBSERVAÇÃO.")
+    if k["emergentes"]:
+        resumo.append(f"{k['emergentes']} produto(s) apareceram recentemente (novo sinal comercial ou emergente) — não são tendência confirmada.")
+    panorama = [{"indicador": "Produtos monitorados", "valor": k["produtos_monitorados"], "natureza": "Observado"},
+                {"indicador": "Produtos com dados recentes (45 dias)", "valor": k["produtos_com_dados_recentes"], "natureza": "Observado"},
+                {"indicador": "Com interesse comercial observado", "valor": k["com_interesse_comercial"], "natureza": "Observado"},
+                {"indicador": "Emergentes / novos sinais", "valor": k["emergentes"], "natureza": "Derivado"},
+                {"indicador": "Crescimento consistente", "valor": k["crescimento_consistente"], "natureza": "Derivado"},
+                {"indicador": "Em investigação (lista do usuário)", "valor": k["em_investigacao"], "natureza": "Observado"},
+                {"indicador": "Fontes funcionais", "valor": k["fontes_funcionais"], "natureza": "Observado"},
+                {"indicador": "Cobertura real", "valor": f"{k['cobertura_real']:.0f}%", "natureza": "Derivado"}]
+    alert_types = Counter(a["tipo"] for a in v8["alertas"])
+    riscos = [{"risco": t, "produtos": n} for t, n in alert_types.most_common(6)]
+    prox = [{"produto": r["produto"], "investigacao": r["proxima_acao"]} for r in (inv + obs)[:6]]
+    prox.append({"produto": "Itens priorizados", "investigacao": "Pesquisar homologações/registros existentes (Anatel/Inmetro), preços, "
+                 "custos de importação e fornecedores antes de qualquer decisão."})
+    intl = [{"produto": c["produto"], "forca": None, "detalhe": f"{c['indicador']} ({c['fonte']}): {c['mercado_a']} "
+             f"{(c['variacao_a'] or 0) * 100:+.0f}% × {c['mercado_b']} {(c['variacao_b'] or 0) * 100:+.0f}%"}
+            for c in v8["comparacao_internacional"][:8] if f.match_product(c["produto_id"])]
+    lim = ["Pesquisas, rankings e atenção não são unidades vendidas; nenhuma conversão para vendas é feita.",
+           "Ranking do Mercado Livre é posição, não volume; Wikipédia e notícias são atenção, não demanda.",
+           "Scores priorizam investigação e não são probabilidade de sucesso. Ausência de dados não é baixa demanda.",
+           "Detalhes de metodologia, modelos, backtesting e qualidade dos dados: Relatório Técnico."]
+    return {"resumo": resumo, "panorama": panorama, "destaques": [r["produto"] for r in inv[:8]] or [r["produto"] for r in obs[:5]],
+            "internacional": intl, "riscos": riscos, "proximos": prox, "limitacoes": lim}
+
+
+def exec08_sections(v8: dict, f: Filters) -> list:
+    P = v8["produtos"]
+    ok = lambda pid: pid in P and _f_ok(f, pid, P[pid]["identificacao"]["categoria"])   # noqa: E731
+    inv = [r for r in v8["ranking"] if ok(r["produto_id"])][:12]
+    t1 = table("investigar", "Produtos para investigação", [("produto", "Produto"), ("situacao", "Situação"), ("nivel", "Nível"),
+               ("fontes", "Fontes", "inteiro"), ("confianca", "Confiança"), ("proxima_acao", "Próxima ação")],
+               [{**r, "nivel": "investigar" if r["nivel"] == "investigar" else "em observação"} for r in inv], "der",
+               notas=["Investigar = prioridade ≥ 55, cobertura ≥ 40, situação de crescimento e correspondência confirmada."],
+               vazio="Nenhum produto com evidência suficiente no recorte.")
+    em = [P[k] for k in v8["grupos"]["novo_sinal_comercial"] + v8["grupos"]["emergentes"] + v8["grupos"]["em_observacao"] if ok(k)][:10]
+    ins = {i["produto_id"]: i for i in v8["insights"]}
+    t2 = table("emergentes", "Tendências emergentes (sinais iniciais)", [("produto", "Produto"), ("situacao", "Situação"),
+               ("evidencia", "Evidência")], [{"produto": p["identificacao"]["produto"], "situacao": p["situacao"],
+                                             "evidencia": ins.get(p["produto_id"], {}).get("evidencia", "")[:160]} for p in em], "der",
+               notas=["Sinais iniciais exigem novas observações e uma fonte independente antes de qualquer conclusão."],
+               vazio="Nenhum sinal emergente no recorte.")
+    rad = []
+    for nivel, lst in v8["radar"].items():
+        for x in lst:
+            if ok(x["produto_id"]):
+                rad.append({"produto": x["produto"], "radar": nivel, "fontes": ", ".join(x["fontes"]) or "—"})
+    order = {"crescimento confirmado por fontes independentes": 0, "crescimento observado": 1, "interesse recorrente": 2, "primeira observação": 3}
+    rad.sort(key=lambda r: order.get(r["radar"], 9))
+    t3 = table("radar", "Evidências comerciais (radar)", [("produto", "Produto"), ("radar", "Nível de evidência"),
+               ("fontes", "Fontes independentes de demanda")], rad[:12], "der",
+               notas=["Wikipédia e notícias não contam como confirmação de demanda."], vazio="Sem evidências comerciais no recorte.")
+    return [("Produtos para investigação", [t1]), ("Tendências emergentes", [t2]), ("Evidências comerciais", [t3])]
+
+
+def quality08_tables(c, db) -> list:
+    from ..intel import service
+    v8 = c.intel08()
+    g = service.gates_full(db, v8)
+    rows = [{"gate": f"Gate {k}", "nome": v.get("nome"), "status": v.get("status")} for k, v in g.items()]
+    t = table("gates", "Gates de qualidade", [("gate", "Gate"), ("nome", "Etapa"), ("status", "Resultado")], rows, "der")
+    g2 = g["2"]["avaliacao_teste"]
+    t2 = table("matching", "Identificação de produtos — conjunto de teste rotulado", [("metrica", "Métrica"), ("valor", "Valor")],
+               [{"metrica": "Casos", "valor": g2["casos"]}, {"metrica": "Precision", "valor": f"{g2['precision']:.1%}"},
+                {"metrica": "Recall", "valor": f"{g2['recall']:.1%}"}, {"metrica": "F1", "valor": f"{g2['f1']:.1%}"},
+                {"metrica": "Associações incorretas", "valor": f"{g2['taxa_incorreta']:.1%}"},
+                {"metrica": "Abstenção", "valor": f"{g2['taxa_abstencao']:.1%}"}], "der")
+    fi = [{"indicador": x["nome"], "elegiveis": ", ".join(sorted({e["nome"] for e in x["fontes_elegiveis"]})) or "—",
+           "nao_elegiveis": "; ".join(sorted({f"{e['nome']} ({e['motivo']})" for e in x["fontes_nao_elegiveis"]}))[:400] or "—"}
+          for x in v8["fontes_por_indicador"]]
+    t3 = table("fontes_indicador", "Fontes elegíveis por indicador", [("indicador", "Indicador"), ("elegiveis", "Fontes elegíveis"),
+               ("nao_elegiveis", "Fontes com dados não elegíveis (motivo)")], fi, "der", largura="larga")
+    return [t, t2, t3]
+
+
+def clusters08_table(v8: dict) -> dict:
+    cl = v8.get("clusters") or {}
+    rows = [{"grupo": g["nome"], "produtos": ", ".join(g["nomes"][:12]), "n": len(g["produtos"]),
+             "caracteristicas": "; ".join(g["justificativa"][:4])} for g in cl.get("grupos", [])]
+    return table("clusters", f"Clusters ({cl.get('metodo', '—')}, silhouette {cl.get('silhouette', '—')})",
+                 [("grupo", "Grupo"), ("n", "Produtos", "inteiro"), ("produtos", "Integrantes"), ("caracteristicas", "Características")],
+                 rows, "der", notas=[cl.get("aviso") or "Atributos adimensionais padronizados; nomes a partir dos centróides."],
+                 vazio=cl.get("aviso") or "Sem agrupamento.", largura="larga")
+
+
+def homologacoes_sections(res: dict, q: dict) -> list:
+    rows = [{"orgao": r["orgao"], "registro": r["registro"], "data": r["data"], "empresa": r["empresa"], "fabricante": r.get("fabricante"),
+             "modelo": r.get("modelo"), "situacao": r.get("situacao"), "correspondencia": r["correspondencia_rotulo"]}
+            for r in res["resultados"][:150]]
+    t1 = table("registros", "Registros oficiais encontrados", [("orgao", "Órgão"), ("registro", "Registro"), ("data", "Data", "data"),
+               ("empresa", "Titular"), ("fabricante", "Fabricante"), ("modelo", "Modelo"), ("situacao", "Situação"),
+               ("correspondencia", "Correspondência")], rows, "obs", largura="larga",
+               notas=[f"Fonte: {p['fonte']} — {p.get('fonte_url') or p.get('consulta_oficial')}" for p in res["por_orgao"]],
+               vazio="Nenhum registro encontrado: SEM CORRESPONDÊNCIA CONFIRMADA (confirme na consulta oficial).")
+    emp = res["empresas"]
+    t2 = table("titulares", "Titulares de registros", [("empresa", "Empresa"), ("cnpj", "CNPJ"), ("registros", "Registros", "inteiro"),
+               ("modelos", "Modelos", "inteiro")], emp["titulares"][:30], "der", notas=emp["avisos"])
+    t3 = table("fabricantes", "Fabricantes presentes nos registros", [("fabricante", "Fabricante"), ("registros", "Registros", "inteiro"),
+               ("titulares_distintos", "Titulares distintos", "inteiro")], emp["fabricantes"][:30], "der")
+    crit = [{"campo": k, "significado": v} for k, v in res["campos"].items()]
+    t4 = table("campos", "Significado dos campos", [("campo", "Campo"), ("significado", "Significado")], crit, "obs")
+    lim = [{"limitacao": x} for x in res["limitacoes"]] + [{"limitacao": "Próxima verificação: conferir o certificado, o escopo e a "
+                                                            "situação vigente diretamente na consulta oficial do órgão."}]
+    t5 = table("limites", "Limitações e próximas verificações", [("limitacao", "Item")], lim, "obs")
+    consulta = table("consulta", "Consulta", [("campo", "Campo"), ("valor", "Valor")],
+                     [{"campo": k, "valor": v} for k, v in q.items() if v], "obs")
+    return [("Consulta e especificações", [consulta]), ("Registros encontrados", [t1]), ("Empresas e fabricantes", [t2, t3]),
+            ("Campos e limitações", [t4, t5])]

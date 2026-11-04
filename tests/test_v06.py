@@ -51,11 +51,17 @@ def base(tmp_path_factory):
         from gpi.compliance.ncm import NcmTable
         aid = CE.analyze(db, KnowledgeBase(db, d), NcmTable(db), {"nome_comercial": "Projetor portátil", "wifi": "sim",
                                                                  "destinacao": "comercializacao"})["id"]
+    if any(v.get("exige_pesquisa") for v in D.TYPES.values()):       # v0.8: registros reais de referência da Anatel
+        from gpi.regulatory.registry import load_anatel_zip_v2
+        from test_v08_regulatory import REAL, SYNTH, zip_bytes
+        load_anatel_zip_v2(db, zip_bytes(REAL + [SYNTH]), "teste")
     for tipo in D.TYPES:
         for fmt in ("xlsx", "pdf", "csv"):
             f = {"produto": "projector+portable"} if tipo == "produto" else {}
             if D.TYPES[tipo].get("exige_analise"):
                 f = {"analise_id": aid}
+            if D.TYPES[tipo].get("exige_pesquisa"):          # v0.8: pesquisa de homologações exige um termo
+                f = {"tipo": "carregador"}
             r = svc.generate(tipo, fmt, f)
             out[(tipo, fmt)] = (r, svc.file(r["id"]))
     yield {"db": db, "dir": d, "svc": svc, "rep": out}

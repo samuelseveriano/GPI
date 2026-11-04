@@ -35,8 +35,12 @@ jobs:
         continue-on-error: true
         run: |
           pip install -r requirements.txt
-          python scripts/regulatory_validation.py regulatory_validation.json 2>&1 | tee reg.log; exit ${PIPESTATUS[0]}
+          set +e
+          python scripts/regulatory_validation.py regulatory_validation.json > reg.log 2>&1
+          code=$?
+          cat reg.log
           { echo "### Validação regulatória (dados reais)"; echo '```'; cut -c1-400 reg.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
       - uses: actions/upload-artifact@v5
         if: always()
         with:

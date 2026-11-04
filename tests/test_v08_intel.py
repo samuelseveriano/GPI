@@ -227,3 +227,17 @@ def test_api_v08_and_investigation_list(tmp_path):
         assert code == 200 and "titular" in st["papeis"]
     finally:
         s.stop()
+
+
+def test_youtube_video_association_is_verified_by_title():
+    from gpi.connectors.content import YouTube
+    payload = {"items": [
+        {"id": "a1", "snippet": {"title": "Air fryer Mondial vale a pena? Review completo", "defaultAudioLanguage": "pt-BR"}, "statistics": {}},
+        {"id": "a2", "snippet": {"title": "MC Fulano - Clipe Oficial (ao vivo)", "defaultAudioLanguage": "pt"}, "statistics": {}},
+        {"id": "a3", "snippet": {"title": "Best robot vacuum 2026 tested", "defaultAudioLanguage": "en"}, "statistics": {}},
+    ]}
+    rows = {r["item_id"]: r for r in YouTube.parse_videos(payload, "air_fryer", "air fryer")}
+    assert rows["a1"]["product_key"] == "air_fryer" and rows["a1"]["metrics"]["mercado"] == "BR"
+    assert rows["a2"]["product_key"] is None                                   # entretenimento não é associado
+    assert rows["a3"]["product_key"] is None and rows["a3"]["metrics"]["mercado"] == "idioma:en"   # outro produto, outro idioma
+    assert rows["a3"]["metrics"]["correspondencia"]["relacao"] == "outro_produto"

@@ -216,7 +216,7 @@ def clusters(products: dict, seed: int = 42) -> dict:
                 cands.append((float(silhouette_score(X, lab)), name, k, lab))
     try:
         from sklearn.cluster import HDBSCAN
-        lab = HDBSCAN(min_cluster_size=max(3, len(ok) // 10)).fit_predict(X)
+        lab = HDBSCAN(min_cluster_size=max(3, len(ok) // 10), copy=True).fit_predict(X)
         mask = lab >= 0
         if len(set(lab[mask])) >= 2 and mask.sum() >= 6:
             cands.append((float(silhouette_score(X[mask], lab[mask])), "HDBSCAN", len(set(lab[mask])), lab))
