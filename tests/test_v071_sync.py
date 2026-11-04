@@ -111,3 +111,37 @@ def test_persistence_after_reopen(tmp_path):
     db2 = Database(tmp_path / "s.sqlite")
     assert db2.query("SELECT COUNT(*) AS n FROM search_observations WHERE source = 'ml_trends'")[0]["n"] == 50
     db2.close()
+
+
+def test_backup_before_migration_and_integrity(tmp_path):
+    import sqlite3
+    from gpi.db import MIGRATIONS
+    p = tmp_path / "old.sqlite"
+    con = sqlite3.connect(p)
+    con.execute("CREATE TABLE schema_version (v INTEGER NOT NULL)")
+    for i, stmts in enumerate(MIGRATIONS[:5], start=1):
+        for s in stmts:
+            con.execute(s)
+        con.execute("INSERT INTO schema_version VALUES (?)", (i,))
+    con.commit()
+    con.close()
+    db = Database(p)
+    assert db.pre_migration_backup and db.pre_migration_backup.exists() and "v5_para" in db.pre_migration_backup.name
+    r = db.integrity()
+    assert r["ok"] and r["integridade"] == "ok" and r["versao_esquema"] == len(MIGRATIONS) and "search_observations" in r["tabelas"]
+    db.close()
+    db2 = Database(p)                                   # já migrado: sem nova cópia
+    assert db2.pre_migration_backup is None
+    db2.close()
+
+
+def test_source_audit_matrix(tmp_path):
+    from gpi.market.audit import audit, markdown
+    http = MLHttp()
+    sm, db = _sm(tmp_path, http)
+    sm.run("manual", ["ml_trends"])
+    a = audit(db, sm.store, sm.creds, {}, sm.connectors)
+    r = {x["fonte"]: x for x in a["fontes"]}["ml_trends"]
+    assert r["E_persistencia"]["registros"] == 50 and r["C_coleta"]["ultima_coleta_ok"]
+    assert r["A_configuracao"]["exige_autenticacao"] and r["A_configuracao"]["credenciais_configuradas"]
+    assert r["fase"] in ("funcional", "dados_armazenados") and "| Mercado Livre" in markdown(a)

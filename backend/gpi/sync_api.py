@@ -69,6 +69,13 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
     def j(o, code=200):
         return JSONResponse(o, status_code=code)
 
+    async def db_integrity(_):
+        return j(await run_in_threadpool(db.integrity))
+
+    async def source_audit(request):
+        from .market.audit import audit
+        return j(await run_in_threadpool(audit, db, sync.store, sync.creds, cfg, sync.connectors))
+
     async def removed(_):
         from .market.service import removed_sources
         return j({"fontes": removed_sources(db)})
@@ -247,6 +254,8 @@ def routes(db, sync, cfg, data_dir, save_settings=None) -> list[Route]:
 
     return [
         Route("/api/sources/removed", removed),
+        Route("/api/sources/audit", source_audit),
+        Route("/api/db/integrity", db_integrity),
         Route("/api/sync/panel", panel), Route("/api/sync/events", events), Route("/api/sync/history", history),
         Route("/api/sync/retry-failed", retry_failed, methods=["POST"]), Route("/api/sync/start", run_all, methods=["POST"]),
         Route("/api/integrations/{pid}/diagnose", diagnose, methods=["POST"]),
