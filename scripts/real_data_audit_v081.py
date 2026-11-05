@@ -39,7 +39,9 @@ def main(out: str):
     # Wikimedia coleta em duas etapas: 1ª passada resolve os títulos (langlinks); as visualizações são planejadas na 2ª
     summ2 = sm.run("auditoria-v081-pv", ["wikimedia"])
     summ["fontes"]["wikimedia_visualizacoes"] = summ2["fontes"].get("wikimedia", {})
-    rep = {"coleta": {k: {"estado": v.get("estado"), "segundos": v.get("segundos")} for k, v in summ["fontes"].items()},
+    rep = {"coleta": {k: {x: v.get(x) for x in ("estado", "segundos", "jobs_ok", "jobs_falhos", "novas", "ultimo_erro")}
+                      for k, v in summ["fontes"].items()},
+           "produtos_wikipedia_resolvidos": sum(1 for p in sm.store.products() if p.get("origin") == "wikipedia"),
            "registros": {r["source"]: r["n"] for r in db.query("SELECT s.source, COUNT(*) AS n FROM market_obs o JOIN market_series s "
                                                                 "ON s.id = o.series_id GROUP BY s.source")}}
     from gpi.products import trends as T
@@ -109,10 +111,13 @@ def main(out: str):
         res.append({"serie": s["id"], "fenomeno": "atenção pública (Wikipédia)", "n": len(y), "melhor": b, "wape": R[b]["wape"],
                     "wape_naive": R["naive"]["wape"], "fva": 1 - R[b]["wape"] / R["naive"]["wape"] if R["naive"]["wape"] else None,
                     "cobertura_80": R[b].get("cobertura_80")})
-    for meta in [m for m in ms.series(source="comexstat") if m["series_key"].endswith(":fob")][:25]:
+    cx = [m for m in ms.series(source="comexstat") if m["series_key"].endswith(":fob")]
+    rep["I_comex_diagnostico"] = {"series_fob": len(cx), "obs_por_serie": sorted(int(m["n_obs"] or 0) for m in cx)[-10:],
+                                  "exemplo": cx[0]["series_key"] if cx else None}
+    for meta in sorted(cx, key=lambda m: -(m["n_obs"] or 0))[:25]:
         obs = db.query("SELECT ref_date, value FROM market_obs WHERE series_id = ? ORDER BY ref_date", (meta["id"],))
         y = np.asarray([o["value"] for o in obs], float)
-        if len(y) < 36 or np.mean(y > 0) < 0.8:
+        if len(y) < 30 or np.mean(y > 0) < 0.8:
             continue
         bt = backtest(y, 6, 12, ["naive", "seasonal_naive", "ses", "holt_damped", "ets_auto", "holt_winters"], n_origins=6)
         R = {k: v for k, v in bt["resultados"].items() if not v.get("falhou") and v.get("wape") is not None}
@@ -147,6 +152,8 @@ def main(out: str):
             v = {a: b for a, b in v.items() if a not in ("exemplos", "medianas_coorte")}
         print(k, json.dumps(v, ensure_ascii=False, default=str)[:900])
     print("coleta", json.dumps(rep["coleta"], ensure_ascii=False))
+    print("diagnostico", json.dumps({"produtos_wikipedia_resolvidos": rep["produtos_wikipedia_resolvidos"],
+                                     **rep["I_comex_diagnostico"]}, ensure_ascii=False))
     print("B_cobertura", json.dumps({k: (v.get("valor"), v.get("numerador"), v.get("denominador")) for k, v in rep["B_cobertura"].items()
                                      if isinstance(v, dict) and "valor" in v}, ensure_ascii=False))
     vazio = [k for k, v in (("Wikimedia", rep["G_declinio"]["series_wikipedia"]), ("Comex Stat", rep["registros"].get("comexstat", 0)),
