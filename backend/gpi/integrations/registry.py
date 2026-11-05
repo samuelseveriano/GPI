@@ -121,8 +121,11 @@ PROVIDERS = [
      "scope": "https://www.googleapis.com/auth/bigquery.readonly", "auth_extra": {"access_type": "offline", "prompt": "consent"}},
     {"id": "ebay", "nome": "eBay — Browse API", "tipo": "api_key", "conectores": ["ebay"],
      "campos": [{"nome": "client_id", "rotulo": "App ID (Client ID) de produção", "secreto": False},
-                {"nome": "client_secret", "rotulo": "Cert ID (Client Secret) de produção", "secreto": True}],
-     "descricao": "Anúncios ativos, preços e marcas por produto no eBay EUA — base da análise de concorrência.",
+                {"nome": "client_secret", "rotulo": "Cert ID (Client Secret) de produção", "secreto": True},
+                {"nome": "sync_token", "rotulo": "Token de sincronização do Worker (EBAY_GPI_SYNC_TOKEN)", "secreto": True},
+                {"nome": "worker_url", "rotulo": "Endereço do Worker de notificações (https)", "secreto": False}],
+     "descricao": "Anúncios ativos, preços e marcas por produto no eBay EUA — base da análise de concorrência. A coleta só é "
+                  "habilitada com a conformidade de exclusão de contas (Marketplace Account Deletion) configurada.",
      "permissoes": "Token de aplicativo (sem login de usuário) com o escopo público de leitura. Quantidade de anúncios não é venda.",
      "como_obter": "developer.ebay.com → criar conta → Application Keys → criar keyset de Production → copie App ID e Cert ID.",
      "link": "https://developer.ebay.com/my/keys", "documentacao": "https://developer.ebay.com/api-docs/buy/browse/overview.html"},

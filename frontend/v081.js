@@ -180,6 +180,59 @@ window.GPI_V081 = function (H, PAGES) {
     };
     box.addEventListener('toggle', () => { if (box.open && !box.dataset.ok) { box.dataset.ok = 1; load(); } });
     if (box.open) { box.dataset.ok = 1; load(); }
+    ebayPanel(arg);
+  }
+
+  /* v0.8.2 — eBay: Produção e Conformidade (Marketplace Account Deletion + Browse API). Nunca mostra tokens. */
+  function ebayPanel(arg) {
+    const box = document.createElement('details');
+    box.className = 'panel';
+    box.id = 'ebay-conf';
+    box.innerHTML = `<summary><h2 style="display:inline">eBay — Produção e Conformidade</h2> <span class="muted small">exclusão de contas (Worker Cloudflare), chaves Production e Browse API</span></summary><div id="eb">${loading('Carregando…')}</div>`;
+    main.insertBefore(box, main.children[3] || null);
+    if (arg === 'ebay') box.open = true;
+    const yn = (v) => v ? '✓' : '✗';
+    const load = async () => {
+      let r;
+      try { r = await api('/api/integrations/ebay/conformidade'); } catch (e) { $('#eb').innerHTML = errBox(e); return; }
+      const last = r.ultima_sincronizacao || {}, w = last.worker || {}, b = r.browse || {};
+      const rows = [
+        ['Credenciais Production', `${yn(r.credenciais.client_id && r.credenciais.client_secret)} App ID e Cert ID`],
+        ['Token de sincronização', `${yn(r.credenciais.sync_token)} ${r.credenciais.sync_token ? 'configurado (protegido localmente)' : 'não configurado'}`],
+        ['Endpoint', `<code>${escH(r.configuracao.worker_url)}/ebay/notifications</code>`],
+        ['Última verificação', escH(last.fim || 'nunca')],
+        ['Última notificação recebida', escH(w.ultima_notificacao_em || '—')],
+        ['Pendentes no Worker', w.pendentes == null ? '—' : num(w.pendentes)],
+        ['Processadas (neste GPI)', escH(Object.entries(r.processadas_local || {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || '0')],
+        ['Falhas de processamento', w.falhas == null ? '—' : num(w.falhas)],
+        ['Browse API', escH(b.estado_rotulo || 'não diagnosticada')],
+        ['Última coleta comercial', escH(r.ultima_coleta || '—')],
+        ['Registros coletados', num(r.anuncios)],
+        ['Coleta do eBay', r.coleta_permitida ? 'permitida (conformidade configurada)' : '<b>bloqueada</b> até configurar a conformidade'],
+      ];
+      $('#eb').innerHTML = `${(r.alertas || []).map((a) => `<p class="small"><b>⚠</b> ${escH(a)}</p>`).join('')}
+        <table class="small"><tbody>${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</tbody></table>
+        <div class="btnrow"><button class="btn small" data-eb="diag">Diagnosticar integração</button> <button class="btn small" data-eb="test">Testar conexão</button>
+        <button class="btn small" data-eb="conf">Verificar conformidade</button> <button class="btn small" data-eb="sync">Sincronizar</button>
+        <button class="btn small" data-eb="hist">Ver histórico</button> <a class="btn small" href="/api/integrations/ebay/diagnostico.json">Exportar diagnóstico</a></div>
+        <div id="ebout" class="small"></div>
+        <p class="small muted">Anúncios ativos não são vendas nem volume de pesquisa. O GPI guarda vendedores só como pseudônimo; pedidos de exclusão do eBay apagam também backups, cache e relatórios.</p>`;
+      const out = $('#ebout');
+      const steps = (x) => `<ol>${(x.etapas || []).map((s) => `<li>${s.ok === true ? '✓' : s.ok === false ? '✗' : '?'} <b>${escH(s.nome)}</b> — ${escH(s.mensagem)}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</li>`).join('')}</ol>`;
+      document.querySelectorAll('[data-eb]').forEach((btn) => { btn.onclick = async () => {
+        out.innerHTML = loading('Executando…');
+        try {
+          const k = btn.dataset.eb;
+          if (k === 'diag') { const x = await post('/api/integrations/ebay/diagnostico', {}); out.innerHTML = `<p>Browse API: <b>${escH(x.estado_rotulo)}</b>. ${escH(x.aviso)}</p>${steps(x)}`; }
+          if (k === 'test') { const x = await post('/api/integrations/ebay/testar', {}); out.innerHTML = x.erro_worker ? `<p>✗ ${escH(x.erro_worker)}</p>` : `<p>✓ Worker respondeu (versão ${escH(x.worker.versao)}); segredos no Worker: ${Object.entries(x.worker.segredos || {}).map(([a, v]) => `${escH(a)} ${yn(v)}`).join(' · ')}.</p>`; }
+          if (k === 'conf') { const x = await post('/api/integrations/ebay/conformidade/verificar', {}); out.innerHTML = `<p>Endpoint público: ${x.endpoint && x.endpoint.responde ? '✓ responde à verificação do eBay' : '✗ sem resposta'}<br>Assinatura ECDSA no Worker (vetor oficial do eBay): ${x.autoteste ? (x.autoteste.assinatura_valida_aceita && x.autoteste.assinatura_adulterada_recusada ? '✓ validada no runtime publicado' : '✗ FALHOU — não habilite em produção') : '—'}</p>${(x.erros || []).map((e) => `<p>✗ ${escH(e)}</p>`).join('')}`; }
+          if (k === 'sync') { const x = await post('/api/integrations/ebay/conformidade/sincronizar', {}); out.innerHTML = `<p>Processadas: ${num(x.processadas)} · ${escH(JSON.stringify(x.resultados))}</p>${(x.erros || []).map((e) => `<p>✗ ${escH(e)}</p>`).join('')}`; load(); }
+          if (k === 'hist') { const x = await api('/api/integrations/ebay/historico'); out.innerHTML = tbl(['Notificação', 'Pedido em', 'Processada', 'Resultado', 'Confirmada'], (x.local || []).map((h) => `<tr><td>${escH(h.notification_id)}</td><td>${escH(h.event_date || '—')}</td><td>${escH(h.processed_at)}</td><td>${escH(h.result)}</td><td>${escH(h.confirmed_at || 'não')}</td></tr>`), 'Nenhuma solicitação de exclusão processada.') + (x.erro_worker ? `<p class="muted">Worker: ${escH(x.erro_worker)}</p>` : ''); }
+        } catch (e) { out.innerHTML = errBox(e); }
+      }; });
+    };
+    box.addEventListener('toggle', () => { if (box.open && !box.dataset.ok) { box.dataset.ok = 1; load(); } });
+    if (box.open) { box.dataset.ok = 1; load(); }
   }
 
   return { 'dashboard': pageDashboard, 'inteligencia-oportunidades': pageRadar, 'alertas': pageAlerts, 'dossie': pageDossier,

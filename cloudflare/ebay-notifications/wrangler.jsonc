@@ -1,0 +1,26 @@
+// Configuração do Worker EXISTENTE "gpi-ebay-notifications" (não cria outro endereço).
+// Segredos NÃO ficam aqui: cadastre-os no painel (Workers → gpi-ebay-notifications → Settings → Variables and Secrets)
+// ou com `wrangler secret put NOME`: EBAY_VERIFICATION_TOKEN (já existe), EBAY_CLIENT_ID, EBAY_CLIENT_SECRET,
+// EBAY_GPI_SYNC_TOKEN. Publicação pelo painel web: ver README.md (não exige Node.js nem privilégios no computador).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gpi-ebay-notifications",
+  "main": "src/index.js",
+  "compatibility_date": "2025-01-01",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gpi-ebay-notifications-db",
+      // ID do banco existente: painel → Storage & Databases → D1 → gpi-ebay-notifications-db (não é segredo)
+      "database_id": "PREENCHA_COM_O_ID_DO_BANCO_D1",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // monitoramento diário (gratuito): devolve à fila processamentos vencidos e registra alerta de pendências
+  "triggers": { "crons": ["17 11 * * *"] },
+  "vars": {
+    "EBAY_ENDPOINT_URL": "https://gpi-ebay-notifications.samuelseveriano.workers.dev/ebay/notifications"
+  },
+  "observability": { "enabled": false }
+}
