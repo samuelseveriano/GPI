@@ -52,6 +52,23 @@ KNOWN_BLOCK = {
 }
 
 
+LOGIN_APP, BUSINESS_APP = "meta", "meta_negocios"
+
+
+def app_key(creds, modulo: str) -> str:
+    """v0.9: app da Meta usado pelo módulo. O caso de uso de Login do Facebook é INCOMPATÍVEL com o de Páginas
+    ("Manage everything on your Page") e casos de uso não podem ser removidos; por isso Páginas, Instagram e
+    Anúncios usam um segundo app ("de negócios") quando configurado. O Login básico fica sempre no app atual."""
+    if modulo == "basico":
+        return LOGIN_APP
+    b = creds.get(BUSINESS_APP) or {}
+    return BUSINESS_APP if str(b.get("client_id") or "").strip() else LOGIN_APP
+
+
+def creds_for(creds, modulo: str) -> dict:
+    return creds.get(app_key(creds, modulo)) or {}
+
+
 def authorize_url(c: dict, ver: str, redirect_uri: str, state: str, modulo: str = "basico", rerequest: bool = False) -> str:
     if modulo not in MODULES:
         raise SourceError("módulo Meta desconhecido", "restrita")
@@ -82,9 +99,9 @@ def granted_scopes(http, c: dict, ver: str, token: str) -> dict:
     return {"valido": bool(d.get("is_valid")), "escopos": sorted(d.get("scopes") or []), "expira_em": d.get("expires_at")}
 
 
-def exchange(http, creds, code: str, redirect_uri: str, ver: str, modulo: str = "basico") -> dict:
+def exchange(http, creds, code: str, redirect_uri: str, ver: str, modulo: str = "basico", app: str = LOGIN_APP) -> dict:
     """Código → token curto → token de longo prazo (~60 dias) → permissões concedidas → conta do Instagram (se aplicável)."""
-    c = creds.get("meta")
+    c = creds.get(app)
     g = f"https://graph.facebook.com/{ver}/"
     r = http.request_json(g + "oauth/access_token?" + up.urlencode({"client_id": c.get("client_id"), "redirect_uri": redirect_uri,
                                                                       "client_secret": c.get("client_secret"), "code": code}), ttl=0)
@@ -96,9 +113,9 @@ def exchange(http, creds, code: str, redirect_uri: str, ver: str, modulo: str = 
     tok = ll.get("access_token") or r["access_token"]
     vals = {"access_token": tok, "expires_at": str(time.time() + float(ll.get("expires_in", r.get("expires_in", 3600))))}
     # v0.8.2: o token só é gravado depois de conferido na Meta — válido e emitido para ESTE App ID
-    app = f"{c.get('client_id')}|{c.get('client_secret')}"
+    app_token = f"{c.get('client_id')}|{c.get('client_secret')}"
     try:
-        dbg = (http.request_json(g + "debug_token?" + up.urlencode({"input_token": tok, "access_token": app}), ttl=0) or {}).get("data") or {}
+        dbg = (http.request_json(g + "debug_token?" + up.urlencode({"input_token": tok, "access_token": app_token}), ttl=0) or {}).get("data") or {}
     except SourceError as e:
         raise OAuthDiag("M08", f"não foi possível conferir o token na Meta ({e.kind}).") from None
     if str(dbg.get("app_id") or "") != str(c.get("client_id") or ""):
@@ -115,7 +132,7 @@ def exchange(http, creds, code: str, redirect_uri: str, ver: str, modulo: str = 
                 vals["ig_user_id"] = ig
         except SourceError:
             pass
-    creds.set("meta", vals)
+    creds.set(app, vals)
     return vals
 
 
@@ -259,22 +276,26 @@ def redirect_uri(cfg: dict, port: int) -> tuple[str, str]:
     return (cfg.get("meta_redirect_uri") or RELAY_DEFAULT).strip(), "https_relay"
 
 
-def reset_if_app_changed(creds, new_client_id: str | None) -> bool:
-    """Um App ID novo invalida tudo que pertencia ao app anterior (token, permissões, conta do Instagram)."""
+def reset_if_app_changed(creds, new_client_id: str | None, key: str = "meta") -> bool:
+    """Um App ID novo invalida tudo que pertencia ao app anterior (token, permissões, conta do Instagram).
+    v0.9: vale para cada app separadamente (Login e negócios) — trocar um não apaga o outro."""
     if not new_client_id:
         return False
-    cur = creds.get("meta")
+    cur = creds.get(key)
     old = str(cur.get("client_id") or "").strip()
     if old and old != str(new_client_id).strip():
         keep = {k: v for k, v in cur.items() if k not in APP_BOUND}
-        creds.delete("meta")
-        creds.set("meta", keep)
+        creds.delete(key)
+        creds.set(key, keep)
         return True
     return False
 
 
 def start(flows, creds, cfg: dict, port: int, modulo: str = "basico") -> dict:
-    c = creds.get("meta")
+    if modulo not in MODULES:
+        modulo = "basico"
+    app = app_key(creds, modulo)
+    c = creds.get(app)
     cid = str(c.get("client_id") or "").strip()
     if not cid.isdigit():
         raise SourceError("o App ID da Meta é numérico (Configurações → Básico do app)", "restrita")
@@ -284,13 +305,16 @@ def start(flows, creds, cfg: dict, port: int, modulo: str = "basico") -> dict:
         modulo = "basico"
     uri, mode = redirect_uri(cfg, port)
     ver = cfg.get("meta_graph_version", "v23.0")
-    rnd, _ = flows.start("meta", {"redirect_uri": uri, "modo": modulo, "https_relay": mode == "https_relay"})
+    rnd, _ = flows.start("meta", {"redirect_uri": uri, "modo": modulo, "https_relay": mode == "https_relay", "app": app})
     state = rnd
     if mode == "https_relay":
         state = f"{int(port)}.{rnd}"
         flows.rekey(rnd, state)
     url = authorize_url(c, ver, uri, state, modulo, rerequest=bool(c.get("escopos")))
-    return {"url": url, "redirect_uri": uri, "modo": mode, "app_id_enviado": cid, "modulo": modulo}
+    return {"url": url, "redirect_uri": uri, "modo": mode, "app_id_enviado": cid, "modulo": modulo, "app": app,
+            "aviso": None if app == BUSINESS_APP or modulo == "basico" else
+            "Este módulo será pedido ao app de Login. Se a Meta mostrar 'Invalid Scopes', o app não tem o caso de uso necessário: "
+            "configure o app de negócios (Central de Integrações → Meta)."}
 
 
 def complete(http, creds, flows, cfg: dict, code: str, state: str) -> dict:
@@ -314,14 +338,15 @@ def complete(http, creds, flows, cfg: dict, code: str, state: str) -> dict:
         raise OAuthDiag("M04", "O pedido não foi iniciado neste GPI ou o GPI foi reiniciado depois de iniciar a conexão.")
     ver = cfg.get("meta_graph_version", "v23.0")
     try:
-        vals = exchange(http, creds, code, f["redirect_uri"], ver, f.get("modo") or "basico")
+        app = f.get("app") or LOGIN_APP
+        vals = exchange(http, creds, code, f["redirect_uri"], ver, f.get("modo") or "basico", app)
     except OAuthDiag:
         raise
     except SourceError as e:
         d = _exchange_diag(str(e))
         raise OAuthDiag(d, (explain(str(e)) or "") + f" Detalhe: {str(e)[:200]}") from None
-    creds.set("meta", {"app_id_token": str(creds.get("meta").get("client_id") or ""), "conectado_em": time.strftime("%Y-%m-%dT%H:%M:%S")})
-    return {"ok": True, "escopos": vals.get("escopos", ""), "instagram": bool(creds.get("meta").get("ig_user_id")),
+    creds.set(app, {"app_id_token": str(creds.get(app).get("client_id") or ""), "conectado_em": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    return {"ok": True, "escopos": vals.get("escopos", ""), "instagram": bool(creds.get(app).get("ig_user_id")), "app": app,
             "app_id": vals.get("app_id_token"), "estado": "autenticado"}
 
 

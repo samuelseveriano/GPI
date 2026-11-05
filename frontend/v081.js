@@ -169,13 +169,27 @@ window.GPI_V081 = function (H, PAGES) {
         ${r.checklist ? `<table class="small"><thead><tr><th>#</th><th>Etapa</th><th>Status</th><th>Resultado</th><th>Possível causa / ação</th></tr></thead><tbody>${r.checklist.map((s) => `<tr><td class="num">${s.etapa}</td><td><b>${escH(s.nome)}</b><br><span class="muted">${escH(s.descricao)}</span></td><td>${s.status === 'ok' ? '✓ ok' : s.status === 'falhou' ? '✗ falhou' : s.status === 'pendente' ? '… pendente' : '? não verificado'}</td><td>${escH(s.resultado || '—')}</td><td>${escH(s.possivel_causa || '')}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</td></tr>`).join('')}</tbody></table>
         <p class="small muted">A integração só é considerada validada quando o GPI troca o código, confere o token nesta Meta e uma consulta real (/me) responde — a tela “Continuar como …” do Facebook não basta.</p>`
         : `<ol class="small">${r.etapas.map((s) => `<li>${s.ok === true ? '✓' : s.ok === false ? '✗' : '?'} <b>${escH(s.nome)}</b> — ${escH(s.mensagem)}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</li>`).join('')}</ol>`}
-        <div class="btnrow">${Object.entries(r.modulos).map(([k, m]) => { const locked = k !== 'basico' && !(r.checklist && r.checklist[9].status === 'ok'); return `<button class="btn small" data-mod="${k}" ${locked ? 'disabled title="Conclua e valide o Login básico primeiro"' : ''}>Conectar — ${escH(m.nome)}</button>`; }).join('')} <button class="btn small" id="marec">Verificar de novo</button></div>
+        <div class="btnrow">${Object.entries(r.modulos).map(([k, m]) => { const locked = k !== 'basico' && !(r.checklist && r.checklist[9].status === 'ok'); return `<button class="btn small" data-mod="${k}" ${locked ? 'disabled title="Conclua e valide o Login básico primeiro"' : ''}>Conectar — ${escH(m.nome)}</button>`; }).join('')} <button class="btn small" id="marec">Verificar de novo</button> <button class="btn small" id="mamods">Diagnosticar módulos</button></div>
+        <div id="mamodout" class="small"></div>
         <p class="small muted">${escH(r.anuncios.nota)}</p>
         <form id="mapaste" class="filters"><label class="f">Se o navegador não voltar ao GPI, cole o código exibido na página de retorno<input name="colado" size="60"></label><button class="btn small">Concluir</button></form><p id="mamsg" class="small"></p>`;
       $('#maf').onsubmit = async (ev) => { ev.preventDefault(); try { await post('/api/integrations/meta/redirect', Object.fromEntries(new FormData(ev.target))); load(); } catch (e) { $('#mamsg').innerHTML = errBox(e); } };
       $('#marec').onclick = load;
+      $('#mamods').onclick = async () => {   // v0.9: diagnóstico por módulo (app de Login × app de negócios)
+        const o = $('#mamodout'); o.innerHTML = loading('Consultando a Meta…');
+        try {
+          const d = await post('/api/integrations/meta/modulos', {});
+          o.innerHTML = `<p>App de Login: <b>${escH(d.apps.login.app_id || '—')}</b> · App de negócios: <b>${escH(d.apps.negocios.app_id || 'não configurado')}</b>. ${escH(d.regra)}</p>
+            <table class="small"><thead><tr><th>Módulo</th><th>Estado</th><th>Permissões necessárias / concedidas</th><th>Conta ou Página · consulta real</th><th>Erro oficial · ação</th></tr></thead><tbody>${Object.values(d.modulos).map((m) => `<tr>
+              <td><b>${escH(m.nome)}</b><br><span class="muted">app de ${escH(m.app)} · ${escH(m.caso_de_uso)}</span></td>
+              <td><b>${escH(m.estado_rotulo)}</b>${(m.pendencias || []).map((x) => `<br><span class="muted">${escH(x)}</span>`).join('')}</td>
+              <td>${m.permissoes_necessarias.map((x) => `${m.permissoes_concedidas.includes(x) ? '✓' : (m.permissoes_recusadas || []).includes(x) ? '✗ recusada' : '…'} ${escH(x)}`).join('<br>')}<br><span class="muted">${escH(m.aprovacao_exigida)}</span></td>
+              <td>${escH(m.conta_ou_pagina || '—')}<br><span class="muted">${escH((m.consulta_real || {}).resultado || 'sem consulta')}</span>${m.observacao ? `<br><span class="muted">${escH(m.observacao)}</span>` : ''}</td>
+              <td>${m.erro_oficial ? `<code>${escH(String(m.erro_oficial.code || ''))}${m.erro_oficial.subcode ? '/' + escH(String(m.erro_oficial.subcode)) : ''}</code> ${escH(m.erro_oficial.mensagem)}<br>` : ''}${escH(m.acao || '')}</td></tr>`).join('')}</tbody></table>`;
+        } catch (e) { o.innerHTML = errBox(e); }
+      };
       document.querySelectorAll('[data-mod]').forEach((b) => { b.onclick = async () => {
-        try { const s = await post('/api/integrations/meta/oauth/start', { modulo: b.dataset.mod }); window.open(s.url, '_blank', 'noopener'); $('#mamsg').textContent = `Login aberto em nova aba (App ID ${s.app_id_enviado}, retorno ${s.redirect_uri}). Depois volte e clique em “Verificar de novo”.`; } catch (e) { $('#mamsg').innerHTML = errBox(e); } }; });
+        try { const s = await post('/api/integrations/meta/oauth/start', { modulo: b.dataset.mod }); window.open(s.url, '_blank', 'noopener'); $('#mamsg').textContent = `Login aberto em nova aba (App ID ${s.app_id_enviado}, app de ${s.app === 'meta_negocios' ? 'negócios' : 'Login'}, retorno ${s.redirect_uri}). Depois volte e clique em “Diagnosticar módulos”.` + (s.aviso ? ' ⚠ ' + s.aviso : ''); } catch (e) { $('#mamsg').innerHTML = errBox(e); } }; });
       $('#mapaste').onsubmit = async (ev) => { ev.preventDefault(); try { const x = await post('/api/oauth/meta/concluir', Object.fromEntries(new FormData(ev.target))); $('#mamsg').textContent = 'Token conferido para o app ' + (x.app_id || '') + ' — permissões: ' + (x.escopos || 'perfil público') + '. Validando consulta real…'; load(); } catch (e) { $('#mamsg').innerHTML = errBox(e); } };
     };
     box.addEventListener('toggle', () => { if (box.open && !box.dataset.ok) { box.dataset.ok = 1; load(); } });

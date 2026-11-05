@@ -156,8 +156,13 @@ class TikTokDiscovery(Connector):
 
 
 # ============================================================================ Meta (Instagram, Facebook, Biblioteca de Anúncios)
-def _meta_get(ctx, path, params):
-    c = ctx.creds.get("meta")
+def _mc(ctx, modulo: str) -> dict:
+    from ..integrations.meta import creds_for
+    return creds_for(ctx.creds, modulo) if ctx.creds else {}
+
+
+def _meta_get(ctx, path, params, modulo: str = "basico"):
+    c = _mc(ctx, modulo)
     if not c.get("access_token"):
         raise SourceError("Meta não conectada: use 'Conectar' na Central de Integrações", "restrita")
     url = _graph(ctx) + path + "?" + urllib.parse.urlencode({**params, "access_token": c["access_token"]})
@@ -184,7 +189,7 @@ class InstagramHashtags(Connector):
 
     def available(self, ctx):
         from ..integrations.meta import module_ok
-        c = ctx.creds.get("meta") if ctx.creds else {}
+        c = _mc(ctx, "instagram")
         return bool(module_ok(c, "instagram") and c.get("ig_user_id"))
 
     @property
@@ -224,17 +229,17 @@ class InstagramHashtags(Connector):
                 "recentes_lidas": len(recent)}
 
     def run(self, job, ctx):
-        db, c = ctx.store.db, ctx.creds.get("meta")
+        db, c = ctx.store.db, _mc(ctx, "instagram")
         tag = job.params["tag"]
-        r = _meta_get(ctx, "ig_hashtag_search", {"user_id": c["ig_user_id"], "q": tag})
+        r = _meta_get(ctx, "ig_hashtag_search", {"user_id": c["ig_user_id"], "q": tag}, "instagram")
         data = r.get("data") or []
         S.quota_add(db, self.id, tag, ctx.today)          # a consulta conta na cota mesmo sem resultado
         if not data:
             return [], []
         hid = data[0]["id"]
         fields = "id,media_type,like_count,comments_count,timestamp,permalink"
-        top = (_meta_get(ctx, f"{hid}/top_media", {"user_id": c["ig_user_id"], "fields": fields, "limit": 50}).get("data") or [])
-        recent = (_meta_get(ctx, f"{hid}/recent_media", {"user_id": c["ig_user_id"], "fields": "id,timestamp", "limit": 50}).get("data") or [])
+        top = (_meta_get(ctx, f"{hid}/top_media", {"user_id": c["ig_user_id"], "fields": fields, "limit": 50}, "instagram").get("data") or [])
+        recent = (_meta_get(ctx, f"{hid}/recent_media", {"user_id": c["ig_user_id"], "fields": "id,timestamp", "limit": 50}, "instagram").get("data") or [])
         agg = self.aggregate(top, recent, datetime.now(timezone.utc).replace(tzinfo=None))
         pid, it = S.identify(db, ctx.cfg, tag, self.id, None)
         pid = pid or job.params.get("pid")
@@ -267,7 +272,7 @@ class FacebookPages(Connector):
 
     def available(self, ctx):
         from ..integrations.meta import module_ok
-        c = ctx.creds.get("meta") if ctx.creds else {}
+        c = _mc(ctx, "paginas")
         return bool(module_ok(c, "facebook") and ctx.cfg.get("facebook_pages"))
 
     @property
@@ -283,7 +288,7 @@ class FacebookPages(Connector):
         since = int((datetime.now(timezone.utc) - timedelta(days=int(ctx.cfg.get("facebook_days", 90)))).timestamp())
         r = _meta_get(ctx, f"{urllib.parse.quote(str(job.params['page']))}/posts",
                       {"fields": "created_time,message,permalink_url,shares,reactions.summary(total_count).limit(0),"
-                                 "comments.summary(total_count).limit(0)", "since": since, "limit": 100})
+                                 "comments.summary(total_count).limit(0)", "since": since, "limit": 100}, "paginas")
         posts = r.get("data")
         require(isinstance(posts, list), "Facebook posts: 'data' ausente")
         agg = defaultdict(lambda: {"n": 0, "inter": 0})
@@ -326,7 +331,7 @@ class MetaAdLibrary(Connector):
 
     def available(self, ctx):
         from ..integrations.meta import module_ok
-        c = ctx.creds.get("meta") if ctx.creds else {}
+        c = _mc(ctx, "anuncios")
         return bool(module_ok(c, "meta_ads") and ctx.cfg.get("meta_ads_enabled", False))
 
     @property
@@ -344,7 +349,7 @@ class MetaAdLibrary(Connector):
                   "ad_active_status": "ACTIVE", "fields": "id", "limit": 100}
         n, path, pages = 0, "ads_archive", 0
         while pages < 5:
-            r = _meta_get(ctx, path, params)
+            r = _meta_get(ctx, path, params, "anuncios")
             data = r.get("data")
             require(isinstance(data, list), "Biblioteca de Anúncios: 'data' ausente")
             n += len(data)
