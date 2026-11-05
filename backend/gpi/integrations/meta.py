@@ -95,11 +95,18 @@ def exchange(http, creds, code: str, redirect_uri: str, ver: str, modulo: str = 
                                                                        "fb_exchange_token": r["access_token"]}), ttl=0)
     tok = ll.get("access_token") or r["access_token"]
     vals = {"access_token": tok, "expires_at": str(time.time() + float(ll.get("expires_in", r.get("expires_in", 3600))))}
+    # v0.8.2: o token só é gravado depois de conferido na Meta — válido e emitido para ESTE App ID
+    app = f"{c.get('client_id')}|{c.get('client_secret')}"
     try:
-        gs = granted_scopes(http, c, ver, tok)
-        vals["escopos"] = ",".join(gs["escopos"])
-    except SourceError:
-        pass
+        dbg = (http.request_json(g + "debug_token?" + up.urlencode({"input_token": tok, "access_token": app}), ttl=0) or {}).get("data") or {}
+    except SourceError as e:
+        raise OAuthDiag("M08", f"não foi possível conferir o token na Meta ({e.kind}).") from None
+    if str(dbg.get("app_id") or "") != str(c.get("client_id") or ""):
+        raise OAuthDiag("M10", f"App ID configurado: {c.get('client_id')}; App ID do token: {dbg.get('app_id') or 'não informado'}.")
+    if not dbg.get("is_valid"):
+        raise OAuthDiag("M11")
+    vals["escopos"] = ",".join(sorted(dbg.get("scopes") or []))
+    vals["app_id_token"] = str(dbg.get("app_id"))
     if modulo == "instagram" or "instagram_basic" in vals.get("escopos", ""):
         try:
             acc = http.request_json(g + "me/accounts?" + up.urlencode({"fields": "name,instagram_business_account", "access_token": tok}), ttl=0)
@@ -191,7 +198,37 @@ import re as _re
 RELAY_DEFAULT = "https://samuelseveriano.github.io/GPI/oauth/meta/"
 LOCAL_RETURN = "/oauth/meta/retorno"
 STATE_RX = _re.compile(r"^(\d{4,5})\.([A-Za-z0-9_\-]{32,64})$")
-CODE_RX = _re.compile(r"^[A-Za-z0-9_\-.~#]{8,1024}$")
+# v0.8.2: mesma regra da página de retorno (pages/oauth/meta/relay.js). A Meta não documenta o tamanho do código;
+# o relay antigo parava em 300 caracteres e recusava códigos reais ("Retorno inválido ou incompleto").
+CODE_RX = _re.compile(r"^[A-Za-z0-9_\-.~]{8,2048}$")
+DIAG = {"M01": "Meta não retornou um código de autorização.",
+        "M02": "O código recebido não corresponde ao formato esperado.",
+        "M03": "Parâmetro de segurança OAuth não recebido.",
+        "M04": "A solicitação de autorização não corresponde à sessão iniciada.",
+        "M05": "A autorização expirou. Inicie uma nova conexão.",
+        "M06": "Meta recusou a autorização.",
+        "M07": "O navegador não conseguiu concluir a comunicação com o GPI.",
+        "M08": "O código foi recebido, mas não foi possível concluir a autenticação.",
+        "M09": "Esta autorização já foi utilizada (proteção contra reutilização). Inicie uma nova conexão.",
+        "M10": "O token recebido pertence a outro aplicativo da Meta.",
+        "M11": "A Meta emitiu um token inválido."}
+
+
+class OAuthDiag(SourceError):
+    """Falha do OAuth da Meta com código de diagnóstico (sem código, token ou segredo na mensagem)."""
+
+    def __init__(self, diag: str, detail: str = ""):
+        super().__init__(DIAG[diag] + (f" {detail}" if detail else "") + f" (diagnóstico {diag})", "restrita")
+        self.diag = diag
+
+
+def _exchange_diag(msg: str) -> str:
+    m = (msg or "").lower()
+    if "expired" in m or "expirou" in m:
+        return "M05"
+    if "been used" in m or "already" in m:
+        return "M09"
+    return "M08"
 APP_BOUND = ("access_token", "refresh_token", "expires_at", "escopos", "ig_user_id", "conectado_em", "app_id_token")
 MODES = {"https_relay": "Retorno HTTPS (GitHub Pages) — recomendado; exige o domínio samuelseveriano.github.io no app",
          "localhost": "http://localhost — aceito pela Meta somente com o app em modo de desenvolvimento"}
@@ -257,20 +294,35 @@ def start(flows, creds, cfg: dict, port: int, modulo: str = "basico") -> dict:
 
 
 def complete(http, creds, flows, cfg: dict, code: str, state: str) -> dict:
-    if not STATE_RX.match(state or ""):
-        raise SourceError("state ausente ou inválido (proteção contra falsificação)", "restrita")
-    if not CODE_RX.match(code or ""):
-        raise SourceError("código de autorização ausente ou inválido", "restrita")
+    """Valida no BACKEND (não só no relay): state presente, formato, sessão, expiração e uso único; troca o código;
+    confere o token na Meta (debug_token) antes de gravá-lo. Mensagens nunca contêm o código ou o token."""
+    if not state:
+        raise OAuthDiag("M03")
+    if not STATE_RX.match(state):
+        raise OAuthDiag("M04")
+    if not code:
+        raise OAuthDiag("M01")
+    if not CODE_RX.match(code):
+        raise OAuthDiag("M02", f"({len(code)} caracteres)")
     f = flows.consume(state)
     if not f or f.get("provider") != "meta":
-        raise SourceError("pedido expirado, já utilizado ou desconhecido — inicie a conexão novamente", "restrita")
+        why = flows.why(state) if hasattr(flows, "why") else "desconhecido"
+        if why == "usado":
+            raise OAuthDiag("M09")
+        if why == "expirado":
+            raise OAuthDiag("M05")
+        raise OAuthDiag("M04", "O pedido não foi iniciado neste GPI ou o GPI foi reiniciado depois de iniciar a conexão.")
     ver = cfg.get("meta_graph_version", "v23.0")
     try:
         vals = exchange(http, creds, code, f["redirect_uri"], ver, f.get("modo") or "basico")
+    except OAuthDiag:
+        raise
     except SourceError as e:
-        raise SourceError((explain(str(e)) or "") + f" Detalhe: {str(e)[:200]}", e.kind) from None
+        d = _exchange_diag(str(e))
+        raise OAuthDiag(d, (explain(str(e)) or "") + f" Detalhe: {str(e)[:200]}") from None
     creds.set("meta", {"app_id_token": str(creds.get("meta").get("client_id") or ""), "conectado_em": time.strftime("%Y-%m-%dT%H:%M:%S")})
-    return {"ok": True, "escopos": vals.get("escopos", ""), "instagram": bool(creds.get("meta").get("ig_user_id"))}
+    return {"ok": True, "escopos": vals.get("escopos", ""), "instagram": bool(creds.get("meta").get("ig_user_id")),
+            "app_id": vals.get("app_id_token"), "estado": "autenticado"}
 
 
 def parse_pasted(text: str) -> tuple[str, str]:
@@ -407,3 +459,76 @@ def _assist(steps, estado, uri, mode, c) -> dict:
                                  "de temas políticos/sociais no Brasil não são comerciais. Dados europeus NÃO representam o mercado "
                                  "brasileiro. ads_read sozinho não garante acesso: exige identidade confirmada."},
             "aviso": "Uma URL de autorização correta não prova que o app tem permissão: cada etapa é verificada na Meta."}
+
+
+# ============================================================================ v0.8.2: checklist do assistente
+CHECK_STEPS = [
+    ("App ID correto", "O App ID salvo é numérico e a Meta reconhece o aplicativo."),
+    ("App Secret configurado", "A Meta emitiu o token do aplicativo com o App ID e o App Secret."),
+    ("Redirect URI válido", "A URI enviada no OAuth usa HTTPS (ou localhost em desenvolvimento)."),
+    ("Domínio autorizado", "O domínio da URI está em Configurações → Básico → Domínios do app."),
+    ("OAuth iniciado", "O GPI gerou a URL de autorização com state de uso único."),
+    ("Autorização recebida", "A Meta devolveu um código e a página de retorno o entregou ao GPI."),
+    ("State validado", "O GPI conferiu que o retorno pertence à conexão que ele iniciou (CSRF/replay)."),
+    ("Token obtido", "O código foi trocado pelo token e o token foi conferido para este App ID."),
+    ("Permissões identificadas", "Permissões realmente concedidas (debug_token)."),
+    ("Consulta real validada", "Uma consulta oficial (/me) respondeu com o token."),
+]
+_CAUSE = {"M01": "Autorização cancelada ou URL de retorno incompleta.", "M02": "Código alterado ou truncado no caminho.",
+          "M03": "A URL de retorno perdeu o parâmetro state.", "M04": "Retorno de outra sessão ou GPI reiniciado no meio do login.",
+          "M05": "Mais de 10 minutos entre iniciar e concluir, ou código vencido na Meta.",
+          "M06": "Recusa na tela da Meta, app inativo ou permissão negada.",
+          "M07": "Navegador corporativo bloqueou o acesso ao endereço local.", "M08": "Falha na troca do código (App Secret, URI diferente).",
+          "M09": "O mesmo retorno foi aberto duas vezes.", "M10": "Credenciais de outro aplicativo.", "M11": "Token expirado ou revogado."}
+
+
+def checklist(r: dict, last: dict | None, started: bool) -> list[dict]:
+    """Converte as verificações reais do assistente + o último retorno OAuth registrado nas 10 etapas pedidas.
+    Status: ok · falhou · pendente · não verificado. Nada é marcado 'ok' só porque a tela do Facebook apareceu."""
+    by = {s["etapa"]: s for s in r.get("etapas", [])}
+    last = last or {}
+    dg = last.get("diagnostico")
+
+    def st(v):
+        return "ok" if v is True else "falhou" if v is False else "não verificado"
+    rows = []
+
+    def put(i, status, resultado, causa=None, acao=None):
+        n, desc = CHECK_STEPS[i - 1]
+        rows.append({"etapa": i, "nome": n, "descricao": desc, "status": status, "resultado": resultado,
+                     "possivel_causa": causa if status in ("falhou", "pendente") else None,
+                     "acao": acao if status in ("falhou", "pendente", "não verificado") else None})
+    s2 = by.get(2, {})
+    put(1, st(s2.get("ok")) if by.get(1, {}).get("ok") else "falhou", (by.get(1) or {}).get("mensagem", "—"),
+        "App ID ausente, não numérico ou de outro app.", (by.get(1) or {}).get("acao") or s2.get("acao"))
+    put(2, st((by.get(3) or {}).get("ok")) if by.get(3) else ("falhou" if by.get(1, {}).get("ok") else "pendente"),
+        (by.get(3) or s2).get("mensagem", "aguardando App ID e App Secret"), "App Secret ausente ou redefinido no painel.",
+        s2.get("acao") or "Informe o App Secret (Configurações → Básico).")
+    put(3, st((by.get(4) or {}).get("ok")), (by.get(4) or {}).get("mensagem", "—"), "URI http fora de localhost.", (by.get(4) or {}).get("acao"))
+    put(4, st((by.get(5) or {}).get("ok")), (by.get(5) or {}).get("mensagem", "—"), "Domínio ausente em Domínios do app.",
+        (by.get(5) or {}).get("acao"))
+    put(5, "ok" if started or last else "pendente", "conexão iniciada neste GPI" if started or last else "nenhuma conexão iniciada",
+        None, "Clique em 'Conectar — Login básico'.")
+    tok = by.get(6, {})
+    if dg in ("M01", "M02", "M06", "M07"):
+        put(6, "falhou", f"{DIAG[dg]} (diagnóstico {dg}; código com {last.get('tamanho_codigo', 0)} caracteres)", _CAUSE.get(dg),
+            "Inicie a conexão de novo; se repetir, veja docs/META_OAUTH_FIX.md.")
+    else:
+        put(6, "ok" if last or tok.get("ok") else "pendente", "retorno recebido pelo GPI" if last or tok.get("ok") else "aguardando retorno",
+            None, "Conclua a autorização na tela da Meta.")
+    if dg in ("M03", "M04", "M05", "M09"):
+        put(7, "falhou", f"{DIAG[dg]} (diagnóstico {dg})", _CAUSE.get(dg), "Inicie uma nova conexão e conclua em até 10 minutos.")
+    else:
+        put(7, "ok" if dg == "OK" or tok.get("ok") else "pendente", "state conferido e consumido" if dg == "OK" or tok.get("ok") else "—",
+            None, "Conclua a autorização.")
+    if dg in ("M08", "M10", "M11"):
+        put(8, "falhou", f"{DIAG[dg]} (diagnóstico {dg})", _CAUSE.get(dg), "Confira App ID/Secret e a URI cadastrada; conecte de novo.")
+    else:
+        put(8, st(tok.get("ok")) if tok else "pendente", tok.get("mensagem", "nenhum token"), "Token ausente, expirado ou de outro app.",
+            tok.get("acao") or "Conclua o Login básico.")
+    p7 = by.get(7, {})
+    put(9, "ok" if p7.get("ok") else "pendente", p7.get("mensagem", "—"), "Token ainda não obtido.", "Conclua o Login básico.")
+    q9 = by.get(9, {})
+    put(10, st(q9.get("ok")) if q9 else "pendente", q9.get("mensagem", "nenhuma consulta executada"),
+        "Recurso não liberado para o app ou conta.", q9.get("acao") or "Rode o assistente depois do login.")
+    return rows

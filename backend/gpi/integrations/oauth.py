@@ -30,6 +30,7 @@ class PendingFlows:
     def __init__(self, ttl: float = 600):
         self.ttl = ttl
         self._d: dict[str, dict] = {}
+        self._gone: dict[str, tuple[str, float]] = {}     # v0.8.2: só o motivo (usado/expirado) — nunca o código
         self._lock = threading.Lock()
 
     def start(self, provider: str, extra: dict | None = None) -> tuple[str, str]:
@@ -47,11 +48,27 @@ class PendingFlows:
                 self._d[new] = self._d.pop(old)
 
     def consume(self, state: str) -> dict | None:
+        now = time.time()
         with self._lock:
             f = self._d.pop(state, None)
-        if not f or f["exp"] < time.time():
+            if f:
+                self._gone[state] = ("expirado" if f["exp"] < now else "usado", now)
+                if len(self._gone) > 500:
+                    self._gone = {k: v for k, v in self._gone.items() if v[1] > now - 3600}
+        if not f or f["exp"] < now:
             return None
         return f
+
+    def why(self, state: str) -> str:
+        """Por que um state não é aceito: 'usado' (replay), 'expirado' ou 'desconhecido' (outra sessão ou GPI reiniciado)."""
+        with self._lock:
+            g = self._gone.get(state)
+            if g:
+                return g[0]
+            f = self._d.get(state)
+        if f and f["exp"] < time.time():
+            return "expirado"
+        return "desconhecido"
 
 
 def authorize_url(base: str, client_id: str, redirect_uri: str, state: str, verifier: str, scope: str | None = None) -> str:

@@ -12,6 +12,7 @@ import json
 import urllib.parse
 import logging
 import secrets
+import time
 from urllib.parse import unquote, urlsplit
 from pathlib import Path
 
@@ -639,13 +640,21 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         try:
             r = await run_in_threadpool(MT.complete, sync.http, sync.creds, flows, cfg, code, state)
         except SourceError as e:
-            log.warning("OAuth Meta não concluído: %s", redact_text(str(e)))
-            return err(str(e))
+            diag = getattr(e, "diag", "M08")
+            log.warning("OAuth Meta não concluído: diagnóstico %s (código com %d caracteres)", diag, len(code))
+            sync.store.save_result("diag:meta_oauth", {"resultado": {"diagnostico": diag, "mensagem": str(e)[:300],
+                                                                     "tamanho_codigo": len(code), "em": time.strftime("%Y-%m-%dT%H:%M:%S")}})
+            return JSONResponse({"erro": str(e), "diagnostico": diag}, 400)
+        sync.store.save_result("diag:meta_oauth", {"resultado": {"diagnostico": "OK", "tamanho_codigo": len(code),
+                                                                 "em": time.strftime("%Y-%m-%dT%H:%M:%S")}})
         return JSONResponse({**r, "protecao": sync.creds.protection})
 
     async def meta_assistant(request):
         from .integrations import meta as MT
         r = await run_in_threadpool(MT.assistant, sync.http, sync.creds, cfg, db, request.url.port or 8765)
+        last = (sync.store.load_result("diag:meta_oauth") or {}).get("resultado")
+        r["checklist"] = MT.checklist(r, last, started=bool(getattr(flows, "_d", None) or getattr(flows, "_gone", None)))
+        r["ultimo_retorno_oauth"] = last
         sync.store.save_result("diag:meta", {"resultado": r})
         return JSONResponse(r)
 

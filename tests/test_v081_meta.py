@@ -129,7 +129,7 @@ def test_api_routes_and_secret_never_returned(tmp_path):
         code, r = s.req("/api/integrations/meta/credentials", {"client_id": "abc"})
         assert code == 400
         code, r = s.req("/api/oauth/meta/concluir", {"code": "AQBcode12345", "state": "8765." + "a" * 40})
-        assert code == 400 and "expirado" in r["erro"]
+        assert code == 400 and r["diagnostico"] == "M04" and "AQBcode12345" not in r["erro"]   # v0.8.2: state desconhecido ≠ expirado
         code, html = s.req("/oauth/meta/retorno", raw=True)
         assert code == 200 and b"oauth_meta_retorno.js" in (html if isinstance(html, bytes) else html.encode())
     finally:
