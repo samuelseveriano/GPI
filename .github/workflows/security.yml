@@ -9,7 +9,7 @@ name: security
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "fix/**"]
   pull_request:
   schedule:
     - cron: "17 6 * * 1"

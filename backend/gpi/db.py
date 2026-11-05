@@ -433,6 +433,18 @@ class Database:
             self.con.execute("CREATE TABLE IF NOT EXISTS schema_version (v INTEGER NOT NULL)")
             r = self.con.execute("SELECT MAX(v) FROM schema_version").fetchone()
             current = r[0] or 0
+            self.pre_migration_backup = None
+            if 0 < current < len(MIGRATIONS) and ENGINE == "sqlite":
+                # v0.7.1: cópia consistente do banco ANTES de qualquer migração (nada é apagado)
+                try:
+                    dest = self.path.parent / "backups" / f"gpi_antes_migracao_v{current}_para_v{len(MIGRATIONS)}_{datetime.now():%Y%m%d_%H%M%S}.sqlite"
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    b = sqlite3.connect(str(dest))
+                    self.con.backup(b)
+                    b.close()
+                    self.pre_migration_backup = dest
+                except Exception:  # noqa: BLE001 — sem espaço/permissão: a migração (não destrutiva) segue
+                    pass
             for i, stmts in enumerate(MIGRATIONS, start=1):
                 if i <= current:
                     continue
@@ -474,6 +486,21 @@ class Database:
                 self.con.execute("CHECKPOINT")
                 shutil.copy2(self.path, dest)
         return dest
+
+    def integrity(self) -> dict:
+        """v0.7.1: verificação de integridade (somente leitura) e contagem real por tabela."""
+        with self.lock:
+            ok = [r[0] for r in self.con.execute("PRAGMA integrity_check").fetchall()]
+            fk = self.con.execute("PRAGMA foreign_key_check").fetchall()
+            tables = [r[0] for r in self.con.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE "
+                                                     "'sqlite_%' AND name NOT LIKE 'compliance_fts%' ORDER BY name")]
+            counts = {t: self.con.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables}
+            orphans = self.con.execute("SELECT COUNT(*) FROM market_obs o LEFT JOIN market_series s ON s.id = o.series_id "
+                                       "WHERE s.id IS NULL").fetchone()[0]
+            jm = self.con.execute("PRAGMA journal_mode").fetchone()[0]
+        return {"integridade": ok[0] if len(ok) == 1 else ok[:20], "ok": ok == ["ok"] and not fk and not orphans,
+                "chaves_estrangeiras_invalidas": len(fk), "observacoes_orfas": orphans, "journal_mode": jm,
+                "versao_esquema": self.schema_version(), "tabelas": counts, "arquivo": self.path.name}
 
     def close(self):
         with self.lock:

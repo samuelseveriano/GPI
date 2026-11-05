@@ -240,9 +240,14 @@ def conformal(errs_by_origin: dict, levels=(0.8, 0.9, 0.95)) -> dict:
         return {}
     C = np.abs(np.vstack(calib))                                  # (n, h)
     n = C.shape[0]
-    out = {"n_calibracao": int(n), "n_teste": len(test), "quantis": {}, "cobertura_observada": {}}
+    out = {"n_calibracao": int(n), "n_teste": len(test), "quantis": {}, "cobertura_observada": {}, "niveis_indisponiveis": []}
     for lv in levels:
-        k = min(1.0, math.ceil((n + 1) * lv) / n)
+        if math.ceil((n + 1) * lv) > n:
+            # v0.7.1: calibração pequena demais para este nível (o quantil conformal seria infinito);
+            # antes, todos os níveis viravam o erro máximo e 80/90/95% saíam idênticos — intervalo indefensável
+            out["niveis_indisponiveis"].append(str(lv))
+            continue
+        k = math.ceil((n + 1) * lv) / n
         q = np.quantile(C, k, axis=0, method="higher")
         out["quantis"][str(lv)] = q.tolist()
         if test:

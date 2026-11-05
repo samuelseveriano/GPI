@@ -40,6 +40,16 @@ def _observe_and_store(ctx, source, country, term, ref_date, period, metric, val
     intent = classify(term)
     pid = Catalog(ctx.store.db, ctx.cfg).observe(term, source, country, intent["intencao"], strong=strong, lang=lang)
     commercial = int(bool(pid) and intent["intencao"] not in ("noticia", "entretenimento"))
+    counts = getattr(ctx, "obs_counts", None)
+    if counts is not None:                       # v0.7.1: contabiliza gravações diretas (novas x revisadas)
+        old = ctx.store.db.query("SELECT value FROM search_observations WHERE source = ? AND country = ? AND region = ? AND "
+                                 "term = ? AND ref_date = ? AND metric = ?",
+                                 (source, country, region or "", term[:200], ref_date, metric))
+        c = counts.setdefault(source, {"novas": 0, "revisadas": 0})
+        if not old:
+            c["novas"] += 1
+        elif float(old[0]["value"]) != float(value):
+            c["revisadas"] += 1
     ctx.store.db.execute(
         "INSERT INTO search_observations (source, country, region, term, ref_date, period, metric, value, value_high, unit,"
         " lang, product_id, intent, commercial, url, extra, collected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -61,6 +71,7 @@ class MercadoLivreTrends(Connector):
     limitations = "Lista ordenada de termos: a posição indica popularidade relativa, não volume de buscas."
     order = 16
     stage = 1
+    manual_refresh = True
     URL = "https://api.mercadolibre.com/trends/MLB"
 
     def available(self, ctx) -> bool:
@@ -81,7 +92,7 @@ class MercadoLivreTrends(Connector):
     def run(self, job, ctx):
         from ..integrations.registry import ml_token
         tok = ml_token(ctx.http, ctx.creds)
-        items = self.parse(ctx.http.request_json(self.URL, headers={"Authorization": f"Bearer {tok}"}, ttl=6 * 3600))
+        items = self.parse(ctx.http.request_json(self.URL, headers={"Authorization": f"Bearer {tok}"}, ttl=3600))
         with ctx.store.db.transaction():
             for it in items:
                 _observe_and_store(ctx, self.id, "BR", it["termo"], ctx.today.isoformat(), "dia", "posicao_tendencia",

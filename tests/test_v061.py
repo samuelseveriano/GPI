@@ -412,7 +412,7 @@ def test_sync_panel_states_real_progress_and_partial_result(tmp_path):
     f = s["fontes"]
     assert f["google_ads_kp"]["estado"] == "requer_autorizacao" and f["google_ads_kp"].get("inicio") is None   # resolvida no início
     assert f["gdelt"]["estado"] == "limite" and "429" in f["gdelt"]["motivo"]
-    assert f["comexstat"]["estado"] == "concluido" and f["comexstat"]["jobs_total"] == 2 and f["comexstat"]["segundos"] > 0
+    assert f["comexstat"]["estado"] in ("concluido", "sem_novidades") and f["comexstat"]["jobs_total"] == 2 and f["comexstat"]["segundos"] > 0
     assert s["titulo"] == "Sincronização concluída com restrições" and s["fase"] == "parcial" and s["percentual"] == 100
     assert seen == sorted(seen) and max(seen[:-1] or [0]) < 100                                # monótono, sem 100 antes do fim
     assert all(v["simbolo"] for v in f.values())                                               # estado não depende só de cor
@@ -433,7 +433,7 @@ def test_sync_priority_order_and_failed_source_does_not_block(tmp_path):
     sm.run("teste")
     firsts = list(dict.fromkeys(order))
     assert firsts == ["ml_trends", "google_trends_rss", "ebay", "youtube", "comexstat"]          # prioridade comercial
-    assert sm.snapshot()["fontes"]["comexstat"]["estado"] == "concluido"                      # falha anterior não bloqueou
+    assert sm.snapshot()["fontes"]["comexstat"]["estado"] in ("concluido", "sem_novidades")                      # falha anterior não bloqueou
 
 
 def test_sync_cancel_marks_sources_and_retry_failed(tmp_path):
@@ -454,7 +454,7 @@ def test_sync_cancel_marks_sources_and_retry_failed(tmp_path):
     r = sm.retry_failed()
     assert r["iniciada"] and r["fontes"] == ["bad"]
     sm._thread.join(10)
-    assert sm.snapshot()["fontes"]["bad"]["estado"] == "concluido" and "bad" not in sm.failed_sources()
+    assert sm.snapshot()["fontes"]["bad"]["estado"] in ("concluido", "sem_novidades") and "bad" not in sm.failed_sources()
 
 
 def test_sync_structured_log_has_no_secrets(tmp_path, ka):

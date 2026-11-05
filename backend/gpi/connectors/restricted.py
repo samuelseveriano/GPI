@@ -87,6 +87,7 @@ class MercadoLivre(Connector):
     stage = 2
     """Ativado somente se a empresa configurar um access token oficial (OAuth)."""
     id, name, order = "mercadolivre", "Mercado Livre Brasil — tendências de busca", 80
+    manual_refresh = True
     reliability = "B"
     docs_url = "https://developers.mercadolivre.com.br/pt_br/tendencias"
     description = "Palavras mais buscadas no Mercado Livre Brasil (recurso /trends), registradas a cada coleta."
@@ -123,7 +124,8 @@ class MercadoLivre(Connector):
             from ..integrations.registry import ml_token
             tok = ml_token(ctx.http, ctx.creds)
         url = "https://api.mercadolibre.com/trends/MLB"
-        kws = self.parse(ctx.http.request_json(url, headers={"Authorization": f"Bearer {tok}"}, ttl=0))
+        # mesma resposta usada por ml_trends na mesma sincronização: cache de 1 h evita requisição duplicada
+        kws = self.parse(ctx.http.request_json(url, headers={"Authorization": f"Bearer {tok}"}, ttl=3600))
         d = ctx.today.isoformat()
         from ..market import taxonomy as tx
         batches = []

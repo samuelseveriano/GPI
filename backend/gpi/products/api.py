@@ -120,6 +120,26 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
         aux = [s for s in r["series"] if s["page"] == cc and METRICS[s["metric"]]["tipo"] not in ("busca", "busca_ranking")]
         return j({**page, "auxiliares": aux[:60], "metricas": METRICS})
 
+    def _insights():
+        from .insights import build
+        r = result()
+        prods = {p["product_id"]: p for p in Catalog(db, cfg).products()}
+        return build(r, db, prods)
+
+    async def insights(_):
+        return j(await run_in_threadpool(_insights))
+
+    async def insight_one(request):
+        pid = request.path_params["pid"]
+        d = await run_in_threadpool(_insights)
+        it = next((i for i in d["itens"] if i["produto_id"] == pid), None)
+        if it is None:
+            fam = pid.split(":")[0]
+            it = next((i for i in d["itens"] if i["produto_id"] == fam), None)
+        return j(it or {"produto_id": pid, "situacao": "EVIDÊNCIA INSUFICIENTE",
+                        "analise": "Nenhuma série coletada para este produto ainda.", "proxima_acao":
+                        "Coletar dados (sincronizar fontes de busca, atenção ou marketplaces) antes de qualquer conclusão."})
+
     async def product(request):
         pid = request.path_params["pid"]
         cat = Catalog(db, cfg)
@@ -322,6 +342,8 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
         Route("/api/settings", settings, methods=["GET", "POST"]),
         Route("/api/consumer/dashboard", dashboard),
         Route("/api/consumer/country/{cc}", country),
+        Route("/api/consumer/insights", insights),
+        Route("/api/consumer/insights/{pid:path}", insight_one),
         Route("/api/consumer/product/{pid:path}", product),
         Route("/api/consumer/compare", compare),
         Route("/api/consumer/opportunities", opportunities),

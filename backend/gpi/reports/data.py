@@ -25,6 +25,9 @@ from .. import __version__
 
 NATUREZA = {"obs": "Observado", "est": "Estimado", "proj": "Projeção", "der": "Derivado"}
 
+import logging
+log = logging.getLogger('gpi.relatorios')
+
 TYPES = {
     "radar_global": {"nome": "Radar Global de Produtos",
                      "descricao": "Produtos emergentes, rankings de crescimento por país e categoria, sinais de busca e "
@@ -758,6 +761,40 @@ def build(db, tipo: str, filtros: dict | None = None, cfg: dict | None = None, t
             soc = c.sec_social(f)[1]
             ds["texto"]["executivo"] = c.executive_text(f, series, ranking["linhas"], opp["linhas"], soc["linhas"])
             ds["graficos"] += c.chart_series(series, 5)
+    # v0.7.1: Insights do GPI (determinísticos) — situação, crescimento, confiança, cobertura, modelo e limitações
+    if tipo in ("radar_global", "mais_pesquisados", "tendencias_pais", "previsoes", "oportunidades", "produto", "executivo"):
+        try:
+            from ..products.catalog import Catalog
+            from ..products.insights import build as build_insights
+            ins = build_insights(c.cons, db, {p["product_id"]: p for p in Catalog(db, c.cfg).products()})
+            rows = []
+            for it in ins["itens"]:
+                if f.produto and it["produto_id"] not in (f.produto, f.produto.split(":")[0]):
+                    continue
+                if f.categoria and it.get("categoria") != f.categoria:
+                    continue
+                sp, fc = it.get("serie_principal") or {}, it.get("previsao") or {}
+                rows.append({"produto": it["nome"], "categoria": it.get("categoria"), "situacao": it["situacao"],
+                             "crescimento": it.get("crescimento_recente"), "base": it.get("base_crescimento"),
+                             "persistencia": f"{it['persistencia']['positivos']}/{it['persistencia']['periodos']}" if it.get("persistencia") else None,
+                             "fontes": it.get("fontes_com_evidencia"), "volatilidade": it.get("volatilidade_rotulo"),
+                             "confianca": it.get("confianca"), "cobertura": it.get("evidence_coverage"),
+                             "opportunity": it.get("opportunity_score"), "pais": sp.get("pais"), "fonte": sp.get("fonte"),
+                             "periodo": sp.get("periodo"), "modelo": (fc.get("modelo") or "—") + (" (baseline)" if fc.get("baseline") else ""),
+                             "wape": (fc.get("metricas") or {}).get("wape"), "analise": it["analise"], "proxima": it["proxima_acao"]})
+            ds["secoes"].insert(0, ("Insights do GPI", [table(
+                "insights", "Insights do GPI — situação e evidência por produto",
+                [("produto", "Produto"), ("categoria", "Categoria"), ("situacao", "Situação"), ("crescimento", "Crescimento", "pct"),
+                 ("base", "Base de comparação"), ("persistencia", "Períodos positivos"), ("fontes", "Fontes com evidência", "inteiro"),
+                 ("volatilidade", "Volatilidade"), ("confianca", "Confiança"), ("cobertura", "Evidence Coverage", "numero"),
+                 ("opportunity", "Opportunity Score", "numero"), ("pais", "País"), ("fonte", "Fonte"), ("periodo", "Período"),
+                 ("modelo", "Modelo de previsão"), ("wape", "WAPE (backtesting)", "pct"), ("analise", "Análise"),
+                 ("proxima", "Próxima investigação")], rows, "der", largura="larga",
+                notas=["Cálculo determinístico a partir das séries coletadas; nenhuma LLM gera números.",
+                       "Interesse de pesquisa, atenção e menções não são unidades vendidas.", ins["aviso"]],
+                vazio="Sem produtos com séries coletadas no recorte.")]))
+        except Exception:  # noqa: BLE001 — insights não podem impedir o relatório
+            log.exception("insights indisponíveis no relatório")
     # resumo (sempre a primeira aba/seção)
     rid = run_id or uuid.uuid4().hex
     mv = model_versions(db, c.ml)

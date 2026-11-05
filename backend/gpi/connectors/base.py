@@ -36,6 +36,8 @@ class Product:
 class Connector:
     id: str = ""
     name: str = ""
+    # v0.7.1: "Atualizar fonte" pode repetir o job do período corrente (1 requisição barata, dentro dos limites da API)
+    manual_refresh: bool = False
     reliability: str = "A"
     docs_url: str = ""
     description: str = ""

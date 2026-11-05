@@ -90,6 +90,7 @@ class GoogleTrendsTrending(Connector):
                    "Os termos passam pelo NLP: produtos com intenção comercial alimentam os rankings de consumo.")
     limitations = ("Lista curta de termos em alta no momento (muitos são notícias/esportes); tráfego em faixas, não "
                    "volume exato; sem histórico retroativo — a série se forma com as coletas diárias.")
+    manual_refresh = True
     order = 15
     stage = 1
     URLS = ["https://trends.google.com/trending/rss?geo={geo}",

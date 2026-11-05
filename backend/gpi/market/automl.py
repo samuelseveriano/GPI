@@ -60,7 +60,9 @@ def candidates(prof: dict, m: int, allow_ml: bool = True) -> list[str]:
     n = prof["n"]
     if prof["padrao"] in ("intermitente", "irregular (lumpy)"):
         return ["naive", "moving_average", "croston_sba", "tsb"]
-    c = ["naive", "ses", "holt_damped"]
+    # v0.7.1 (auditoria): Holt sem amortecimento e ETS automático entram na disputa — em tendência linear limpa o
+    # Holt amortecido subestimava a inclinação e o Naive vencia; a escolha continua sendo do backtesting
+    c = ["naive", "ses", "holt", "holt_damped", "ets_auto"]
     if m > 1 and n >= m + 1:
         c.append("seasonal_naive")
     if m > 1 and n >= 2 * m + 2 and prof["sazonal"]:
@@ -114,14 +116,16 @@ def auto_forecast(y: pd.Series, meta: dict, horizon: int = 12, m: int = 12, allo
     res = bt.get("resultados", {})
     eligible = {k: v for k, v in res.items() if v.get("wape") is not None}
     best = min(eligible, key=lambda k: eligible[k]["wape"]) if eligible else "naive"
+    beat_baseline = best != "naive"
     if best != "naive" and eligible.get(best, {}).get("fva_vs_naive", 1) <= 0:
-        best = "naive"
+        best, beat_baseline = "naive", False
     try:
         r = run_model(best, vals, h, m)
     except ModelNotApplicable:
         best = "naive"
         r = run_model("naive", vals, h, m)
     lo80, hi80 = interval(r.forecast, r.var_h, 0.80)
+    lo90, hi90 = interval(r.forecast, r.var_h, 0.90)
     lo95, hi95 = interval(r.forecast, r.var_h, 0.95)
     last = s.index[-1]
     met = res.get(best, {})
@@ -132,6 +136,8 @@ def auto_forecast(y: pd.Series, meta: dict, horizon: int = 12, m: int = 12, allo
         lim.append("intervalos estreitos demais no backtesting: a incerteza real é maior")
     if r.interval_method == "aproximado":
         lim.append("intervalo de previsão aproximado")
+    if not beat_baseline:
+        lim.append("nenhum modelo superou o baseline (Naive) no backtesting: a previsão usa o baseline")
     out.update(
         status="prevista", modelo=best, modelo_nome=MODELS[best][0], candidatos=cands,
         backtest={k: {kk: vv for kk, vv in v.items() if kk in ("wape", "mae", "rmsse", "bias_pct",
@@ -140,7 +146,8 @@ def auto_forecast(y: pd.Series, meta: dict, horizon: int = 12, m: int = 12, allo
         qualidade=quality(met.get("wape")), metricas=met,
         labels_futuro=[str(p) for p in pd.period_range(last + 1, periods=h, freq="M")],
         previsao=np.maximum(r.forecast, 0).tolist(), lo80=lo80.tolist(), hi80=hi80.tolist(),
-        lo95=lo95.tolist(), hi95=hi95.tolist(), parametros={k: v for k, v in r.params.items()
+        lo90=lo90.tolist(), hi90=hi90.tolist(), lo95=lo95.tolist(), hi95=hi95.tolist(),
+        baseline_selecionado=not beat_baseline, parametros={k: v for k, v in r.params.items()
                                                             if isinstance(v, (int, float, str))},
         limitacoes=lim)
     return out
