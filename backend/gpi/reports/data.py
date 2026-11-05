@@ -912,7 +912,58 @@ def exec08_text(v8: dict, f: Filters) -> dict:
            "Scores priorizam investigação e não são probabilidade de sucesso. Ausência de dados não é baixa demanda.",
            "Detalhes de metodologia, modelos, backtesting e qualidade dos dados: Relatório Técnico."]
     return {"resumo": resumo, "panorama": panorama, "destaques": [r["produto"] for r in inv[:8]] or [r["produto"] for r in obs[:5]],
-            "internacional": intl, "riscos": riscos, "proximos": prox, "limitacoes": lim}
+            "internacional": intl, "riscos": riscos, "proximos": prox, "limitacoes": lim,
+            "mudancas": recent_changes081(v8, f), "qualidade": evidence_quality081(v8)}
+
+
+def recent_changes081(v8: dict, f: Filters) -> list:
+    """v0.8.1: principais mudanças recentes — só alertas COMERCIAIS e estatísticos de séries de demanda (sem atenção pública)."""
+    out = []
+    for a in (v8.get("alertas_v081") or {}).get("itens", []):
+        if a["categoria_alerta"] == "qualidade" or a["severidade"] == "baixa":
+            continue
+        if a.get("produto_id") and not f.match_product(a["produto_id"]):
+            continue
+        out.append({"produto": a["produto"], "mudanca": a["tipo"], "data": a.get("data") or "—", "fonte": a.get("fonte") or "—",
+                    "evidencia": a.get("evidencia") or ""})
+    return out[:10]
+
+
+def evidence_quality081(v8: dict) -> dict:
+    """v0.8.1: seção QUALIDADE DAS EVIDÊNCIAS do relatório executivo (fontes consideradas/excluídas, cobertura, séries elegíveis)."""
+    from ..intel import commercial
+    P = v8["produtos"]
+    used, excl = {}, {}
+    elig = tot = 0
+    first, last = None, None
+    for p in P.values():
+        for e in p["evidencias"]:
+            tot += 1
+            c = commercial.evidence_class(e["tipo"])
+            if c["classe"] in ("A", "B", "C"):
+                used[e["fonte_nome"]] = c["classe_nome"]
+            else:
+                excl[e["fonte_nome"]] = f"{c['classe_nome']} — não mede demanda comercial"
+            if e["elegibilidade"].get("tendencia"):
+                elig += 1
+            per = (e.get("periodo") or "").split(" a ")
+            if len(per) == 2 and per[0] != "—":
+                first = min(first or per[0], per[0])
+                last = max(last or per[1], per[1])
+    for s in v8.get("fontes", []):
+        if s["estado"] not in ("funcional", "removida") and s["id"] not in used:
+            excl.setdefault(s["id"], f"sem dados utilizáveis (situação: {s['estado']})")
+    cov = v8.get("coberturas") or {}
+    rows = [{"item": "Fontes consideradas para demanda", "valor": "; ".join(f"{k} ({v})" for k, v in sorted(used.items())) or "nenhuma"},
+            {"item": "Fontes excluídas da demanda", "valor": "; ".join(f"{k}: {v}" for k, v in sorted(excl.items()))[:900] or "nenhuma"},
+            {"item": "Cobertura comercial", "valor": f"{(cov.get('comercial') or {}).get('valor', 0)}% — {(cov.get('comercial') or {}).get('formula', '')}"},
+            {"item": "Cobertura do catálogo", "valor": f"{(cov.get('catalogo') or {}).get('valor', 0)}% — {(cov.get('catalogo') or {}).get('formula', '')}"},
+            {"item": "Cobertura de previsão", "valor": f"{(cov.get('previsao') or {}).get('valor', 0)}% — {(cov.get('previsao') or {}).get('formula', '')}"},
+            {"item": "Séries elegíveis para tendência", "valor": f"{elig} de {tot}"},
+            {"item": "Período analisado", "valor": f"{first} a {last}" if first else "—"}]
+    return {"linhas": rows, "nota": "Wikipédia, notícias e comércio exterior entram como contexto, nunca como demanda. "
+                                    "Ausência de dados não é baixa demanda."}
+
 
 
 def exec08_sections(v8: dict, f: Filters) -> list:

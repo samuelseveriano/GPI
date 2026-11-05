@@ -217,6 +217,22 @@ $re8 = Invoke-RestMethod -Uri "$base/api/reports/generate" -Method Post -Headers
 if ($re8.status -ne "gerado") { Fail "relatório executivo v0.8: $($re8.erro)" }
 Note "   gates: $(($q8.gates.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value.status)" }) -join ' ') · produtos analisados: $($v8.kpis.produtos_analisados) · métricas: $(@($m8.metricas).Count) · investigação nº $invId · executivo PDF gerado"
 
+Note "N) v0.8.1: dashboard executivo, coberturas com fórmula, alertas em 3 categorias, Radar de Candidatos, descoberta e assistente Meta"
+$ex = Invoke-RestMethod -Uri "$base/api/v081/executivo" -NoProxy -TimeoutSec 240
+foreach ($c in @("catalogo", "comercial", "temporal", "geografica", "previsao")) { if (-not $ex.coberturas.$c.formula) { Fail "cobertura $c sem fórmula" } }
+if ($null -eq $ex.saude) { Fail "dashboard executivo sem saúde dos dados" }
+$al = Invoke-RestMethod -Uri "$base/api/v081/alertas" -NoProxy -TimeoutSec 120
+foreach ($k in @($al.contagem.PSObject.Properties.Name)) { if (@("comercial", "estatístico", "qualidade") -notcontains $k) { Fail "categoria de alerta inválida: $k" } }
+$ca = Invoke-RestMethod -Uri "$base/api/v081/candidatos" -NoProxy -TimeoutSec 120
+if (@($ca.estados).Count -lt 5) { Fail "Radar de Candidatos sem estados" }
+$di = Invoke-RestMethod -Uri "$base/api/v081/descoberta" -NoProxy -TimeoutSec 120
+if ($di.avaliacao.acuracia -lt 0.9) { Fail "Product Discovery Engine abaixo de 90% no conjunto rotulado ($($di.avaliacao.acuracia))" }
+$ma = Invoke-RestMethod -Uri "$base/api/integrations/meta/assistente" -Method Post -Headers $hdr -ContentType "application/json" -Body "{}" -NoProxy -TimeoutSec 60
+if ($ma.estado -ne "nao_configurado") { Fail "assistente Meta deveria indicar 'nao_configurado' sem credenciais (obtido: $($ma.estado))" }
+if (@($ma.etapas).Count -lt 2) { Fail "assistente Meta sem etapas" }
+$ss = Invoke-RestMethod -Uri "$base/api/sync/status" -NoProxy -TimeoutSec 30
+Note "   coberturas: comercial $($ex.coberturas.comercial.valor)% · alertas: $($al.total) · candidatos: $(@($ca.itens).Count) · descoberta: acurácia $([math]::Round(100 * $di.avaliacao.acuracia, 1))% · Meta: $($ma.estado) · sincronização: $($ss.resultado)"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -246,4 +262,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–M)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–N)"

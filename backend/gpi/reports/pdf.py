@@ -436,6 +436,15 @@ def write(ds: dict, path) -> dict:
         story.append(NextPageTemplate("retrato"))
         story.append(CondPageBreak(80 * mm) if compact else PageBreak())
         from .data import table
+        if ex.get("mudancas") is not None:
+            story.append(heading("Principais mudanças recentes"))
+            story += pdf_table(table("mudancas", "Mudanças comerciais e de demanda recentes", [("produto", "Produto"), ("mudanca", "Mudança"),
+                                     ("data", "Data"), ("fonte", "Fonte"), ("evidencia", "Evidência")], ex["mudancas"], "der",
+                                     vazio="Nenhuma mudança comercial recente com evidência suficiente."), pw)
+        if ex.get("qualidade"):
+            story.append(heading("QUALIDADE DAS EVIDÊNCIAS"))
+            story += pdf_table(table("qualidade_ev", "Fontes, exclusões e cobertura", [("item", "Item"), ("valor", "Detalhe")],
+                                     ex["qualidade"]["linhas"], "der", notas=[ex["qualidade"]["nota"]]), pw)
         story.append(heading("Riscos"))
         story += pdf_table(table("riscos", "Riscos mais frequentes", [("risco", "Risco"), ("produtos", "Produtos afetados", "inteiro")],
                                  ex["riscos"], "der"), pw)

@@ -36,6 +36,9 @@ def main(out: str):
     Catalog(db, cfg).ensure_seeded()
     sm = SyncManager(db, tmp, cfg)
     summ = sm.run("auditoria-v081", ["wikimedia", "comexstat", "bcb_ptax", "google_trends_rss"])
+    # Wikimedia coleta em duas etapas: 1ª passada resolve os títulos (langlinks); as visualizações são planejadas na 2ª
+    summ2 = sm.run("auditoria-v081-pv", ["wikimedia"])
+    summ["fontes"]["wikimedia_visualizacoes"] = summ2["fontes"].get("wikimedia", {})
     rep = {"coleta": {k: {"estado": v.get("estado"), "segundos": v.get("segundos")} for k, v in summ["fontes"].items()},
            "registros": {r["source"]: r["n"] for r in db.query("SELECT s.source, COUNT(*) AS n FROM market_obs o JOIN market_series s "
                                                                 "ON s.id = o.series_id GROUP BY s.source")}}
@@ -143,8 +146,14 @@ def main(out: str):
         if isinstance(v, dict):
             v = {a: b for a, b in v.items() if a not in ("exemplos", "medianas_coorte")}
         print(k, json.dumps(v, ensure_ascii=False, default=str)[:900])
+    print("coleta", json.dumps(rep["coleta"], ensure_ascii=False))
     print("B_cobertura", json.dumps({k: (v.get("valor"), v.get("numerador"), v.get("denominador")) for k, v in rep["B_cobertura"].items()
                                      if isinstance(v, dict) and "valor" in v}, ensure_ascii=False))
+    vazio = [k for k, v in (("Wikimedia", rep["G_declinio"]["series_wikipedia"]), ("Comex Stat", rep["registros"].get("comexstat", 0)),
+                            ("backtesting", len(res))) if not v]
+    if vazio:                     # sem dados, as verificações passariam sem provar nada: falha explícita
+        print("AUDITORIA SEM DADOS REAIS SUFICIENTES:", ", ".join(vazio))
+        sys.exit(2)
     if not rep["C_wikipedia"]["aprovado"] or rep["F_internacional"]["idioma_como_consistente"] or rep["F_internacional"]["paginas_de_pais_com_wikipedia"]:
         sys.exit(1)
 
