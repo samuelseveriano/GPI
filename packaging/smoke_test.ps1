@@ -222,7 +222,7 @@ $ex = Invoke-RestMethod -Uri "$base/api/v081/executivo" -NoProxy -TimeoutSec 240
 foreach ($c in @("catalogo", "comercial", "temporal", "geografica", "previsao")) { if (-not $ex.coberturas.$c.formula) { Fail "cobertura $c sem fórmula" } }
 if ($null -eq $ex.saude) { Fail "dashboard executivo sem saúde dos dados" }
 $al = Invoke-RestMethod -Uri "$base/api/v081/alertas" -NoProxy -TimeoutSec 120
-foreach ($k in @($al.contagem.PSObject.Properties.Name)) { if (@("comercial", "estatístico", "qualidade") -notcontains $k) { Fail "categoria de alerta inválida: $k" } }
+foreach ($k in @($al.contagem.PSObject.Properties | ForEach-Object { $_.Name } | Where-Object { $_ })) { if (@("comercial", "estatístico", "qualidade") -notcontains $k) { Fail "categoria de alerta inválida: $k" } }
 $ca = Invoke-RestMethod -Uri "$base/api/v081/candidatos" -NoProxy -TimeoutSec 120
 if (@($ca.estados).Count -lt 5) { Fail "Radar de Candidatos sem estados" }
 $di = Invoke-RestMethod -Uri "$base/api/v081/descoberta" -NoProxy -TimeoutSec 120
