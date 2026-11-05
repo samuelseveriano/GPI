@@ -223,3 +223,27 @@ def catalog() -> dict:
             "fontes": [{"id": k, **v} for k, v in SOURCES.items()],
             "indices": [{"id": k, **v, "metricas_elegiveis": [m for m in METRICS if eligible(m, k)]} for k, v in INDICATORS.items()],
             "regra": "Um tipo de evidência nunca é convertido em outro. Ausência de dados não é ausência de demanda."}
+
+
+# v0.9 — origem obrigatória de cada observação (não substitui a fonte; diz COMO o número nasceu)
+ORIGINS = {"REAL": "coletado de uma fonte real", "DEMONSTRATIVO": "dado de demonstração (nunca entra em análises reais)",
+           "SIMULADO": "dado sintético de teste (nunca apresentado como coleta)", "ESTIMADO": "estimativa informada pela fonte (faixa)",
+           "DERIVADO": "calculado pelo GPI a partir de dados reais", "PREVISTO": "previsão de modelo"}
+_DEMO = ("demonstr", "demo:", "dados demonstrativos")
+_SIM = ("simulad", "sintetic", "synthetic")
+
+
+def origin_of(source: str, layer: str = "observado", metric: str = "") -> str:
+    import unicodedata
+    s = "".join(c for c in unicodedata.normalize("NFD", (source or "").lower()) if unicodedata.category(c) != "Mn")
+    if any(k in s for k in _DEMO):
+        return "DEMONSTRATIVO"
+    if any(k in s for k in _SIM):
+        return "SIMULADO"
+    if layer in ("previsto", "previsao"):
+        return "PREVISTO"
+    if layer == "derivado":
+        return "DERIVADO"
+    if "faixa" in (metric or "") or "estimad" in (metric or ""):
+        return "ESTIMADO"
+    return "REAL"

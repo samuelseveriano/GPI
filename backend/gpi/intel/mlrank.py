@@ -77,6 +77,13 @@ def term_stats(positions: dict[str, float], weeks: list[str]) -> dict:
         out["desvio_posicao"] = round(sd, 1)
     else:
         out["estabilidade"] = None
+    run = best = 0
+    for w in weeks:                                   # v0.9: maior permanência contínua no ranking
+        run = run + 1 if w in positions else 0
+        best = max(best, run)
+    out["permanencia_max_semanas"] = best
+    out["crescimento"] = ("não comprovado — o ranking mede posição relativa, não volume de buscas"
+                          if len(present) < 8 else "ver tendência da posição (posição não é volume)")
     n = len(present)
     out["classe"] = ("NOVO SINAL COMERCIAL" if n == 1 else "SINAL EM OBSERVAÇÃO" if n <= 3 else
                      "INTERESSE RECORRENTE" if (out["persistencia"] or 0) >= 0.5 else "SINAL INTERMITENTE") if n else None

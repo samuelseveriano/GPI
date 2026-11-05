@@ -398,7 +398,12 @@ def build(db, result: dict, catalog_products: dict, today: date | None = None, w
     ml = mlrank.analyze(db) if "ml_trends/posicao_tendencia" not in blocked else {"por_produto": {}, "semanas_coletadas": [],
                                                                                    "termos": [], "bloqueado": "Gate 1"}
     by = defaultdict(list)
+    excl_origin = []
     for s in series:
+        o = semantics.origin_of(f"{s.get('source')} {s.get('fonte_nome') or ''}", "observado", s.get("metric") or "")
+        if o in ("DEMONSTRATIVO", "SIMULADO"):          # v0.9: nunca entram nos cálculos de produção
+            excl_origin.append({"serie": s.get("id"), "origem": o})
+            continue
         by[s["product_id"]].append(s)
     for pid in ml["por_produto"]:
         by.setdefault(pid, [])
@@ -409,5 +414,10 @@ def build(db, result: dict, catalog_products: dict, today: date | None = None, w
         items[pid] = product(pid, lst, catalog_products.get(pid, {}), ml["por_produto"].get(pid), result.get("previsoes") or {},
                              (result.get("scores") or {}).get(pid) or {}, cohort, _match_quality(db, pid, cache, ids),
                              lineage(db, pid) if with_lineage else None)
+    for it in items.values():                            # v0.9: origem obrigatória em cada evidência
+        for e in it["evidencias"]:
+            e["origem"] = semantics.origin_of(f"{e.get('fonte')} {e.get('fonte_nome') or ''}", e.get("camada") or "observado",
+                                              e.get("metrica") or "")
     return {"produtos": items, "gate1": g1, "gate4": g4, "coorte_wikipedia": cohort, "mercado_livre": ml,
+            "excluidos_por_origem": excl_origin, "origens": semantics.ORIGINS,
             "classes": [{"classe": c, "definicao": CLASS_DEF[c]} for c in CLASSES], "gerado_em": result.get("gerado_em")}

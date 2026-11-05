@@ -175,3 +175,23 @@ def routes(db, sync, cfg) -> list[Route]:
             Route("/api/v081/candidatos", candidates), Route("/api/v081/descoberta", discovery_view),
             Route("/api/v08/investigacoes", inv_list, methods=["GET", "POST"]),
             Route("/api/v08/investigacoes/{iid:int}", inv_one, methods=["GET", "POST"])]
+
+
+def _payload_for_v09(db, sync, cfg):
+    """v0.9: mesmo resultado da inteligência (calculado sob o mesmo lock), para as rotas de decisão."""
+    r = sync.store.load_result(service.RESULT)
+    if r and r.get("versao") == "0.8.1":
+        return r
+    with _lock:
+        r = sync.store.load_result(service.RESULT)
+        if not r or r.get("versao") != "0.8.1":
+            from ..products import trends
+            from ..products.catalog import Catalog
+            cons = sync.store.load_result("consumer")
+            if not cons or "testes_multiplos" not in cons:
+                cons = trends.analyze(db, cfg, forecasts=False, today=sync.today_fn())
+                sync.store.save_result("consumer", cons)
+            prods = {p["product_id"]: p for p in Catalog(db, cfg).products()}
+            r = service.compute(db, cons, prods, sync.today_fn())
+            sync.store.save_result(service.RESULT, r)
+    return r
