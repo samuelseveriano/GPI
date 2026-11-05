@@ -1,12 +1,13 @@
 // Verifica a lógica de segurança da página de retorno OAuth (local ou publicada).
-// Uso: node verify_relay.js caminho/para/relay.js
+// Uso: node verify_relay.js caminho/para/relay.js [mercadolivre|meta]
 const fs = require('fs');
 const vm = require('vm');
 const src = fs.readFileSync(process.argv[2], 'utf8');
+const PROV = process.argv[3] || 'mercadolivre';
 const S = 'a'.repeat(43);
 const cases = [
-  ['?code=TG-abc123&state=8765.' + S, 'http://127.0.0.1:8765/oauth/mercadolivre/retorno#code=TG-abc123&state=8765.' + S],
-  ['?code=TG-abc123&state=8770.' + S, 'http://127.0.0.1:8770/oauth/mercadolivre/retorno#code=TG-abc123&state=8770.' + S],
+  ['?code=TG-abc123&state=8765.' + S, 'http://127.0.0.1:8765/oauth/' + PROV + '/retorno#code=TG-abc123&state=8765.' + S],
+  ['?code=TG-abc123&state=8770.' + S, 'http://127.0.0.1:8770/oauth/' + PROV + '/retorno#code=TG-abc123&state=8770.' + S],
   ['?code=TG-abc123&state=80.' + S, null],                       // porta privilegiada/curta
   ['?code=TG-abc123&state=99999.' + S, null],                    // porta inválida
   ['?code=TG-abc123&state=8765.evil.com/' + S, null],            // tentativa de redirecionamento aberto
@@ -23,7 +24,7 @@ for (const [search, expect] of cases) {
     setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, select() {} });
   let replaced = null;
   const ctx = { document: { getElementById: el, execCommand: () => false }, navigator: {},
-    window: { location: { search, pathname: '/GPI/oauth/mercadolivre/', replace: (u) => { replaced = u; } } },
+    window: { location: { search, pathname: '/GPI/oauth/' + PROV + '/', replace: (u) => { replaced = u; } } },
     history: { replaceState() {} }, setTimeout: (f) => f(), URLSearchParams };
   vm.runInNewContext(src, ctx);
   const link = (els.link || { attrs: {} }).attrs.href || null;

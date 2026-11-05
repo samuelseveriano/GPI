@@ -37,6 +37,8 @@ jobs:
           set -euo pipefail
           test -f pages/oauth/mercadolivre/index.html
           test -f pages/oauth/mercadolivre/relay.js
+          test -f pages/oauth/meta/index.html
+          test -f pages/oauth/meta/relay.js
           test -f pages/.nojekyll
           bad=$(find pages -type f ! \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '.nojekyll' \) -print)
           if [ -n "$bad" ]; then echo "::error title=pages::arquivos não permitidos: $bad"; exit 1; fi
@@ -44,10 +46,14 @@ jobs:
             echo "::error title=pages::possível segredo na pasta pages/"; exit 1; fi
           grep -q "default-src 'none'" pages/oauth/mercadolivre/index.html
           grep -q 'no-referrer' pages/oauth/mercadolivre/index.html
+          grep -q "default-src 'none'" pages/oauth/meta/index.html
+          grep -q 'no-referrer' pages/oauth/meta/index.html
           find pages -type f -exec sha256sum {} \; | sort -k2 | tee pages-sha256.txt
           { echo "### Arquivos publicados"; echo '```'; cat pages-sha256.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Lógica de segurança da página (state, porta, redirecionamento aberto, código malformado)
-        run: node .github/pages/verify_relay.js pages/oauth/mercadolivre/relay.js
+        run: |
+          node .github/pages/verify_relay.js pages/oauth/mercadolivre/relay.js mercadolivre
+          node .github/pages/verify_relay.js pages/oauth/meta/relay.js meta
       - name: Artefato para o GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
@@ -103,4 +109,10 @@ jobs:
           hdr=$(curl -sSI "$URL" | tr -d '\r')
           echo "$hdr" | head -15
           echo "::notice title=pages::$URL respondeu HTTP 200 com a página de retorno e o relay.js verificado"
+          MURL="${BASE%/}/oauth/meta/"
+          mcode=$(curl -sS -o mpage.html -w '%{http_code}' "$MURL" || echo 000)
+          if [ "$mcode" = "200" ] && grep -q 'relay.js' mpage.html; then
+            curl -sSf -o mrelay.js "${MURL}relay.js" && cmp mrelay.js pages/oauth/meta/relay.js && node .github/pages/verify_relay.js mrelay.js meta \
+              && echo "::notice title=pages::$MURL respondeu HTTP 200 (retorno da Meta verificado)"
+          else echo "::warning title=pages::$MURL ainda não publicado (HTTP $mcode)"; fi
           { echo "### Callback HTTPS publicado"; echo "$URL — HTTP 200"; echo '```'; sha256sum relay.js page.html; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

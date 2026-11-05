@@ -47,23 +47,34 @@ def fontes_por_indicador(db, products: dict) -> list[dict]:
     return out
 
 
-def international(products: dict) -> list[dict]:
-    """Só quando há a MESMA métrica e fonte com série elegível em dois mercados."""
-    out = []
+def international(products: dict, comps: dict | None = None) -> dict:
+    """v0.8.1: MERCADOS geográficos e PÚBLICOS linguísticos em listas separadas; só a mesma fonte e métrica com série
+    elegível nos dois lados. A antecedência (lead-lag) vem classificada (consistente/exploratória/instável/sem
+    evidência/não comparável) — significância não é relevância."""
+    geo, lang = [], []
+    comps = comps or {}
     for p in products.values():
         by = defaultdict(dict)
         for e in p["evidencias"]:
-            if e["elegibilidade"].get("tendencia") and e["derivado"].get("momentum") is not None and e["pais"] in ("BR", "US", "GLOBAL:pt", "GLOBAL:en"):
-                by[(e["fonte"], e["metrica"])][e["pais"]] = e
+            if e["elegibilidade"].get("tendencia") and e["derivado"].get("momentum") is not None:
+                by[(e["fonte"], e["metrica"])][e.get("pagina") or e["pais"]] = e
+        ll = {(c.get("a"), c.get("b")): c for c in comps.get(p["produto_id"], [])}
         for (src, met), m in by.items():
-            pair = [k for k in ("BR", "US") if k in m] if met != "visualizacoes" else [k for k in ("GLOBAL:pt", "GLOBAL:en") if k in m]
-            if len(pair) == 2:
-                a, b = m[pair[0]], m[pair[1]]
-                out.append({"produto_id": p["produto_id"], "produto": p["identificacao"]["produto"], "fonte": a["fonte_nome"],
-                            "indicador": a["indicador"], "mercado_a": a["mercado"], "variacao_a": a["derivado"]["momentum"],
-                            "mercado_b": b["mercado"], "variacao_b": b["derivado"]["momentum"],
-                            "nota": "mesma fonte e métrica nos dois mercados" + ("; idioma ≠ país" if met == "visualizacoes" else "")})
-    return sorted(out, key=lambda x: -abs((x["variacao_a"] or 0) - (x["variacao_b"] or 0)))
+            for pair, dest in ((("BR", "US"), geo), (("LANG:pt", "LANG:en"), lang), (("LANG:pt", "LANG:zh"), lang)):
+                if all(k in m for k in pair):
+                    a, b = m[pair[0]], m[pair[1]]
+                    c = ll.get((a["pais"], b["pais"])) or ll.get((b["pais"], a["pais"])) or {}
+                    dest.append({"produto_id": p["produto_id"], "produto": p["identificacao"]["produto"], "fonte": a["fonte_nome"],
+                                 "indicador": a["indicador"], "classe_evidencia": a.get("classe_nome"),
+                                 "mercado_a": a["mercado"], "variacao_a": a["derivado"]["momentum"],
+                                 "mercado_b": b["mercado"], "variacao_b": b["derivado"]["momentum"],
+                                 "antecedencia": c.get("classe_antecedencia") or "sem análise de antecedência",
+                                 "correlacao": c.get("correlacao"), "r2": c.get("r2"), "estavel": c.get("estavel"),
+                                 "motivos": c.get("motivos_classe") or [],
+                                 "nota": "mercados geográficos" if dest is geo else "públicos linguísticos — idioma não é país"})
+    key = lambda x: -abs((x["variacao_a"] or 0) - (x["variacao_b"] or 0))   # noqa: E731
+    return {"mercados": sorted(geo, key=key), "publicos_linguisticos": sorted(lang, key=key),
+            "regra": "Português ≠ Brasil, inglês ≠ Estados Unidos, chinês ≠ China continental."}
 
 
 def gate8(db, payload: dict) -> dict:
@@ -137,10 +148,25 @@ def compute(db, consumer: dict, catalog_products: dict, today: date | None = Non
     for c in fu["gate1"]["verificacoes"]:
         if not c["ok"]:
             alerts.append({"tipo": "qualidade dos dados", "detalhe": f"{c['verificacao']}: {c['detalhe']}", "produto": "—"})
-    payload = {"versao": "0.8", "gerado_em": today.isoformat(), "kpis": kpis, "produtos": P, "insights": insights,
+    from . import commercial, discovery
+    invs = investigations.list_all(db)["itens"]
+    cov = commercial.coverage(P, monitored)
+    rad = commercial.radar(P, invs)
+    al8 = commercial.alerts(P, fu["gate1"], [{"id": r["source"], "estado": r["state"], "ultima_coleta_ok": r["last_success"]}
+                                             for r in st_rows], today)
+    kpis.update({"com_evidencia_comercial": sum(1 for p in P.values() if p["indices"]["commercial_intent_index"] is not None
+                                                or p["indices"]["search_interest_index"] is not None),
+                 "novos_sinais": sum(1 for r in rad if r["estado"] == "Novo sinal"),
+                 "interesse_recorrente": sum(1 for p in P.values() if p["situacao"] == "INTERESSE RECORRENTE"),
+                 "crescimento_confirmado": sum(1 for p in P.values() if p["situacao"] in ("CRESCIMENTO CONSISTENTE", "ACELERAÇÃO")
+                                               and p["confirmacao_cruzada"]["confirmado"]),
+                 "cobertura_comercial": cov["comercial"]["valor"], "cobertura_comercial_formula": cov["comercial"]["formula"]})
+    payload = {"versao": "0.8.1", "gerado_em": today.isoformat(), "kpis": kpis, "produtos": P, "insights": insights,
+               "coberturas": cov, "radar_candidatos": rad, "alertas_v081": al8,
+               "descoberta": discovery.run(db),
                "ranking": ranking, "grupos": groups, "contagens": {k: len(v) for k, v in groups.items()},
                "clusters": IE.clusters(P), "radar": dict(radar), "alertas": alerts[:300],
-               "comparacao_internacional": international(P), "mercado_livre": fu["mercado_livre"],
+               "comparacao_internacional": international(P, consumer.get("comparacoes")), "mercado_livre": fu["mercado_livre"],
                "fontes_por_indicador": fontes_por_indicador(db, P), "classes": fu["classes"],
                "gates": {"1": fu["gate1"], "4": fu["gate4"], "6": IE.gate6(insights)},
                "fontes": [{"id": r["source"], "estado": r["state"], "ultima_coleta_ok": r["last_success"]} for r in st_rows],

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<title>GPI — retorno da Meta</title>
+<link rel="stylesheet" href="relay.css">
+</head>
+<body>
+<main>
+  <h1>GPI — retorno da autorização da Meta (Login do Facebook)</h1>
+  <p id="status">Processando…</p>
+  <div id="voltar" hidden>
+    <p>Esta página não guarda nem envia nada a servidores: ela apenas devolve o código ao GPI que está aberto no seu
+      computador (endereço local 127.0.0.1). A troca pelo token acontece no próprio GPI, que é o único que possui o
+      App Secret.</p>
+    <p><a id="link" class="botao" href="#" rel="noreferrer noopener">Voltar ao GPI e concluir</a></p>
+  </div>
+  <div id="manual" hidden>
+    <h2>Se o navegador não voltar ao GPI</h2>
+    <p>Copie o texto abaixo e cole no GPI em <b>Central de Integrações → Meta → Colar código</b>.
+      Ele expira em poucos minutos e só funciona no GPI que iniciou a conexão.</p>
+    <textarea id="codigo" readonly rows="3"></textarea>
+    <p><button id="copiar" type="button">Copiar</button> <span id="copiado"></span></p>
+  </div>
+  <p class="nota">Global Product Intelligence — página estática publicada no GitHub Pages, sem cookies, sem
+    análise de tráfego e sem scripts de terceiros. Código-fonte: pasta <code>pages/</code> do repositório.</p>
+</main>
+<script src="relay.js"></script>
+</body>
+</html>

@@ -26,6 +26,7 @@ window.GPI_V061 = function (H, PAGES) {
     const final = !s.rodando && s.fim && (Date.now() - Date.parse(s.fim) < 60000);
     if (!s.rodando && !final) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
+    bar.dataset.resultado = s.rodando ? '' : (s.resultado || '');
     bar.innerHTML = `${s.rodando ? '<span class="spinner" aria-hidden="true"></span>' : ''}<b>${s.rodando ? 'SINCRONIZAÇÃO' : escH(s.titulo).toUpperCase()}${s.percentual != null && s.rodando ? ' — ' + s.percentual + '%' : ''}</b>
       ${s.rodando ? progress(s) : ''}<span class="small">${escH(s.resumo || s.titulo || '')}</span>
       <button class="small" data-sp="open">Ver detalhes</button>

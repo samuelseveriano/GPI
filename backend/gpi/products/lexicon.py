@@ -85,7 +85,7 @@ CONCEPTS: dict[str, tuple] = {
     "air_purifier": ("head", "Climatização", ["purificador de ar"], ["air purifier"], ["空气净化器"]),
     "heater": ("head", "Climatização", ["aquecedor"], ["space heater", "heater"], ["取暖器", "暖风机"]),
     "diffuser": ("head", "Casa e limpeza", ["difusor de aromas", "difusor"], ["diffuser", "aroma diffuser"], ["香薰机"]),
-    "chair": ("head", "Móveis e escritório", ["cadeira", "cadeiras", "cadeira de escritório", "cadeira de escritorio", "poltrona"], ["chair", "chairs", "office chair", "gaming chair"], ["椅子", "电竞椅", "办公椅"]),
+    "chair": ("head", "Móveis e escritório", ["cadeira", "cadeiras", "cadeira de escritório", "cadeira de escritorio", "poltrona"], ["chair", "chairs", "office chair"], ["椅子", "电竞椅", "办公椅"]),
     "desk": ("head", "Móveis e escritório", ["escrivaninha", "mesa de escritório", "mesa gamer", "mesa para computador"], ["desk", "gaming desk", "standing desk", "computer desk"], ["电脑桌", "书桌", "升降桌"]),
     "organizer": ("head", "Casa e limpeza", ["organizador"], ["organizer"], ["收纳盒"]),
     # ---- ferramentas

@@ -24,7 +24,8 @@ import numpy as np
 STATUS = {"emergente": "EMERGENTE", "crescimento": "EMERGENTE", "crescimento consistente": "CRESCIMENTO CONSISTENTE",
           "crescimento acelerado": "ACELERAÇÃO", "estável": "ESTÁVEL", "sazonal": "SAZONAL",
           "possível saturação": "POSSÍVEL SATURAÇÃO", "declínio": "DECLÍNIO", "sem dados": "EVIDÊNCIA INSUFICIENTE",
-          "presença recorrente": "ESTÁVEL"}
+          "presença recorrente": "ESTÁVEL", "possível declínio": "POSSÍVEL DECLÍNIO",
+          "variação não confirmada": "VARIAÇÃO NÃO CONFIRMADA", "mudança na fonte": "MUDANÇA NA FONTE"}
 GROWING = {"EMERGENTE", "CRESCIMENTO CONSISTENTE", "ACELERAÇÃO"}
 KIND_RANK = {"busca": 0, "busca_ranking": 1, "atencao": 2, "popularidade": 3}
 NEXT = {"ACELERAÇÃO": "Investigar preços, concorrência, especificações e fornecedores; acompanhar se a aceleração se mantém.",
@@ -34,7 +35,10 @@ NEXT = {"ACELERAÇÃO": "Investigar preços, concorrência, especificações e f
         "ESTÁVEL": "Demanda estável: avaliar diferenciação, preço e concorrência.",
         "POSSÍVEL SATURAÇÃO": "Cautela: verificar concorrência e se o crescimento está perdendo força.",
         "DECLÍNIO": "Baixa prioridade enquanto a queda persistir.",
-        "EVIDÊNCIA INSUFICIENTE": "Coletar mais dados (mais períodos ou outra fonte) antes de qualquer conclusão."}
+        "EVIDÊNCIA INSUFICIENTE": "Coletar mais dados (mais períodos ou outra fonte) antes de qualquer conclusão.",
+        "POSSÍVEL DECLÍNIO": "Acompanhar: a queda ainda não é estatisticamente confirmada.",
+        "VARIAÇÃO NÃO CONFIRMADA": "Aguardar novos períodos: a variação não é significativa nem persistente.",
+        "MUDANÇA NA FONTE": "Desconsiderar como sinal do produto: a fonte inteira mudou de patamar."}
 
 
 def _sufficient(s: dict) -> bool:
@@ -46,6 +50,9 @@ def _sufficient(s: dict) -> bool:
 
 def series_status(s: dict) -> str:
     if not _sufficient(s):
+        return "EVIDÊNCIA INSUFICIENTE"
+    # v0.8.1: atenção pública (Wikipédia, notícias) não classifica demanda — nem crescimento, nem declínio, nem sazonalidade
+    if (s.get("metrica") or {}).get("tipo") not in ("busca", "busca_ranking"):
         return "EVIDÊNCIA INSUFICIENTE"
     return STATUS.get((s.get("ind") or {}).get("classe"), "ESTÁVEL")
 

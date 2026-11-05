@@ -433,6 +433,10 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             item["diagnosticavel"] = p["tipo"] != "approval"
             if p["tipo"] == "oauth":
                 item["redirect_uri"] = (ML.redirect_uri(cfg) if p.get("oauth_https_relay") else redirect_uri(request))
+                if p["id"] == "meta":
+                    from .integrations import meta as MT
+                    item["redirect_uri"], item["redirect_modo"] = MT.redirect_uri(cfg, request.url.port or 8765)
+                    item["app_id_enviado"] = sync.creds.get("meta").get("client_id")
             if p["id"] == "rss":
                 from .connectors.content import RSS_DEFAULT
                 item["feeds"] = cfg.get("rss_feeds") or RSS_DEFAULT
@@ -457,9 +461,16 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
                 values[k] = bool(v) if allowed[k].get("checkbox") else str(v).strip()[:500]
         if not values:
             return err("nenhum campo válido informado")
+        reset = False
+        if p["id"] == "meta" and values.get("client_id"):
+            from .integrations import meta as MT
+            if not str(values["client_id"]).isdigit():
+                return err("o App ID da Meta é numérico (Configurações → Básico do app)")
+            reset = MT.reset_if_app_changed(sync.creds, values["client_id"])   # token/permissões do app anterior
         sync.creds.set(p["id"], values)
         log.info("credenciais atualizadas para %s (campos: %s)", p["id"], ", ".join(values))
-        return JSONResponse({"ok": True, "credenciais": sync.creds.masked(p["id"])})
+        return JSONResponse({"ok": True, "credenciais": sync.creds.masked(p["id"]),
+                             "aviso": "App ID alterado: token e permissões do aplicativo anterior foram descartados." if reset else None})
 
     def _revoke(pid):
         """Revoga a autorização no provedor antes de apagar as credenciais locais (melhor esforço)."""
@@ -530,13 +541,15 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
                 mode = b.get("modulo") if b.get("modulo") in MODULES else "basico"
             else:
                 mode = "conta" if b.get("modo") == "conta" else "anunciante"
+            if p["id"] == "meta":                 # v0.8.1: redirect HTTPS (GitHub Pages) ou localhost (modo desenvolvimento)
+                from .integrations import meta as MT
+                try:
+                    return JSONResponse(MT.start(flows, sync.creds, cfg, request.url.port or 8765, mode))
+                except SourceError as e:
+                    return err(str(e))
             state, _ = flows.start(p["id"], {"redirect_uri": redirect_uri(request), "modo": mode})
             try:
-                if p["id"] == "tiktok":
-                    url = integ.tiktok_authorize_url(c, mode, redirect_uri(request), state)
-                else:
-                    url = integ.meta_authorize_url(c, cfg.get("meta_graph_version", "v23.0"), redirect_uri(request), state,
-                                                   mode, rerequest=bool(c.get("escopos")))
+                url = integ.tiktok_authorize_url(c, mode, redirect_uri(request), state)
             except SourceError as e:
                 return err(str(e))
             return JSONResponse({"url": url})
@@ -561,10 +574,10 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         if not f:
             return page("Conexão não concluída", "Pedido expirado ou inválido (proteção contra falsificação). Tente novamente.")
         if f["provider"] == "meta":
-            from .integrations.meta import callback_error
+            from .integrations.meta import callback_error, explain
             msg = callback_error(q)
             if msg:
-                return page("Conexão Meta não concluída", msg)
+                return page("Conexão Meta não concluída", (explain(msg) or "") + " " + msg)
         if q.get("error"):
             return page("Conexão recusada", "O provedor informou: " + str(q.get("error"))[:200])
         p = integ.provider(f["provider"])
@@ -612,6 +625,43 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             return err(str(e))
         log.info("Mercado Livre conectado (usuário %s)", r.get("user_id"))
         return JSONResponse({**r, "protecao": sync.creds.protection})
+
+    async def meta_return_page(_):
+        return FileResponse(frontend_dir / "oauth_meta_retorno.html", headers={"Cache-Control": "no-store"})
+
+    async def meta_complete(request):
+        from .integrations import meta as MT
+        b = await body_json(request)
+        code, state = str(b.get("code") or ""), str(b.get("state") or "")
+        if b.get("colado"):
+            code, st2 = MT.parse_pasted(str(b["colado"]))
+            state = st2 or state
+        try:
+            r = await run_in_threadpool(MT.complete, sync.http, sync.creds, flows, cfg, code, state)
+        except SourceError as e:
+            log.warning("OAuth Meta não concluído: %s", redact_text(str(e)))
+            return err(str(e))
+        return JSONResponse({**r, "protecao": sync.creds.protection})
+
+    async def meta_assistant(request):
+        from .integrations import meta as MT
+        r = await run_in_threadpool(MT.assistant, sync.http, sync.creds, cfg, db, request.url.port or 8765)
+        sync.store.save_result("diag:meta", {"resultado": r})
+        return JSONResponse(r)
+
+    async def meta_redirect(request):
+        from .integrations import meta as MT
+        b = await body_json(request)
+        mode = b.get("modo") if b.get("modo") in MT.MODES else "https_relay"
+        vals = {"meta_redirect_mode": mode}
+        uri = str(b.get("redirect_uri") or "").strip()
+        if uri:
+            pr = urllib.parse.urlsplit(uri)
+            if pr.scheme != "https" or not pr.hostname or pr.query or pr.fragment or pr.username:
+                return err("o retorno HTTPS precisa ser uma URL https estática (sem ?parâmetros ou #fragmento)")
+            vals["meta_redirect_uri"] = uri
+        save_user_settings(vals)
+        return JSONResponse({"ok": True, "redirect_uri": MT.redirect_uri(cfg, request.url.port or 8765)[0], "modo": mode})
 
     async def ml_redirect(request):
         b = await body_json(request)
@@ -677,6 +727,10 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/shutdown", shutdown, methods=["POST"]),
         Route(ML.LOCAL_RETURN, ml_return_page),
         Route("/api/oauth/mercadolivre/concluir", ml_complete, methods=["POST"]),
+        Route("/oauth/meta/retorno", meta_return_page),
+        Route("/api/oauth/meta/concluir", meta_complete, methods=["POST"]),
+        Route("/api/integrations/meta/assistente", meta_assistant, methods=["POST"]),
+        Route("/api/integrations/meta/redirect", meta_redirect, methods=["POST"]),
         Route("/api/integrations/mercadolivre/redirect", ml_redirect, methods=["POST"]),
         Route("/api/sync/status", sync_status),
         Route("/api/sync/run", sync_run, methods=["POST"]),

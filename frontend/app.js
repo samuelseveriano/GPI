@@ -420,6 +420,7 @@
   Object.assign(PAGES, window.GPI_V07({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
   Object.assign(PAGES, window.GPI_V071({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
   if (window.GPI_V08) Object.assign(PAGES, window.GPI_V08({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
+  if (window.GPI_V081) Object.assign(PAGES, window.GPI_V081({ api, post, fmt, pct, money, escH, loading, errBox, main, $ }, PAGES));
 
 
   async function refresh() {

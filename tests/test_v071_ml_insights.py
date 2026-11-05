@@ -88,7 +88,7 @@ def test_insights_are_deterministic_and_grounded(consumer):
     assert a["itens"] == b["itens"] and a["clusters"] == b["clusters"]             # reprodutível
     assert a["itens"], "nenhum insight"
     valid = {"EMERGENTE", "CRESCIMENTO CONSISTENTE", "ACELERAÇÃO", "ESTÁVEL", "SAZONAL", "POSSÍVEL SATURAÇÃO", "DECLÍNIO",
-             "EVIDÊNCIA INSUFICIENTE"}
+             "EVIDÊNCIA INSUFICIENTE", "POSSÍVEL DECLÍNIO", "VARIAÇÃO NÃO CONFIRMADA", "MUDANÇA NA FONTE"}   # v0.8.1
     for it in a["itens"]:
         assert it["situacao"] in valid and it["confianca"] in ("alta", "moderada", "baixa")
         assert it["proxima_acao"] and it["analise"]
