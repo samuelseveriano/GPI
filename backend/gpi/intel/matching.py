@@ -54,7 +54,10 @@ MODEL_LINES = [("smartphone", re.compile(r"\b(poco [xfmc]\d|redmi( note)? ?\d|mo
                ("action_camera", re.compile(r"\b(gopro|go pro)\b|\bhero ?\d{1,2}\b")),
                ("smart_speaker", re.compile(r"\becho (dot|pop|show)\b"))]
 MODEL_NOUN = {"smartphone": "smartphone", "action_camera": "action camera", "smart_speaker": "smart speaker"}
-FEATURE_HEADS = {"camera", "gps"}       # citados como característica de outro produto ("celular com câmera boa")
+FEATURE_HEADS = {"camera", "gps", "led_strip"}   # citados como característica de outro produto ("celular com câmera", "LED desk lamp")
+# v0.9 (achado na auditoria com dados REAIS: "007 first light" virou luminária): "light" sozinho tem outros sentidos
+LIGHT_ALONE = re.compile(r"\blight\b")
+LIGHT_QUALIFIED = re.compile(r"\b(lamp|lampada|luminaria|desk|night|led|ring|bulb|strip|luz|ceiling|floor|reading|solar|smart|rgb)\b")
 
 
 def _norm(t: str) -> str:
@@ -175,6 +178,10 @@ def match(text: str, lang: str | None = None, catalog_ids: set | None = None, ta
     elif len(cats) > 1 and not _is_accessory_phrase(t):
         out["estado"] = AMBIGUOUS
         reasons.append(f"produtos de categorias diferentes no mesmo texto ({', '.join(sorted(set(heads)))})")
+    elif (fam.split("+")[0] == "lamp" and LIGHT_ALONE.search(t) and not LIGHT_QUALIFIED.search(t) and not var
+          and not a["atributos"]):
+        out["estado"] = PROBABLE
+        reasons.append("'light' sem qualificador (pode ser título de jogo, filme ou marca)")
     elif _bare(t) in POLY_WORDS and not var and not a["atributos"] and not out["comercial"]:
         out["estado"] = PROBABLE
         reasons.append(f"termo genérico com mais de um sentido ('{p['nome_pt']}') sem qualificador")

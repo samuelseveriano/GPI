@@ -57,7 +57,7 @@ CONCEPTS: dict[str, tuple] = {
     "smart_speaker": ("head", "Casa inteligente e segurança", ["assistente virtual", "alexa", "echo dot", "google nest", "caixa de som inteligente", "alto-falante inteligente", "alto falante inteligente", "echo pop"], ["smart speaker", "echo dot", "alexa", "google nest", "echo pop"], ["智能音箱"]),
     "safe": ("head", "Casa inteligente e segurança", ["cofre"], ["safe", "safe box"], ["保险箱"]),
     # ---- iluminação
-    "lamp": ("head", "Iluminação", ["luminária", "luminaria", "abajur", "luz", "refletor", "arandela", "spot"], ["lamp", "light", "floodlight", "fixture", "lights"], ["灯", "台灯", "灯具", "照明灯"]),
+    "lamp": ("head", "Iluminação", ["luminária", "luminaria", "abajur", "luz", "refletor", "arandela", "spot", "luminária de mesa", "luminaria de mesa"], ["lamp", "light", "floodlight", "fixture", "lights", "desk lamp", "led desk lamp", "table lamp", "reading lamp"], ["灯", "台灯", "灯具", "照明灯"]),
     "bulb": ("head", "Iluminação", ["lâmpada", "lampada", "lâmpadas", "lampadas"], ["bulb", "light bulb", "bulbs"], ["灯泡"]),
     "led_strip": ("head", "Iluminação", ["fita led", "fita de led", "mangueira led"], ["led strip", "led strip lights", "light strip"], ["灯带", "led灯带"]),
     "flashlight": ("head", "Iluminação", ["lanterna"], ["flashlight", "torch"], ["手电筒"]),

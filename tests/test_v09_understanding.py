@@ -161,3 +161,10 @@ def test_single_complaint_is_not_recurring_defect(tmp_path):
            [("reddit", "positivo", f"comprei, meu carregador é bom {i}", f"p{i}") for i in range(5)]
     p = _rv(tmp_path, docs)["produtos"][0]
     assert p["problemas"][0]["classificacao"] == "relato isolado" and "taxa de defeito" in p["problemas"][0]["limitacao"]
+
+
+def test_real_data_finding_game_title_is_not_lamp():
+    """Achado da auditoria com dados REAIS (Google Trends RSS): '007 first light' (jogo) era confirmado como luminária."""
+    assert U.understand("007 first light", "en")["estado"] != "confirmada"
+    assert U.understand("LED desk lamp", "en")["principal"] == "lamp"
+    assert U.understand("ring light de mesa com tripé", "pt")["principal"] == "ring_light"
