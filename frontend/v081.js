@@ -166,15 +166,70 @@ window.GPI_V081 = function (H, PAGES) {
       $('#ma').innerHTML = `<p>Estado: <b>${escH(r.estado_rotulo)}</b>. <span class="small muted">${escH(r.aviso)}</span></p>
         <form id="maf" class="filters"><label class="f">Retorno do login<select name="modo">${Object.entries(r.modos).map(([k, t]) => `<option value="${k}" ${k === r.modo ? 'selected' : ''}>${escH(t)}</option>`).join('')}</select></label><button class="btn">Salvar</button></form>
         <p class="small">URL a cadastrar na Meta (Login do Facebook → Configurações → URIs de redirecionamento do OAuth válidos): <code>${escH(r.redirect_uri)}</code> · App ID que o GPI enviará: <code>${escH(r.app_id_enviado || '—')}</code></p>
-        <ol class="small">${r.etapas.map((s) => `<li>${s.ok === true ? '✓' : s.ok === false ? '✗' : '?'} <b>${escH(s.nome)}</b> — ${escH(s.mensagem)}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</li>`).join('')}</ol>
-        <div class="btnrow">${Object.entries(r.modulos).map(([k, m]) => `<button class="btn small" data-mod="${k}">Conectar — ${escH(m.nome)}</button>`).join('')} <button class="btn small" id="marec">Verificar de novo</button></div>
+        ${r.checklist ? `<table class="small"><thead><tr><th>#</th><th>Etapa</th><th>Status</th><th>Resultado</th><th>Possível causa / ação</th></tr></thead><tbody>${r.checklist.map((s) => `<tr><td class="num">${s.etapa}</td><td><b>${escH(s.nome)}</b><br><span class="muted">${escH(s.descricao)}</span></td><td>${s.status === 'ok' ? '✓ ok' : s.status === 'falhou' ? '✗ falhou' : s.status === 'pendente' ? '… pendente' : '? não verificado'}</td><td>${escH(s.resultado || '—')}</td><td>${escH(s.possivel_causa || '')}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</td></tr>`).join('')}</tbody></table>
+        <p class="small muted">A integração só é considerada validada quando o GPI troca o código, confere o token nesta Meta e uma consulta real (/me) responde — a tela “Continuar como …” do Facebook não basta.</p>`
+        : `<ol class="small">${r.etapas.map((s) => `<li>${s.ok === true ? '✓' : s.ok === false ? '✗' : '?'} <b>${escH(s.nome)}</b> — ${escH(s.mensagem)}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</li>`).join('')}</ol>`}
+        <div class="btnrow">${Object.entries(r.modulos).map(([k, m]) => { const locked = k !== 'basico' && !(r.checklist && r.checklist[9].status === 'ok'); return `<button class="btn small" data-mod="${k}" ${locked ? 'disabled title="Conclua e valide o Login básico primeiro"' : ''}>Conectar — ${escH(m.nome)}</button>`; }).join('')} <button class="btn small" id="marec">Verificar de novo</button></div>
         <p class="small muted">${escH(r.anuncios.nota)}</p>
         <form id="mapaste" class="filters"><label class="f">Se o navegador não voltar ao GPI, cole o código exibido na página de retorno<input name="colado" size="60"></label><button class="btn small">Concluir</button></form><p id="mamsg" class="small"></p>`;
       $('#maf').onsubmit = async (ev) => { ev.preventDefault(); try { await post('/api/integrations/meta/redirect', Object.fromEntries(new FormData(ev.target))); load(); } catch (e) { $('#mamsg').innerHTML = errBox(e); } };
       $('#marec').onclick = load;
       document.querySelectorAll('[data-mod]').forEach((b) => { b.onclick = async () => {
         try { const s = await post('/api/integrations/meta/oauth/start', { modulo: b.dataset.mod }); window.open(s.url, '_blank', 'noopener'); $('#mamsg').textContent = `Login aberto em nova aba (App ID ${s.app_id_enviado}, retorno ${s.redirect_uri}). Depois volte e clique em “Verificar de novo”.`; } catch (e) { $('#mamsg').innerHTML = errBox(e); } }; });
-      $('#mapaste').onsubmit = async (ev) => { ev.preventDefault(); try { const x = await post('/api/oauth/meta/concluir', Object.fromEntries(new FormData(ev.target))); $('#mamsg').textContent = 'Conectado: ' + (x.escopos || 'perfil público'); load(); } catch (e) { $('#mamsg').innerHTML = errBox(e); } };
+      $('#mapaste').onsubmit = async (ev) => { ev.preventDefault(); try { const x = await post('/api/oauth/meta/concluir', Object.fromEntries(new FormData(ev.target))); $('#mamsg').textContent = 'Token conferido para o app ' + (x.app_id || '') + ' — permissões: ' + (x.escopos || 'perfil público') + '. Validando consulta real…'; load(); } catch (e) { $('#mamsg').innerHTML = errBox(e); } };
+    };
+    box.addEventListener('toggle', () => { if (box.open && !box.dataset.ok) { box.dataset.ok = 1; load(); } });
+    if (box.open) { box.dataset.ok = 1; load(); }
+    ebayPanel(arg);
+  }
+
+  /* v0.8.2 — eBay: Produção e Conformidade (Marketplace Account Deletion + Browse API). Nunca mostra tokens. */
+  function ebayPanel(arg) {
+    const box = document.createElement('details');
+    box.className = 'panel';
+    box.id = 'ebay-conf';
+    box.innerHTML = `<summary><h2 style="display:inline">eBay — Produção e Conformidade</h2> <span class="muted small">exclusão de contas (Worker Cloudflare), chaves Production e Browse API</span></summary><div id="eb">${loading('Carregando…')}</div>`;
+    main.insertBefore(box, main.children[3] || null);
+    if (arg === 'ebay') box.open = true;
+    const yn = (v) => v ? '✓' : '✗';
+    const load = async () => {
+      let r;
+      try { r = await api('/api/integrations/ebay/conformidade'); } catch (e) { $('#eb').innerHTML = errBox(e); return; }
+      const last = r.ultima_sincronizacao || {}, w = last.worker || {}, b = r.browse || {};
+      const rows = [
+        ['Credenciais Production', `${yn(r.credenciais.client_id && r.credenciais.client_secret)} App ID e Cert ID`],
+        ['Token de sincronização', `${yn(r.credenciais.sync_token)} ${r.credenciais.sync_token ? 'configurado (protegido localmente)' : 'não configurado'}`],
+        ['Endpoint', `<code>${escH(r.configuracao.worker_url)}/ebay/notifications</code>`],
+        ['Última verificação', escH(last.fim || 'nunca')],
+        ['Última notificação recebida', escH(w.ultima_notificacao_em || '—')],
+        ['Pendentes no Worker', w.pendentes == null ? '—' : num(w.pendentes)],
+        ['Processadas (neste GPI)', escH(Object.entries(r.processadas_local || {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || '0')],
+        ['Falhas de processamento', w.falhas == null ? '—' : num(w.falhas)],
+        ['Browse API', escH(b.estado_rotulo || 'não diagnosticada')],
+        ['Última coleta comercial', escH(r.ultima_coleta || '—')],
+        ['Registros coletados', num(r.anuncios)],
+        ['Coleta do eBay', r.coleta_permitida ? 'permitida (conformidade configurada)' : '<b>bloqueada</b> até configurar a conformidade'],
+      ];
+      $('#eb').innerHTML = `${(r.alertas || []).map((a) => `<p class="small"><b>⚠</b> ${escH(a)}</p>`).join('')}
+        <table class="small"><tbody>${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</tbody></table>
+        <div class="btnrow"><button class="btn small" data-eb="diag">Diagnosticar integração</button> <button class="btn small" data-eb="test">Testar conexão</button>
+        <button class="btn small" data-eb="conf">Verificar conformidade</button> <button class="btn small" data-eb="sync">Sincronizar</button>
+        <button class="btn small" data-eb="hist">Ver histórico</button> <a class="btn small" href="/api/integrations/ebay/diagnostico.json">Exportar diagnóstico</a></div>
+        <div id="ebout" class="small"></div>
+        <p class="small muted">Anúncios ativos não são vendas nem volume de pesquisa. O GPI guarda vendedores só como pseudônimo; pedidos de exclusão do eBay apagam também backups, cache e relatórios.</p>`;
+      const out = $('#ebout');
+      const steps = (x) => `<ol>${(x.etapas || []).map((s) => `<li>${s.ok === true ? '✓' : s.ok === false ? '✗' : '?'} <b>${escH(s.nome)}</b> — ${escH(s.mensagem)}${s.acao ? `<br><span class="muted">Ação: ${escH(s.acao)}</span>` : ''}</li>`).join('')}</ol>`;
+      document.querySelectorAll('[data-eb]').forEach((btn) => { btn.onclick = async () => {
+        out.innerHTML = loading('Executando…');
+        try {
+          const k = btn.dataset.eb;
+          if (k === 'diag') { const x = await post('/api/integrations/ebay/diagnostico', {}); out.innerHTML = `<p>Browse API: <b>${escH(x.estado_rotulo)}</b>. ${escH(x.aviso)}</p>${steps(x)}`; }
+          if (k === 'test') { const x = await post('/api/integrations/ebay/testar', {}); out.innerHTML = x.erro_worker ? `<p>✗ ${escH(x.erro_worker)}</p>` : `<p>✓ Worker respondeu (versão ${escH(x.worker.versao)}); segredos no Worker: ${Object.entries(x.worker.segredos || {}).map(([a, v]) => `${escH(a)} ${yn(v)}`).join(' · ')}.</p>`; }
+          if (k === 'conf') { const x = await post('/api/integrations/ebay/conformidade/verificar', {}); out.innerHTML = `<p>Endpoint público: ${x.endpoint && x.endpoint.responde ? '✓ responde à verificação do eBay' : '✗ sem resposta'}<br>Assinatura ECDSA no Worker (vetor oficial do eBay): ${x.autoteste ? (x.autoteste.assinatura_valida_aceita && x.autoteste.assinatura_adulterada_recusada ? '✓ validada no runtime publicado' : '✗ FALHOU — não habilite em produção') : '—'}</p>${(x.erros || []).map((e) => `<p>✗ ${escH(e)}</p>`).join('')}`; }
+          if (k === 'sync') { const x = await post('/api/integrations/ebay/conformidade/sincronizar', {}); out.innerHTML = `<p>Processadas: ${num(x.processadas)} · ${escH(JSON.stringify(x.resultados))}</p>${(x.erros || []).map((e) => `<p>✗ ${escH(e)}</p>`).join('')}`; load(); }
+          if (k === 'hist') { const x = await api('/api/integrations/ebay/historico'); out.innerHTML = tbl(['Notificação', 'Pedido em', 'Processada', 'Resultado', 'Confirmada'], (x.local || []).map((h) => `<tr><td>${escH(h.notification_id)}</td><td>${escH(h.event_date || '—')}</td><td>${escH(h.processed_at)}</td><td>${escH(h.result)}</td><td>${escH(h.confirmed_at || 'não')}</td></tr>`), 'Nenhuma solicitação de exclusão processada.') + (x.erro_worker ? `<p class="muted">Worker: ${escH(x.erro_worker)}</p>` : ''); }
+        } catch (e) { out.innerHTML = errBox(e); }
+      }; });
     };
     box.addEventListener('toggle', () => { if (box.open && !box.dataset.ok) { box.dataset.ok = 1; load(); } });
     if (box.open) { box.dataset.ok = 1; load(); }

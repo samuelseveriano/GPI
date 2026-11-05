@@ -12,6 +12,7 @@ import json
 import urllib.parse
 import logging
 import secrets
+import time
 from urllib.parse import unquote, urlsplit
 from pathlib import Path
 
@@ -639,15 +640,92 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         try:
             r = await run_in_threadpool(MT.complete, sync.http, sync.creds, flows, cfg, code, state)
         except SourceError as e:
-            log.warning("OAuth Meta não concluído: %s", redact_text(str(e)))
-            return err(str(e))
+            diag = getattr(e, "diag", "M08")
+            log.warning("OAuth Meta não concluído: diagnóstico %s (código com %d caracteres)", diag, len(code))
+            sync.store.save_result("diag:meta_oauth", {"resultado": {"diagnostico": diag, "mensagem": str(e)[:300],
+                                                                     "tamanho_codigo": len(code), "em": time.strftime("%Y-%m-%dT%H:%M:%S")}})
+            return JSONResponse({"erro": str(e), "diagnostico": diag}, 400)
+        sync.store.save_result("diag:meta_oauth", {"resultado": {"diagnostico": "OK", "tamanho_codigo": len(code),
+                                                                 "em": time.strftime("%Y-%m-%dT%H:%M:%S")}})
         return JSONResponse({**r, "protecao": sync.creds.protection})
 
     async def meta_assistant(request):
         from .integrations import meta as MT
         r = await run_in_threadpool(MT.assistant, sync.http, sync.creds, cfg, db, request.url.port or 8765)
+        last = (sync.store.load_result("diag:meta_oauth") or {}).get("resultado")
+        r["checklist"] = MT.checklist(r, last, started=bool(getattr(flows, "_d", None) or getattr(flows, "_gone", None)))
+        r["ultimo_retorno_oauth"] = last
         sync.store.save_result("diag:meta", {"resultado": r})
         return JSONResponse(r)
+
+    # ------------------------------------------------------------------ v0.8.2: eBay — Produção e Conformidade
+    async def ebay_status(_):
+        from .integrations import ebay_compliance as EC
+        r = await run_in_threadpool(EC.local_status, db, sync.creds, sync.store)
+        r["browse"] = (sync.store.load_result("ebay:browse_diag") or {}).get("resultado")
+        r["credenciais"] = {k: bool(v) for k, v in sync.creds.get("ebay").items()
+                            if k in ("client_id", "client_secret", "sync_token", "worker_url")}
+        return JSONResponse(r)
+
+    async def ebay_sync(_):
+        from .integrations import ebay_compliance as EC
+        r = await run_in_threadpool(EC.sync, db, sync.http, sync.creds, data_dir, Path(sync.http.cache_dir), sync.store, "manual")
+        return JSONResponse(r, 200 if r["situacao"] != "falhou" else 502)
+
+    async def ebay_test(_):
+        from .integrations import ebay_compliance as EC
+        out = {"worker": None, "erro_worker": None}
+        try:
+            out["worker"] = await run_in_threadpool(EC.worker_status, sync.http, sync.creds)
+        except SourceError as e:
+            out["erro_worker"] = EC.classify_worker_error(e)
+        return JSONResponse(out)
+
+    async def ebay_compliance_check(_):
+        """Verificar conformidade: endpoint público (GET de verificação), autoteste de assinatura no Worker e pendências."""
+        from .integrations import ebay_compliance as EC
+        out = {"endpoint": None, "autoteste": None, "erros": []}
+        try:
+            u = EC.worker_url(sync.creds) + EC.ENDPOINT_PATH + "?challenge_code=" + secrets.token_hex(8)
+            r = await run_in_threadpool(lambda: sync.http.request_json(u, ttl=0, timeout=20))
+            out["endpoint"] = {"responde": bool(r.get("challengeResponse")), "url": EC.worker_url(sync.creds) + EC.ENDPOINT_PATH}
+        except SourceError as e:
+            out["erros"].append("o endpoint público não respondeu à verificação: " + EC.classify_worker_error(e))
+        try:
+            out["autoteste"] = await run_in_threadpool(EC._signed, sync.http, sync.creds, "POST", "/gpi/v1/selftest", {})
+        except SourceError as e:
+            out["erros"].append(EC.classify_worker_error(e))
+        sync.store.save_result("ebay:verificacao", {"resultado": out})
+        return JSONResponse(out)
+
+    async def ebay_diagnose(_):
+        from .integrations import ebay_compliance as EC
+        return JSONResponse(await run_in_threadpool(EC.browse_diagnose, sync.http, sync.creds, db, sync.store))
+
+    async def ebay_history(_):
+        from .integrations import ebay_compliance as EC
+        EC._ensure(db)
+        local = db.query("SELECT notification_id, event_date, received_at, processed_at, result, details, confirmed_at, error "
+                         "FROM ebay_deletion_log ORDER BY processed_at DESC LIMIT 200")
+        remote, erro = None, None
+        try:
+            remote = (await run_in_threadpool(EC._signed, sync.http, sync.creds, "GET", "/gpi/v1/history")).get("itens")
+        except SourceError as e:
+            erro = EC.classify_worker_error(e)
+        return JSONResponse({"local": local, "worker": remote, "erro_worker": erro})
+
+    async def ebay_export(_):
+        """Diagnóstico exportável: situação, verificações e históricos — sem tokens, segredos ou nomes de usuário."""
+        from .integrations import ebay_compliance as EC
+        payload = {"gerado_em": time.strftime("%Y-%m-%dT%H:%M:%S"), "versao": __version__,
+                   "situacao": await run_in_threadpool(EC.local_status, db, sync.creds, sync.store),
+                   "browse": (sync.store.load_result("ebay:browse_diag") or {}).get("resultado"),
+                   "verificacao": (sync.store.load_result("ebay:verificacao") or {}).get("resultado"),
+                   "credenciais_presentes": {k: bool(v) for k, v in sync.creds.get("ebay").items()
+                                             if k in ("client_id", "client_secret", "sync_token", "worker_url")}}
+        body = redact_text(json.dumps(payload, ensure_ascii=False, indent=1, default=str))
+        return Response(body, media_type="application/json",
+                        headers={"Content-Disposition": "attachment; filename=gpi_ebay_diagnostico.json", "Cache-Control": "no-store"})
 
     async def meta_redirect(request):
         from .integrations import meta as MT
@@ -731,6 +809,13 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/oauth/meta/concluir", meta_complete, methods=["POST"]),
         Route("/api/integrations/meta/assistente", meta_assistant, methods=["POST"]),
         Route("/api/integrations/meta/redirect", meta_redirect, methods=["POST"]),
+        Route("/api/integrations/ebay/conformidade", ebay_status),
+        Route("/api/integrations/ebay/conformidade/sincronizar", ebay_sync, methods=["POST"]),
+        Route("/api/integrations/ebay/conformidade/verificar", ebay_compliance_check, methods=["POST"]),
+        Route("/api/integrations/ebay/testar", ebay_test, methods=["POST"]),
+        Route("/api/integrations/ebay/diagnostico", ebay_diagnose, methods=["POST"]),
+        Route("/api/integrations/ebay/historico", ebay_history),
+        Route("/api/integrations/ebay/diagnostico.json", ebay_export),
         Route("/api/integrations/mercadolivre/redirect", ml_redirect, methods=["POST"]),
         Route("/api/sync/status", sync_status),
         Route("/api/sync/run", sync_run, methods=["POST"]),

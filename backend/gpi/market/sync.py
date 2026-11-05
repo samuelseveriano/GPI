@@ -35,6 +35,7 @@ import math
 import os
 import threading
 import time
+from pathlib import Path
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -374,6 +375,16 @@ class SyncManager:
             if hasattr(self.http, "source_stats"):
                 self.http.source_stats.clear()
             t_all = time.monotonic()
+            # v0.8.2: exclusões pedidas pelo eBay são processadas ANTES de qualquer coleta (abertura, agendada e manual)
+            if self.creds is not None and not self.http.cancel_event.is_set():
+                try:
+                    from ..integrations import ebay_compliance as EC
+                    if EC.configured(self.creds)["token_sincronizacao"]:
+                        self.state.update(atual="conformidade eBay: solicitações de exclusão")
+                        summary["conformidade_ebay"] = EC.sync(self.db, self.http, self.creds, Path(self.data_dir),
+                                                               Path(self.http.cache_dir), self.store, trigger)
+                except Exception as e:  # noqa: BLE001 — nunca interrompe a sincronização das demais fontes
+                    log.warning("conformidade eBay não concluída: %s", type(e).__name__)
             todo = [c for c in self.connectors if not only or c.id in only]
             ok_todo = []
             for c in sorted(todo, key=lambda c: (PRIORITY.get(c.id, 3), c.order)):

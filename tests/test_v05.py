@@ -121,7 +121,9 @@ EBAY = {"itemSummaries": [{"itemId": f"v1|{i}", "title": f"Ninja Air Fryer {4 + 
 
 def test_ebay_listings_and_competition(tmp_path):
     http = Http({"identity/v1/oauth2/token": {"access_token": "t", "expires_in": 7200}, "item_summary/search": EBAY})
-    ctx, db = _ctx(tmp_path, http, {"ebay": {"client_id": "a", "client_secret": "b"}}, {"ebay_max_products": 2})
+    ctx0, _ = _ctx(tmp_path / "sem", http, {"ebay": {"client_id": "a", "client_secret": "b"}}, {"ebay_max_products": 2})
+    assert not EbayBrowse().available(ctx0)            # v0.8.2: sem conformidade de exclusão, nada do eBay é gravado
+    ctx, db = _ctx(tmp_path, http, {"ebay": {"client_id": "a", "client_secret": "b", "sync_token": "s" * 40}}, {"ebay_max_products": 2})
     c = EbayBrowse()
     assert c.available(ctx) and len(c.plan(ctx)) == 2
     job = next(j for j in c.plan(ctx))
@@ -131,6 +133,8 @@ def test_ebay_listings_and_competition(tmp_path):
     comp = competition(db)["itens"][0]
     assert comp["anuncios"] == 12 and comp["vendedores_unicos"] == 4 and comp["anuncios_em_promocao"] == 3
     assert 0 <= comp["pressao_competitiva"] <= 100 and comp["marcas"][0]["marca"] == "ninja"
+    sellers = {r["seller"] for r in db.query("SELECT DISTINCT seller FROM market_listings WHERE source = 'ebay'")}
+    assert sellers and all(x.startswith("h:") for x in sellers)          # v0.8.2: só pseudônimos
 
 
 def test_gdelt_timeline_monthly(tmp_path):

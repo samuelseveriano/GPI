@@ -235,7 +235,7 @@ class EbayBrowse(Connector):
     name = "eBay — Browse API (anúncios e preços)"
     reliability = "A"
     docs_url = "https://developer.ebay.com/api-docs/buy/browse/overview.html"
-    description = "Anúncios ativos por produto no eBay EUA: título, marca, preço, moeda, condição e vendedor."
+    description = "Anúncios ativos por produto no eBay EUA: título, marca, preço, moeda, condição e vendedor (pseudonimizado)."
     limitations = "Anúncios ativos não são vendas; um vendedor pode ter vários anúncios (o GPI deduplica por vendedor)."
     order = 82
     stage = 2
@@ -243,7 +243,8 @@ class EbayBrowse(Connector):
 
     def available(self, ctx) -> bool:
         c = ctx.creds.get("ebay") if ctx.creds else {}
-        return bool(c.get("client_id") and c.get("client_secret"))
+        # v0.8.2: só coleta com o fluxo Marketplace Account Deletion configurado (o GPI guarda histórico de anúncios)
+        return bool(c.get("client_id") and c.get("client_secret") and c.get("sync_token"))
 
     def plan(self, ctx):
         from ..products.catalog import Catalog
@@ -255,8 +256,10 @@ class EbayBrowse(Connector):
     def run(self, job, ctx):
         tok = ebay_token(ctx.http, ctx.creds)
         url = self.URL + "?" + urllib.parse.urlencode({"q": job.params["q"], "limit": 50})
+        # ttl=0: respostas brutas do eBay (com nomes de usuário de vendedores) não são gravadas no cache em disco
         items = parse_ebay(ctx.http.request_json(url, headers={"Authorization": f"Bearer {tok}",
-                                                               "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, ttl=12 * 3600))
+                                                               "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"}, ttl=0))
+        from ..integrations.ebay_compliance import seller_pseudonym
         from ..products import nlp
         day, ts = ctx.today.isoformat(), now_iso()
         with ctx.store.db.transaction():
@@ -267,7 +270,8 @@ class EbayBrowse(Connector):
                     " price, currency, original_price, country, seller, condition, url, extra, collected_at)"
                     " VALUES ('ebay', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)",
                     (it["id"], day, job.params["pid"], job.params["q"], it["titulo"][:300], at.get("marca"), at.get("modelo"),
-                     it["categoria"], it["preco"], it["moeda"], it["preco_original"], it["pais"] or "US", it["vendedor"],
+                     it["categoria"], it["preco"], it["moeda"], it["preco_original"], it["pais"] or "US",
+                     seller_pseudonym(ctx.creds, it["vendedor"]),          # v0.8.2: pseudônimo, nunca o nome de usuário
                      it["condicao"], it["url"], ts))
         return [], []
 

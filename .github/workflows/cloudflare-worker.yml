@@ -1,0 +1,38 @@
+# v0.8.2 — Worker gpi-ebay-notifications: testes em Node e no runtime real do Cloudflare (workerd/Miniflare).
+# Não publica nada: a publicação é feita pelo usuário no painel da Cloudflare (docs/EBAY_CLOUDFLARE_SETUP.md).
+name: cloudflare-worker
+
+on:
+  push:
+    paths: ["cloudflare/**", ".github/workflows/cloudflare-worker.yml"]
+  pull_request:
+    paths: ["cloudflare/**", ".github/workflows/cloudflare-worker.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Worker eBay — testes (Node + workerd)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloudflare/ebay-notifications
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Testes unitários e de integração (D1 sobre SQLite)
+        run: node --test tests/worker.test.mjs
+      - name: Instalar Miniflare (runtime workerd) apenas para o teste
+        run: npm install --no-save --no-audit --no-fund miniflare@3
+      - name: Testes no runtime real do Cloudflare (workerd + simulador oficial do D1)
+        env:
+          REQUIRE_WORKERD: "1"
+        run: node --test tests/workerd.test.mjs
+      - name: Nenhum segredo no Worker
+        run: |
+          ! grep -nE "(EBAY_[A-Z_]+|token|secret)\s*[:=]\s*['\"][A-Za-z0-9_\-]{24,}['\"]" src/index.js wrangler.jsonc
