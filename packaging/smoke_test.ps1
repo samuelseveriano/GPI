@@ -233,6 +233,24 @@ if (@($ma.etapas).Count -lt 2) { Fail "assistente Meta sem etapas" }
 $ss = Invoke-RestMethod -Uri "$base/api/sync/status" -NoProxy -TimeoutSec 30
 Note "   coberturas: comercial $($ex.coberturas.comercial.valor)% · alertas: $($al.total) · candidatos: $(@($ca.itens).Count) · descoberta: acurácia $([math]::Round(100 * $di.avaliacao.acuracia, 1))% · Meta: $($ma.estado) · sincronização: $($ss.resultado)"
 
+Note "O) v0.8.2: eBay (conformidade de exclusão, coleta bloqueada sem Worker) e Meta (diagnóstico do retorno OAuth)"
+$eb = Invoke-RestMethod -Uri "$base/api/integrations/ebay/conformidade" -NoProxy -TimeoutSec 60
+if ($eb.coleta_permitida) { Fail "coleta do eBay liberada sem a conformidade de exclusão configurada" }
+$es = Invoke-RestMethod -Uri "$base/api/integrations/ebay/conformidade/sincronizar" -Method Post -Headers $hdr -ContentType "application/json" -Body "{}" -NoProxy -TimeoutSec 60
+if ($es.situacao -ne "nao_configurado") { Fail "sincronização eBay sem token deveria indicar 'nao_configurado' (obtido: $($es.situacao))" }
+$ej = Invoke-WebRequest -Uri "$base/api/integrations/ebay/diagnostico.json" -NoProxy -TimeoutSec 60 -UseBasicParsing
+if ($ej.Content -match "client_secret""\s*:\s*""[^""]") { Fail "diagnóstico exportado contém segredo" }
+$mb2 = @{ code = ("AQ" + ("x" * 410)); state = ("8765." + ("a" * 43)) } | ConvertTo-Json
+try {
+  Invoke-RestMethod -Uri "$base/api/oauth/meta/concluir" -Method Post -Headers $hdr -ContentType "application/json" -Body $mb2 -NoProxy -TimeoutSec 30 | Out-Null
+  Fail "retorno OAuth da Meta com state desconhecido foi aceito"
+} catch {
+  $resp = $_.ErrorDetails.Message | ConvertFrom-Json
+  if ($resp.diagnostico -ne "M04") { Fail "diagnóstico OAuth Meta esperado M04 (obtido: $($resp.diagnostico))" }
+  if ($_.ErrorDetails.Message -match ("x" * 50)) { Fail "mensagem de erro OAuth expôs o código" }
+}
+Note "   eBay: coleta bloqueada sem conformidade · sincronização: $($es.situacao) · Meta: código de 412 caracteres aceito pelo formato, state desconhecido → M04"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -262,4 +280,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–N)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–O)"
