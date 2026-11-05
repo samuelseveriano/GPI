@@ -31,14 +31,22 @@ def main(out: str):
     t0 = time.time()
     tmp = Path(tempfile.mkdtemp())
     db = Database(tmp / "real.sqlite")
-    cfg = {"history_start_year": date.today().year - 5, "contact": "ci-auditoria-v081", "max_jobs_per_source": 400, "sync_workers": 4}
+    cfg = {"history_start_year": date.today().year - 5, "contact": "auditoria CI; https://github.com/samuelseveriano/GPI/issues", "max_jobs_per_source": 400,
+           "sync_workers": 2}
     from gpi.products.catalog import Catalog
     Catalog(db, cfg).ensure_seeded()
     sm = SyncManager(db, tmp, cfg)
     summ = sm.run("auditoria-v081", ["wikimedia", "comexstat", "bcb_ptax", "google_trends_rss"])
     # Wikimedia coleta em duas etapas: 1ª passada resolve os títulos (langlinks); as visualizações são planejadas na 2ª
-    summ2 = sm.run("auditoria-v081-pv", ["wikimedia"])
-    summ["fontes"]["wikimedia_visualizacoes"] = summ2["fontes"].get("wikimedia", {})
+    # a Wikimedia limita requisições (HTTP 429) em IPs compartilhados do CI: novas passadas com pausa, como o app faz
+    for i in range(4):
+        summ2 = sm.run(f"auditoria-v081-pv{i}", ["wikimedia"])
+        summ["fontes"][f"wikimedia_passada_{i + 2}"] = summ2["fontes"].get("wikimedia", {})
+        n_wiki = db.query("SELECT COUNT(*) AS n FROM market_obs o JOIN market_series s ON s.id = o.series_id "
+                          "WHERE s.source = 'wikimedia'")[0]["n"]
+        if n_wiki and not summ2["fontes"].get("wikimedia", {}).get("jobs_falhos"):
+            break
+        time.sleep(90)
     rep = {"coleta": {k: {x: v.get(x) for x in ("estado", "segundos", "jobs_ok", "jobs_falhos", "novas", "ultimo_erro")}
                       for k, v in summ["fontes"].items()},
            "produtos_wikipedia_resolvidos": sum(1 for p in sm.store.products() if p.get("origin") == "wikipedia"),
