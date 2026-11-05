@@ -28,5 +28,5 @@ def test_acceleration_needs_real_change_not_linear_growth():
 
 def test_one_week_of_ranking_is_not_sustained_growth():
     r = term_stats({"2026-W44": 3}, ["2026-W44"])
-    assert r["classe"] == "NOVO SINAL COMERCIAL" and r["crescimento"].startswith("não comprovado")
+    assert r["classe"] == "NOVO SINAL COMERCIAL" and r["nota_crescimento"].startswith("não comprovado")
     assert r["permanencia_max_semanas"] == 1

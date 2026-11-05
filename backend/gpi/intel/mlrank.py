@@ -82,7 +82,7 @@ def term_stats(positions: dict[str, float], weeks: list[str]) -> dict:
         run = run + 1 if w in positions else 0
         best = max(best, run)
     out["permanencia_max_semanas"] = best
-    out["crescimento"] = ("não comprovado — o ranking mede posição relativa, não volume de buscas"
+    out["nota_crescimento"] = ("não comprovado — o ranking mede posição relativa, não volume de buscas"
                           if len(present) < 8 else "ver tendência da posição (posição não é volume)")
     n = len(present)
     out["classe"] = ("NOVO SINAL COMERCIAL" if n == 1 else "SINAL EM OBSERVAÇÃO" if n <= 3 else
