@@ -124,3 +124,40 @@ def test_dev_and_test_sets_do_not_overlap():
     dev = {c["texto"].lower() for c in E.load("understanding_dev_v09.tsv")}
     test = {c["texto"].lower() for c in E.load("understanding_test_v09.tsv")}
     assert not dev & test
+
+
+# ---------------------------------------------------------------- Review Intelligence 2.0
+def _rv(tmp_path, docs):
+    from gpi.market.content_intel import review_summary
+    from gpi.market.store import MarketStore
+    db = Database(tmp_path / "r.sqlite")
+    cs = ContentStore(db)
+    cs.upsert("x", [])
+    for i, (src, label, text, author) in enumerate(docs):
+        db.execute("INSERT INTO content_items (source, item_id, kind, title, text, url, author, published_at, product_key, collected_at, "
+                   "refreshed_at, sentiment, sentiment_label, aspects, target) VALUES (?, ?, 'post', ?, ?, ?, ?, '2026-10-01', 'p1', 't', 't', ?, ?, ?, 'produto')",
+                   (src, f"i{i}", text, text, f"https://x/{i}", author, {"positivo": .6, "negativo": -.6, "neutro": 0}[label], label,
+                    json.dumps({"bateria": -.5} if "bateria" in text and label == "negativo" else {})))
+    return review_summary(MarketStore(db), cs)
+
+
+def test_neutral_heavy_product_is_not_most_criticized(tmp_path):
+    docs = [("reddit", "neutro", f"meu fone chegou, uso no dia a dia {i}", f"a{i}") for i in range(12)] + \
+           [("reddit", "negativo", f"meu fone tem bateria fraca {i}", f"b{i}") for i in range(2)]
+    rv = _rv(tmp_path, docs)
+    p = rv["produtos"][0]
+    assert p["neutros"] == 12 and p["negativos"] == 2 and "p1" not in rv["mais_criticados"]
+
+
+def test_news_is_not_counted_as_buyer_opinion(tmp_path):
+    docs = [("google_news", "negativo", f"Recall de fone por bateria {i}", f"n{i}") for i in range(6)] + \
+           [("reddit", "positivo", f"comprei e meu fone é ótimo {i}", f"r{i}") for i in range(5)]
+    p = _rv(tmp_path, docs)["produtos"][0]
+    assert p["documentos"] == 11 and p["n"] == 5 and p["negativos"] == 0 and p["por_tipo_fonte"]["Notícia"] == 6
+
+
+def test_single_complaint_is_not_recurring_defect(tmp_path):
+    docs = [("reddit", "negativo", "meu carregador: bateria esquentou", "u1")] + \
+           [("reddit", "positivo", f"comprei, meu carregador é bom {i}", f"p{i}") for i in range(5)]
+    p = _rv(tmp_path, docs)["produtos"][0]
+    assert p["problemas"][0]["classificacao"] == "relato isolado" and "taxa de defeito" in p["problemas"][0]["limitacao"]

@@ -20,7 +20,7 @@ estatístico · **5** regra restritiva · **6** erro de associação · **7** fa
 
 | Observação | Causa verificada | Tipo |
 |---|---|---|
-| Vídeo de **campainha** associado a **fechadura** | O casador calcula a relação com o produto consultado (`estado_alvo` = "outro produto"), mas o conector do YouTube decide pelo campo genérico `estado` ("confirmada"). **Reproduzido**: `match("Campainha inteligente com câmera…", target="fechadura+inteligente")` → `estado = confirmada`. | 6 |
+| Vídeo de **campainha** associado a **fechadura** | **Corrigido após verificação** (a primeira versão deste relatório atribuía a causa ao conector, que na verdade já usa `estado_alvo`). Causas reais, ambas reproduzidas: (1) `ContentStore.upsert` mantinha a associação antiga quando a nova avaliação a rejeitava — vídeos associados pela consulta antes da v0.8 nunca eram limpos; (2) `content_intel.process()` rodava um casador simples por palavras em TODOS os itens sem produto, inclusive vídeos que a v0.8 tinha rejeitado, e os reassociava. | 6 |
 | "Video doorbell **vs** smart lock" vira fechadura | Dois produtos da mesma categoria no mesmo texto não eram tratados como comparação; o casador escolhia um. | 3 |
 | Produtos genéricos (celular, cadeira, carregador) | O léxico identifica família e alguns modificadores; **marca e código de modelo não são extraídos** (JBL Tune 520BT, HY300, Xiaomi S10 → sem modelo). Não há níveis persistentes categoria → família → produto → variante → modelo. | 3 |
 | Notícia tratada como produto | "Anatel apreende carregadores…" → "família de produtos": o filtro de notícias não cobre verbos como *apreende*. | 3 |
