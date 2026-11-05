@@ -8,6 +8,7 @@ on:
       - "scripts/real_data_audit_v081.py"
       - "backend/gpi/products/trends.py"
       - "backend/gpi/intel/**"
+      - "backend/gpi/products/**"
       - ".github/workflows/real-data-audit.yml"
   workflow_dispatch:
 

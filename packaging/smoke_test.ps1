@@ -251,6 +251,19 @@ try {
 }
 Note "   eBay: coleta bloqueada sem conformidade · sincronização: $($es.situacao) · Meta: código de 412 caracteres aceito pelo formato, state desconhecido → M04"
 
+Note "P) v0.9: painel A–G, estágios, alertas com estado, compreensão de produtos (conjunto de teste) e diagnóstico Meta por módulo"
+$pn = Invoke-RestMethod -Uri "$base/api/v09/painel" -NoProxy -TimeoutSec 240
+if ($null -eq $pn.A_resumo) { Fail "painel v0.9 sem resumo executivo" }
+$st = Invoke-RestMethod -Uri "$base/api/v09/estagios" -NoProxy -TimeoutSec 240
+foreach ($it in @($st.itens)) { if ($it.estagio_evidencia.estagio -ge 3 -and -not $it.estagio_evidencia.criterios.evidencia_comercial) { Fail "estágio 3 sem evidência comercial: $($it.produto_id)" } }
+$cp = Invoke-RestMethod -Uri "$base/api/v09/compreensao" -NoProxy -TimeoutSec 120
+if ($cp.avaliacao.teste.precisao_alta_confianca -lt 0.95) { Fail "precisão de alta confiança abaixo de 95% no conjunto de teste ($($cp.avaliacao.teste.precisao_alta_confianca))" }
+$al = Invoke-RestMethod -Uri "$base/api/v09/alertas" -NoProxy -TimeoutSec 120
+foreach ($a in @($al.itens)) { if (@("novo", "conhecido") -notcontains $a.estado) { Fail "alerta sem estado válido" } }
+$mm = Invoke-RestMethod -Uri "$base/api/integrations/meta/modulos" -Method Post -Headers $hdr -ContentType "application/json" -Body "{}" -NoProxy -TimeoutSec 60
+foreach ($m in @("paginas", "instagram", "anuncios")) { if ($mm.modulos.$m.estado -ne "configuracao_incompleta") { Fail "Meta/$m sem credenciais deveria ser 'configuracao_incompleta' (obtido: $($mm.modulos.$m.estado))" } }
+Note "   painel: $($pn.A_resumo.produtos) produtos · estágio 3: $($pn.A_resumo.investigacao_recomendada) · identificação: $([math]::Round(100 * $cp.avaliacao.teste.precisao_alta_confianca, 1))% (teste) · Meta sem credenciais: configuração incompleta"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -280,4 +293,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–O)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–P)"

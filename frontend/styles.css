@@ -273,3 +273,11 @@ td { white-space: normal; max-width: 380px; overflow-wrap: anywhere; vertical-al
 td.num, td .cst, td .badge { white-space: nowrap; overflow-wrap: normal; }
 th { white-space: nowrap; }
 main .panel > table, main .panel table { max-width: 100%; }
+
+/* v0.9 — estágios de decisão e listas compactas (1366×768, sem rolagem horizontal) */
+.stg{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;border:1px solid var(--line,#ccd);white-space:nowrap}
+.stg0,.stg1{opacity:.85}.stg2{background:rgba(120,140,170,.12)}.stg3{background:rgba(40,140,90,.16);font-weight:600}
+.stg4,.stg5,.stg6{background:rgba(60,110,200,.14)}.stg7{background:rgba(110,110,110,.14)}
+ul.clean{list-style:none;padding-left:0;margin:.3em 0}ul.clean>li{padding:4px 0;border-bottom:1px solid var(--line,#e5e7eb)}
+details.inline{display:inline-block;margin-left:6px}details.inline>summary{cursor:pointer;color:var(--muted,#667)}
+.badge{display:inline-block;padding:0 6px;border-radius:8px;background:rgba(220,120,30,.18);font-size:11px;font-weight:600}
