@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, createHmac, generateKeyPairSync, sign, randomBytes } from 'node:crypto';
 import { makeD1 } from './d1.mjs';
-import * as W from '../src/index.js';
+import { W } from './load.mjs';
 
 const MIG = new URL('../migrations/', import.meta.url);
 const BASE = 'https://gpi-ebay-notifications.samuelseveriano.workers.dev';

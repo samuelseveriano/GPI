@@ -15,11 +15,12 @@
 //          GET https://api.ebay.com/commerce/notification/v1/public_key/{kid} (token de aplicativo);
 //          verificação ECDSA/SHA-1 da assinatura (DER, base64) sobre JSON.stringify(mensagem);
 //          204 se válida, 412 se a assinatura não confere, 500 em falha interna (o eBay reenvia).
+// Único export: o handler padrão (o runtime do Workers recusa exports nomeados que não sejam handlers).
 // O 204 só é devolvido DEPOIS de a notificação ser gravada no D1. Recebimento ≠ exclusão concluída: a exclusão é
 // feita pelo GPI no computador do usuário e confirmada depois por /gpi/v1/ack.
 
-export const VERSION = '0.8.2';
-export const ENDPOINT_DEFAULT = 'https://gpi-ebay-notifications.samuelseveriano.workers.dev/ebay/notifications';
+const VERSION = '0.8.2';
+const ENDPOINT_DEFAULT = 'https://gpi-ebay-notifications.samuelseveriano.workers.dev/ebay/notifications';
 const NOTIFY_PATH = '/ebay/notifications';
 const TOPIC = 'MARKETPLACE_ACCOUNT_DELETION';
 const PUBLIC_KEY_URL = 'https://api.ebay.com/commerce/notification/v1/public_key/';
@@ -54,7 +55,7 @@ function b64decode(s) {
   return out;
 }
 // mensagens de erro sem dados pessoais, sem segredos e curtas
-export function sanitize(msg) {
+function sanitize(msg) {
   return String(msg || '').replace(/[A-Za-z0-9+/_=-]{24,}/g, '[…]').replace(/[^\x20-\x7EÀ-ſ]/g, ' ').slice(0, 300);
 }
 async function audit(env, actor, action, nid = null, detail = null) {
@@ -65,7 +66,7 @@ async function audit(env, actor, action, nid = null, detail = null) {
 }
 
 // ------------------------------------------------------------------------------------------- GET (verificação)
-export async function challengeResponse(code, token, endpoint) {
+async function challengeResponse(code, token, endpoint) {
   return sha256hex(code + token + endpoint);
 }
 
@@ -79,7 +80,7 @@ async function handleChallenge(url, env) {
 }
 
 // ------------------------------------------------------------------------------------------- assinatura eBay
-export function parseSignatureHeader(h) {
+function parseSignatureHeader(h) {
   if (!h || h.length > 4096) return null;
   let o;
   try { o = JSON.parse(new TextDecoder().decode(b64decode(h))); } catch (e) { return null; }
@@ -89,7 +90,7 @@ export function parseSignatureHeader(h) {
 }
 
 // DER (SEQUENCE{INTEGER r, INTEGER s}) → r||s de tamanho fixo (formato exigido pela WebCrypto)
-export function derToP1363(der, size = 32) {
+function derToP1363(der, size = 32) {
   let i = 0;
   if (der[i++] !== 0x30) throw new Error('assinatura DER inválida');
   let len = der[i++];
@@ -112,7 +113,7 @@ function pemToDer(pem) {
   return b64decode(b);
 }
 
-export async function verifyEcdsaSha1(pem, sigB64, data) {
+async function verifyEcdsaSha1(pem, sigB64, data) {
   const key = await crypto.subtle.importKey('spki', pemToDer(pem), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
   const sig = derToP1363(b64decode(sigB64));
   return crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-1' }, key, sig, enc.encode(data));
@@ -133,7 +134,7 @@ async function appToken(env, fetcher) {
   return mem.token;
 }
 
-export async function getPublicKey(env, kid, fetcher = fetch) {
+async function getPublicKey(env, kid, fetcher = fetch) {
   const now = Math.floor(Date.now() / 1000);
   const m = mem.keys.get(kid);
   if (m && m.fetched_at > now - KEY_TTL_S) return m;
@@ -160,7 +161,7 @@ export async function getPublicKey(env, kid, fetcher = fetch) {
 }
 
 // ------------------------------------------------------------------------------------------- POST (notificação)
-export function validateMessage(m) {
+function validateMessage(m) {
   if (!m || typeof m !== 'object' || !m.metadata || !m.notification) return 'mensagem sem metadata/notification';
   if (m.metadata.topic !== TOPIC) return 'tópico não suportado';
   const n = m.notification;
@@ -214,7 +215,7 @@ async function handleNotification(request, env, fetcher) {
 }
 
 // ------------------------------------------------------------------------------------------- autenticação GPI
-export async function syncSignature(token, method, path, ts, nonce, body) {
+async function syncSignature(token, method, path, ts, nonce, body) {
   const key = await crypto.subtle.importKey('raw', enc.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return hex(await crypto.subtle.sign('HMAC', key, enc.encode([method, path, ts, nonce, await sha256hex(body || '')].join('\n'))));
 }
@@ -329,7 +330,7 @@ const SDK_VECTOR = {
   message: { metadata: { topic: TOPIC, schemaVersion: '1.0', deprecated: false }, notification: { notificationId: '49feeaeb-4982-42d9-a377-9645b8479411_33f7e043-fed8-442b-9d44-791923bd9a6d', eventDate: '2021-03-19T20:43:59.462Z', publishDate: '2021-03-19T20:43:59.679Z', publishAttemptCount: 1, data: { username: 'test_user', userId: 'ma8vp1jySJC', eiasToken: ['nY+sHZ2PrBmdj6wV', 'nY+sEZ2PrA2dj6wJ', 'nY+gAZGEpwmdj6x9', 'nY+seQ=='].join('') } } },   // eiasToken: valor público do teste do SDK
 };
 
-export async function selftest() {
+async function selftest() {
   const good = await verifyEcdsaSha1(SDK_VECTOR.pem, SDK_VECTOR.signature, JSON.stringify(SDK_VECTOR.message));
   const tampered = JSON.parse(JSON.stringify(SDK_VECTOR.message));
   tampered.notification.data.username = 'outro_usuario';
@@ -365,7 +366,7 @@ async function handleGpi(request, env, path) {
 }
 
 // ------------------------------------------------------------------------------------------- cron (monitoramento)
-export async function scheduled(env) {
+async function runScheduled(env) {
   try {
     await requeueStale(env);
     await env.DB.prepare('DELETE FROM sync_nonces WHERE ts < ?').bind(Math.floor(Date.now() / 1000) - 2 * SYNC_SKEW_S).run();
@@ -376,7 +377,7 @@ export async function scheduled(env) {
 }
 
 // ------------------------------------------------------------------------------------------- roteamento
-export async function handle(request, env, fetcher = fetch) {
+async function handle(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   if (url.protocol !== 'https:' && !env.ALLOW_HTTP_FOR_TESTS) return json({ error: 'HTTPS obrigatório' }, 400);
   if (url.pathname === NOTIFY_PATH) {
@@ -390,5 +391,5 @@ export async function handle(request, env, fetcher = fetch) {
 
 export default {
   fetch: (request, env) => handle(request, env, fetch),
-  scheduled: (event, env, ctx) => ctx.waitUntil(scheduled(env)),
+  scheduled: (event, env, ctx) => ctx.waitUntil(runScheduled(env)),
 };

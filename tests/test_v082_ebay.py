@@ -217,7 +217,7 @@ def test_hmac_matches_worker_javascript():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js não disponível")
-    js = ("import { syncSignature } from './src/index.js';"
+    js = ("import { W } from './tests/load.mjs'; const { syncSignature } = W;"
           "console.log(await syncSignature('" + TOKEN + "', 'POST', '/gpi/v1/ack', '1762000000', 'abcdefghijklmnop', '{\"a\":1}'));")
     r = subprocess.run([node, "--input-type=module", "-e", js], cwd=ROOT / "cloudflare" / "ebay-notifications",
                        capture_output=True, text=True, timeout=60)
