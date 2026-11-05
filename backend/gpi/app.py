@@ -36,6 +36,7 @@ from .market import service as msv
 from .market.analysis import make_analyzer
 from .products.api import routes as consumer_routes
 from .intel.api import routes as intel_routes
+from .intel.api09 import routes as intel09_routes
 from .regulatory.api import routes as regulatory_routes
 from .reports.api import routes as report_routes
 from .reports.service import ReportService
@@ -858,6 +859,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/models", m_models),
         *consumer_routes(db, sync, cfg, save_user_settings),
         *intel_routes(db, sync, cfg),
+        *intel09_routes(db, sync, cfg),
         *regulatory_routes(db, None),
         *v061_routes(db, sync, cfg, data_dir, save_user_settings),
         *report_routes(reports),

@@ -24,15 +24,22 @@ NLP_SOURCES = ("reddit", "rss", "google_news")
 def process(store: MarketStore, content: ContentStore) -> dict:
     db = store.db
     matcher = ProductMatcher(store.products())
-    rows = db.query("SELECT source, item_id, title, text, product_key, sentiment FROM content_items")
+    rows = db.query("SELECT source, item_id, title, text, product_key, sentiment, lang FROM content_items")
     matched = analysed = 0
+    from ..intel import understanding as U
+    U.ensure(db)
     with db.lock:
         for r in rows:
             sets, vals = [], []
-            if not r["product_key"]:
-                pk = matcher.match(f"{r['title'] or ''} {r['text'] or ''}")
+            # v0.9: vídeos do YouTube só se associam pela correspondência com o produto consultado (understanding.reassess_
+            # content). Antes este casador por palavras reassociava vídeos que a v0.8 tinha rejeitado.
+            if not r["product_key"] and r["source"] != "youtube":
+                u = U.understand(f"{r['title'] or ''}", (r["lang"] or "")[:2] or None)
+                pk = matcher.match(f"{r['title'] or ''} {r['text'] or ''}") if u["estado"] == "confirmada" else None
                 if pk:
                     sets.append("product_key = ?"); vals.append(pk); matched += 1
+                elif u["estado"] in ("ambigua", "provavel"):
+                    U.queue_review(db, r["source"], r["item_id"], r["title"] or "", r["lang"], u)
             if r["sentiment"] is None and r["source"] in NLP_SOURCES:
                 text = r["text"] if (r["text"] and len(r["text"]) > 40) else f"{r['title'] or ''}. {r['text'] or ''}"
                 a = nlp.analyze(text)

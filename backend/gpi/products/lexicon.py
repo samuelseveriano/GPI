@@ -18,11 +18,11 @@ CONCEPTS: dict[str, tuple] = {
     "charger": ("head", "Celulares e acessórios", ["carregador", "carregadores", "fonte de celular"], ["charger", "chargers", "charging adapter", "power adapter"], ["充电器", "充电头"]),
     "cable": ("head", "Celulares e acessórios", ["cabo", "cabos"], ["cable", "cord"], ["数据线", "充电线"]),
     "power_bank": ("head", "Celulares e acessórios", ["power bank", "carregador portátil", "bateria externa", "bateria portátil"], ["power bank", "portable charger", "battery pack"], ["充电宝", "移动电源"]),
-    "phone_case": ("head", "Celulares e acessórios", ["capinha", "capa de celular", "case de celular"], ["phone case"], ["手机壳"]),
+    "phone_case": ("head", "Celulares e acessórios", ["capinha", "capa de celular", "case de celular", "capa para celular", "capa para iphone", "capa para galaxy", "capa para xiaomi", "capa para motorola", "capinha para"], ["phone case", "case for iphone", "case for galaxy"], ["手机壳"]),
     "screen_protector": ("head", "Celulares e acessórios", ["película", "pelicula"], ["screen protector", "tempered glass protector"], ["钢化膜", "手机膜"]),
     "phone_holder": ("head", "Celulares e acessórios", ["suporte de celular", "suporte para celular"], ["phone holder", "phone mount"], ["手机支架"]),
-    "smartphone": ("head", "Celulares e acessórios", ["celular", "smartphone", "iphone", "galaxy"], ["smartphone", "cell phone", "iphone"], ["手机", "智能手机"]),
-    "smartwatch": ("head", "Celulares e acessórios", ["smartwatch", "relógio inteligente", "relogio inteligente", "smartband", "pulseira inteligente"], ["smartwatch", "smart watch", "fitness tracker", "smart band"], ["智能手表", "智能手环"]),
+    "smartphone": ("head", "Celulares e acessórios", ["celular", "smartphone", "iphone", "galaxy", "redmi", "redmi note", "poco x", "poco f", "poco m", "moto g", "moto e", "moto edge", "galaxy a", "galaxy s", "galaxy z"], ["smartphone", "cell phone", "iphone", "redmi", "redmi note", "poco x", "poco f", "moto g", "galaxy a", "galaxy s", "pixel"], ["手机", "智能手机"]),
+    "smartwatch": ("head", "Celulares e acessórios", ["smartwatch", "relógio inteligente", "relogio inteligente", "smartband", "pulseira inteligente"], ["smartwatch", "smart watch", "fitness tracker", "smart band"], ["智能手表", "智能手环", "运动手表", "手表"]),
     "stylus": ("head", "Informática", ["caneta touch", "caneta para tablet"], ["stylus", "stylus pen"], ["触控笔"]),
     # ---- áudio e vídeo
     "earbuds": ("head", "Áudio e vídeo", ["fone de ouvido", "fone bluetooth", "fones de ouvido", "fone", "headphone", "headset", "earbuds"], ["earbuds", "headphones", "earphones", "headset"], ["耳机", "蓝牙耳机"]),
@@ -31,7 +31,7 @@ CONCEPTS: dict[str, tuple] = {
     "microphone": ("head", "Áudio e vídeo", ["microfone"], ["microphone", "mic"], ["麦克风", "话筒"]),
     "projector": ("head", "Áudio e vídeo", ["projetor"], ["projector"], ["投影仪"]),
     "tv_box": ("head", "Áudio e vídeo", ["tv box", "receptor de tv"], ["tv box", "streaming box", "streaming stick"], ["电视盒子", "机顶盒"]),
-    "action_camera": ("head", "Áudio e vídeo", ["câmera de ação", "camera de acao", "câmera esportiva"], ["action camera", "action cam"], ["运动相机"]),
+    "action_camera": ("head", "Áudio e vídeo", ["câmera de ação", "camera de acao", "câmera esportiva", "gopro", "go pro"], ["action camera", "action cam", "gopro", "go pro"], ["运动相机"]),
     "ring_light": ("head", "Áudio e vídeo", ["ring light", "iluminador de anel"], ["ring light"], ["环形灯", "补光灯"]),
     "gimbal": ("head", "Áudio e vídeo", ["estabilizador de celular", "gimbal"], ["gimbal", "phone stabilizer"], ["稳定器"]),
     # ---- informática
@@ -54,7 +54,7 @@ CONCEPTS: dict[str, tuple] = {
     "plug": ("head", "Casa inteligente e segurança", ["tomada", "tomadas", "plugue"], ["plug", "outlet", "socket"], ["插座", "插头"]),
     "switch": ("head", "Casa inteligente e segurança", ["interruptor"], ["light switch", "wall switch"], ["开关"]),
     "alarm": ("head", "Casa inteligente e segurança", ["alarme"], ["alarm", "alarm system"], ["报警器"]),
-    "smart_speaker": ("head", "Casa inteligente e segurança", ["assistente virtual", "alexa", "echo dot", "google nest"], ["smart speaker", "echo dot", "alexa", "google nest"], ["智能音箱"]),
+    "smart_speaker": ("head", "Casa inteligente e segurança", ["assistente virtual", "alexa", "echo dot", "google nest", "caixa de som inteligente", "alto-falante inteligente", "alto falante inteligente", "echo pop"], ["smart speaker", "echo dot", "alexa", "google nest", "echo pop"], ["智能音箱"]),
     "safe": ("head", "Casa inteligente e segurança", ["cofre"], ["safe", "safe box"], ["保险箱"]),
     # ---- iluminação
     "lamp": ("head", "Iluminação", ["luminária", "luminaria", "abajur", "luz", "refletor", "arandela", "spot"], ["lamp", "light", "floodlight", "fixture", "lights"], ["灯", "台灯", "灯具", "照明灯"]),
@@ -112,7 +112,7 @@ CONCEPTS: dict[str, tuple] = {
     "hair_dryer": ("head", "Beleza e cuidados pessoais", ["secador de cabelo", "secador"], ["hair dryer"], ["吹风机"]),
     "hair_straightener": ("head", "Beleza e cuidados pessoais", ["chapinha", "prancha alisadora", "escova secadora", "modelador de cachos"], ["hair straightener", "flat iron", "curling iron", "hot air brush"], ["直发器", "卷发棒"]),
     "shaver": ("head", "Beleza e cuidados pessoais", ["barbeador", "aparador de pelos", "máquina de cortar cabelo", "maquina de cortar cabelo"], ["shaver", "trimmer", "hair clipper"], ["剃须刀", "理发器"]),
-    "toothbrush": ("head", "Beleza e cuidados pessoais", ["escova de dentes elétrica", "escova de dentes eletrica", "escova elétrica"], ["electric toothbrush"], ["电动牙刷"]),
+    "toothbrush": ("head", "Beleza e cuidados pessoais", ["escova de dentes elétrica", "escova de dentes eletrica", "escova elétrica", "escova de dente elétrica", "escova de dente eletrica", "escova de dentes sônica", "escova de dente sônica"], ["electric toothbrush"], ["电动牙刷"]),
     "massager": ("head", "Saúde", ["massageador", "pistola de massagem"], ["massager", "massage gun"], ["按摩器", "筋膜枪"]),
     "scale": ("head", "Saúde", ["balança corporal", "balança digital", "balanca digital", "balança de bioimpedância", "balanca de bioimpedancia", "balança inteligente"], ["bathroom scale", "smart scale"], ["体重秤", "体脂秤"]),
     "thermometer": ("head", "Saúde", ["termômetro", "termometro"], ["thermometer"], ["温度计", "体温计"]),
@@ -171,7 +171,7 @@ QUALIFIERS = {
 STOP_ZH = {"最好", "推荐", "哪个", "好", "便宜", "价格", "多少钱", "评测", "怎么", "的", "什么", "排行", "排行榜"}
 
 # Marcas frequentes (atributo 'marca'; não definem o produto)
-BRANDS = {"apple", "samsung", "xiaomi", "redmi", "motorola", "lg", "sony", "jbl", "philips", "mondial", "britania",
+BRANDS = {"sandisk", "thunderx3", "magcubic", "amazon", "kingston", "lenovo", "tcl", "hisense", "blitzwolf", "aukey", "haylou", "soundpeats", "edifier", "xgimi", "apple", "samsung", "xiaomi", "redmi", "motorola", "lg", "sony", "jbl", "philips", "mondial", "britania",
           "britânia", "arno", "electrolux", "midea", "intelbras", "positivo", "multilaser", "anker", "baseus", "ugreen",
           "dji", "gopro", "bosch", "makita", "dewalt", "black+decker", "black decker", "wap", "karcher", "kärcher",
           "ls2", "shoei", "agv", "norisk", "pro tork", "protork", "ebf", "x11", "givi", "tp-link", "tplink", "huawei",

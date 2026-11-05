@@ -34,6 +34,8 @@ def make_analyzer(cfg: dict | None = None):
         step("descoberta", lambda: _discovery(store, cfg))
         step("derivadas", lambda: intel.build_derived(store))
         step("conteudo", lambda: content_intel.process(store, ContentStore(store.db)))
+        from ..intel import understanding as _U                  # v0.9: reavalia vídeos e registra a taxonomia
+        step("compreensao_produtos", lambda: (_U.reassess_content(store.db), _U.build_taxonomy(store.db)))
         # oportunidades/clusters primeiro (o painel é publicado rápido); previsões depois,
         # e o ranking é recalculado ao fim para incorporar as previsões novas
         step("oportunidades", lambda: _intel(store))

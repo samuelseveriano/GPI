@@ -22,7 +22,9 @@ class ContentStore:
                                              (source, r["item_id"])).fetchone()
                 m = json.dumps(r.get("metrics"), ensure_ascii=False) if r.get("metrics") is not None else None
                 if exists:
-                    pk = exists[0] if keep_product or not r.get("product_key") else r.get("product_key")
+                    # v0.9: a reavaliação vence — se a nova correspondência rejeita o produto, a associação antiga sai
+                    # (antes ela ficava para sempre: causa do vídeo de campainha associado à fechadura)
+                    pk = exists[0] if keep_product else r.get("product_key")
                     self.db.con.execute(
                         "UPDATE content_items SET title = ?, text = ?, metrics = COALESCE(?, metrics), refreshed_at = ?,"
                         " product_key = ? WHERE source = ? AND item_id = ?",
