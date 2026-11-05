@@ -21,6 +21,7 @@ binaries, datas = [], [
     (os.path.join(ROOT, "docs"), "docs"),
     (os.path.join(ROOT, "backend", "gpi", "reports", "fonts"), os.path.join("gpi", "reports", "fonts")),   # DejaVu (PDF)
     (os.path.join(ROOT, "backend", "gpi", "compliance", "kb"), os.path.join("gpi", "compliance", "kb")),  # v0.7: base regulatória
+    (os.path.join(ROOT, "backend", "gpi", "intel", "data"), os.path.join("gpi", "intel", "data")),   # v0.8: conjuntos rotulados (Gate 2)
 ]
 # v0.6: ReportLab (PDF dos relatórios) — módulos carregados dinamicamente e dados (fontes padrão, mapas CID)
 hidden += collect_submodules("reportlab", filter=lambda n: ".test" not in n)

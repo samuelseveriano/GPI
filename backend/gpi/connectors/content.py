@@ -272,9 +272,18 @@ class YouTube(Connector):
 
     @staticmethod
     def parse_videos(payload, product_key=None, query=None) -> list[dict]:
+        from ..intel.matching import match, market_of
         rows = []
         for v in payload["items"]:
             sn, st = v.get("snippet", {}), v.get("statistics", {})
+            lang = sn.get("defaultAudioLanguage") or sn.get("defaultLanguage")
+            # v0.8: o vídeo só fica associado ao produto da consulta se o TÍTULO falar desse produto (mesma família e
+            # variante compatível). Entretenimento, outro produto ou variante diferente → sem associação (termo preservado).
+            corr = None
+            if product_key and sn.get("title"):
+                m = match(sn["title"], (lang or "")[:2] or None, target=product_key)
+                corr = {"estado": m.get("estado_alvo", m["estado"]), "relacao": m.get("relacao_alvo"), "motivos": m["motivos"][:2]}
+            mk = market_of(lang, YouTube.REGION)
             vid = v.get("id")
             require(isinstance(vid, str) and sn.get("title"), "YouTube videos.list: item sem id/título")
             metrics = {k: int(st[k]) for k in ("viewCount", "likeCount", "commentCount") if str(st.get(k, "")).isdigit()}
@@ -282,8 +291,11 @@ class YouTube(Connector):
                          "text": (sn.get("description") or "")[:300], "url": f"https://www.youtube.com/watch?v={vid}",
                          "author": sn.get("channelTitle"), "published_at": (sn.get("publishedAt") or "")[:10] or None,
                          "lang": sn.get("defaultAudioLanguage") or sn.get("defaultLanguage"),
-                         "category": sn.get("categoryId"), "product_key": product_key, "query": query,
-                         "metrics": {**metrics, "tipos": YouTube.classify(sn["title"])}})
+                         "category": sn.get("categoryId"),
+                         "product_key": product_key if (corr is None or corr["estado"] == "confirmada") else None, "query": query,
+                         "metrics": {**metrics, "tipos": YouTube.classify(sn["title"]), "correspondencia": corr,
+                                     "produto_consultado": product_key, "mercado": mk["mercado"], "pais_da_consulta": mk["pais_da_consulta"],
+                                     "nota_mercado": mk["nota"]}})
         return rows
 
     def run(self, job, ctx):

@@ -23,7 +23,8 @@ import numpy as np
 
 STATUS = {"emergente": "EMERGENTE", "crescimento": "EMERGENTE", "crescimento consistente": "CRESCIMENTO CONSISTENTE",
           "crescimento acelerado": "ACELERAÇÃO", "estável": "ESTÁVEL", "sazonal": "SAZONAL",
-          "possível saturação": "POSSÍVEL SATURAÇÃO", "declínio": "DECLÍNIO", "sem dados": "EVIDÊNCIA INSUFICIENTE"}
+          "possível saturação": "POSSÍVEL SATURAÇÃO", "declínio": "DECLÍNIO", "sem dados": "EVIDÊNCIA INSUFICIENTE",
+          "presença recorrente": "ESTÁVEL"}
 GROWING = {"EMERGENTE", "CRESCIMENTO CONSISTENTE", "ACELERAÇÃO"}
 KIND_RANK = {"busca": 0, "busca_ranking": 1, "atencao": 2, "popularidade": 3}
 NEXT = {"ACELERAÇÃO": "Investigar preços, concorrência, especificações e fornecedores; acompanhar se a aceleração se mantém.",

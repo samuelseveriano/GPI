@@ -363,6 +363,35 @@ MIGRATIONS = [
             provincia TEXT, site TEXT, contato TEXT, produtos TEXT, certificacoes TEXT, observacoes TEXT,
             fonte TEXT NOT NULL DEFAULT 'informado pelo usuário', criado_em TEXT NOT NULL, atualizado_em TEXT NOT NULL)""",
     ],
+    # v9 (v0.8): inteligência regulatória (registros oficiais completos, consultas assistidas) e lista de investigação
+    [
+        """CREATE TABLE IF NOT EXISTS anatel_registros (
+            numero_homologacao TEXT, data_homologacao TEXT, solicitante TEXT, cnpj_solicitante TEXT, certificado TEXT,
+            data_certificado TEXT, validade_certificado TEXT, situacao_certificado TEXT, situacao_requerimento TEXT,
+            fabricante TEXT, pais_fabricante TEXT, modelo TEXT, modelo_chave TEXT, nome_comercial TEXT, categoria TEXT,
+            tipo_produto TEXT, antena TEXT, ativo TEXT)""",
+        "CREATE INDEX IF NOT EXISTS idx_anr_mod ON anatel_registros(modelo_chave)",
+        "CREATE INDEX IF NOT EXISTS idx_anr_num ON anatel_registros(numero_homologacao)",
+        "CREATE INDEX IF NOT EXISTS idx_anr_sol ON anatel_registros(cnpj_solicitante)",
+        "CREATE INDEX IF NOT EXISTS idx_anr_tipo ON anatel_registros(tipo_produto)",
+        """CREATE TABLE IF NOT EXISTS inmetro_registros (
+            numero_registro TEXT, razao_social TEXT, cnpj TEXT, fabricante TEXT, marca TEXT, modelo TEXT, modelo_chave TEXT,
+            objeto TEXT, certificado TEXT, organismo TEXT, programa TEXT, situacao TEXT, data_registro TEXT, validade TEXT,
+            extra TEXT)""",
+        "CREATE INDEX IF NOT EXISTS idx_inr_mod ON inmetro_registros(modelo_chave)",
+        "CREATE INDEX IF NOT EXISTS idx_inr_num ON inmetro_registros(numero_registro)",
+        """CREATE TABLE IF NOT EXISTS regulatory_lookups (
+            id INTEGER PRIMARY KEY, orgao TEXT NOT NULL, fonte_url TEXT NOT NULL, data_consulta TEXT NOT NULL,
+            produto_id TEXT, consulta TEXT NOT NULL, numero_registro TEXT, resultado TEXT NOT NULL, informacoes TEXT,
+            responsavel TEXT, criado_em TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS investigations (
+            id INTEGER PRIMARY KEY, produto_id TEXT, produto TEXT NOT NULL, estado TEXT NOT NULL, motivo TEXT,
+            evidencias TEXT, fontes TEXT, fornecedores TEXT, concorrentes TEXT, exigencias TEXT, documentos TEXT,
+            proximas_acoes TEXT, criado_em TEXT NOT NULL, atualizado_em TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS investigation_events (
+            id INTEGER PRIMARY KEY, investigation_id INTEGER NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+            estado TEXT NOT NULL, nota TEXT, criado_em TEXT NOT NULL)""",
+    ],
 ]
 
 

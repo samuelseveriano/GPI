@@ -39,6 +39,7 @@ def make_analyzer(cfg: dict | None = None):
         step("oportunidades", lambda: _intel(store))
         step("previsoes", lambda: _forecasts(store, cfg, state))
         step("consumo", lambda: _consumer(store, cfg, state, forecasts=True))
+        step("inteligencia_v08", lambda: _intel08(store, cfg))
         step("social", lambda: _social(store, cfg))
         step("oportunidades3", lambda: _opportunity3(store))
         if cfg.get("ml_global_enabled", False):
@@ -52,7 +53,7 @@ def make_analyzer(cfg: dict | None = None):
         return _consumer(store, cfg, state, forecasts=False)
 
     analyze.quick = quick
-    analyze.steps = 10 + (1 if cfg.get("ml_global_enabled", False) else 0)   # etapas reais (progresso da análise)
+    analyze.steps = 11 + (1 if cfg.get("ml_global_enabled", False) else 0)   # etapas reais (progresso da análise)
     return analyze
 
 
@@ -67,6 +68,18 @@ def _advanced(store, cfg, state):
             store.db.execute("INSERT OR IGNORE INTO drift_events (series_id, detector, ref_date, direction, detail, created_at)"
                              " VALUES (?, ?, ?, ?, ?, ?)", (e["serie"], e["detector"], e["data"], e["direcao"], e.get("nome"), now))
     return {"grupos": len(res["grupos"]), "mudancas": len(res["drift"]), "segundos": res["segundos"]}
+
+
+def _intel08(store, cfg):
+    """v0.8: qualidade (gates) → fusão (PIFE) → insights → resultado único para dashboard, dossiê e relatórios."""
+    from datetime import date
+    from ..intel import service
+    from ..products.catalog import Catalog
+    prods = {p["product_id"]: p for p in Catalog(store.db, cfg).products()}
+    res = service.compute(store.db, store.load_result("consumer") or {}, prods, date.today())
+    store.save_result(service.RESULT, res)
+    return {"produtos": len(res["produtos"]), "investigar": sum(1 for r in res["ranking"] if r["nivel"] == "investigar"),
+            "gates": {k: v["status"] for k, v in res["gates"].items()}, "segundos": res["segundos"]}
 
 
 def _social(store, cfg):

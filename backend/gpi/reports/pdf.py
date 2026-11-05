@@ -420,17 +420,21 @@ def write(ds: dict, path) -> dict:
             if d:
                 story += [CondPageBreak(70 * mm), d, Spacer(1, 8)]
     # ---- seções
+    compact = bool(ds.get("compacto"))
     for name, tables in sections:
         wide = any(t.get("largura") == "larga" for t in tables)
-        story.append(NextPageTemplate("paisagem" if wide else "retrato"))
-        story.append(PageBreak())
+        if compact and not wide:          # v0.8: executivo curto — seções encadeadas, quebra só quando falta espaço
+            story.append(CondPageBreak(60 * mm))
+        else:
+            story.append(NextPageTemplate("paisagem" if wide else "retrato"))
+            story.append(PageBreak())
         story.append(heading({"Oportunidades": "Principais oportunidades" if ex else "Oportunidades"}.get(name, name)))
         for t in tables:
             limit = 60 if t["id"] in ("historico", "brutos", "social_indicadores") else 150
             story += pdf_table(t, lw if wide else pw, limit)
     if ex:
         story.append(NextPageTemplate("retrato"))
-        story.append(PageBreak())
+        story.append(CondPageBreak(80 * mm) if compact else PageBreak())
         from .data import table
         story.append(heading("Riscos"))
         story += pdf_table(table("riscos", "Riscos mais frequentes", [("risco", "Risco"), ("produtos", "Produtos afetados", "inteiro")],
