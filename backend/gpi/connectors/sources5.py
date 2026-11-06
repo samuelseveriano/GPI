@@ -278,6 +278,8 @@ class EbayBrowse(Connector):
 
 # ============================================================================ GDELT
 def parse_gdelt_timeline(payload: dict) -> list[tuple[str, float, float | None]]:
+    if isinstance(payload, dict) and not payload:
+        return []          # o GDELT devolve {} quando nenhum artigo cita o termo (sem dados, não é erro de formato)
     require(isinstance(payload, dict) and isinstance(payload.get("timeline"), list), "GDELT: resposta sem 'timeline'")
     out = []
     for s in payload["timeline"]:
