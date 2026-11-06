@@ -35,7 +35,7 @@ jobs:
           cat audit.log | tail -40
           { echo "### Auditoria v0.8.1 com dados reais"; echo '```'; tail -20 audit.log | cut -c1-600; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $code
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: auditoria-dados-reais-v081
