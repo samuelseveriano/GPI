@@ -153,7 +153,8 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             from .intel.api import _payload_for_v09
             from .suite import monitor as _MON
             out["monitorados"] = _MON.refresh(db, lambda: _payload_for_v09(db, sync, cfg),
-                                              lambda: _D.stages(_payload_for_v09(db, sync, cfg), db, sync.today_fn()), sync.today_fn())
+                                              lambda: _D.stages(_payload_for_v09(db, sync, cfg), db, sync.today_fn()), sync.today_fn(),
+                                              sync.context)
         except Exception as e:  # noqa: BLE001
             log.exception("falha ao atualizar monitorados")
             out["monitorados"] = {"erro": str(e)}

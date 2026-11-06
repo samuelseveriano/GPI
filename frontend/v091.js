@@ -32,14 +32,16 @@ window.GPI_V091 = function (H, PAGES) {
         <label class="f" id="rfc" hidden>De<input type="date" name="inicio"></label><label class="f" id="rfd" hidden>Até<input type="date" name="fim"></label>
         <label class="f">Objetivo<select name="objetivo"><option>importar para revenda</option><option>avaliar demanda</option><option>comparar mercados</option><option>encontrar fornecedores</option><option>monitorar</option></select></label>
         <label class="f">Profundidade<select name="profundidade"><option value="rapida">Rápida</option><option value="completa">Completa (inclui previsões)</option></select></label>
-        <button class="btn primary">Pesquisar</button></div></form><div id="rout"></div>`;
+        <label class="small"><input type="checkbox" name="atualizar"> atualizar fontes (ignorar cache)</label>
+        <button class="btn primary">Pesquisar</button></div>
+        <p class="small muted">Rápida: cache primeiro e poucas fontes do mercado principal. Completa: reaproveita a rápida, consulta fontes adicionais e os mercados de comparação, e roda as análises estatísticas.</p></form><div id="rout"></div>`;
     const f = $('#rf');
     f.periodo_meses.onchange = () => { const c = f.periodo_meses.value === 'custom'; $('#rfc').hidden = !c; $('#rfd').hidden = !c; };
     f.onsubmit = async (ev) => {
       ev.preventDefault();
       const b = { consulta: f.consulta.value, mercado: f.mercado.value, comparacao: f.comparacao.value.split(/[,; ]+/).filter(Boolean),
         periodo_meses: f.periodo_meses.value === 'custom' ? 12 : +f.periodo_meses.value, inicio: f.periodo_meses.value === 'custom' ? f.inicio.value : null,
-        fim: f.periodo_meses.value === 'custom' ? f.fim.value : null, objetivo: f.objetivo.value, profundidade: f.profundidade.value };
+        fim: f.periodo_meses.value === 'custom' ? f.fim.value : null, objetivo: f.objetivo.value, profundidade: f.profundidade.value, atualizar: f.atualizar.checked };
       try { const r = await post('/api/suite/pesquisa', b); location.hash = '#pesquisa-produtos/' + encodeURIComponent(qs({ id: r.id })); } catch (e) { $('#rout').innerHTML = errBox(e); }
     };
     if (a.id) await follow(+a.id); else if (a.q && a.auto === '1') f.requestSubmit();
@@ -50,10 +52,16 @@ window.GPI_V091 = function (H, PAGES) {
       let j;
       try { j = await api('/api/suite/pesquisa/' + id); } catch (e) { out.innerHTML = errBox(e); return; }
       if ($('#rf') && j.query) $('#rf').consulta.value = j.query;
-      const p = j.progresso;
-      out.innerHTML = `<section class="panel"><p><b>${escH(j.query)}</b> · ${escH(j.status)} · ${p.concluidas}/${p.total} etapas</p>
-        <div class="pbar"><div style="width:${p.pct}%"></div></div>
-        <ol class="small">${j.steps.map((s) => `<li>${escH(s.nome)} — <span class="badge ${s.estado === 'concluída' ? 'ok' : s.estado === 'falhou' ? 'bad' : ''}">${escH(s.estado)}</span> <span class="muted">${escH(s.detalhe || '')}</span></li>`).join('')}</ol></section><div id="rdos"></div>`;
+      const p = j.progresso, cov = j.cobertura, fin = (j.result || {}).mensagem_final;
+      const SB = { 'concluída com dados': 'ok', 'concluída sem dados': 'demo', 'não autorizada': 'bad', 'indisponível': 'bad', 'falhou': 'bad', 'cancelada': '' };
+      out.innerHTML = `<section class="panel"><p><b>${escH(j.query)}</b> · ${escH(j.status)} ${j.finished_at ? '' : '<button class="btn small" id="rcancel">Cancelar</button>'}</p>
+        <div class="two"><div><p class="small"><b>Progresso do processamento</b>: ${p.encerradas}/${p.total} etapas encerradas (${p.pct}%)</p><div class="pbar"><div style="width:${p.pct}%"></div></div>
+          <p class="small muted">${escH(Object.entries(p.por_estado || {}).map(([k, v]) => `${v} ${k}`).join(' · '))}</p></div>
+        <div><p class="small"><b>Cobertura da investigação</b>: ${cov ? `${cov.fontes_com_evidencia} fonte(s) com evidência útil · ${cov.registros_validos} registro(s) válidos · capacidades: ${escH(cov.capacidades_cobertas.join(', ') || 'nenhuma')}` : 'calculada ao fim do processamento'}</p>
+          ${cov ? `<div class="pbar"><div style="width:${Math.min(100, 100 * cov.fontes_com_evidencia / Math.max(1, cov.fontes_previstas + 1))}%;background:${cov.fontes_com_evidencia ? 'var(--accent)' : 'var(--bad, #c33)'}"></div></div>` : ''}</div></div>
+        ${fin ? `<div class="banner ${(j.result || {}).conclusiva ? 'info' : ''}"><b>${escH(fin)}</b></div>` : ''}
+        <details ${j.finished_at ? '' : 'open'}><summary class="small">Etapas</summary><ol class="small">${j.steps.map((s) => `<li>${escH(s.nome)} — <span class="badge ${SB[s.estado] || ''}">${escH(s.estado)}</span> <span class="muted">${escH(s.detalhe || '')}</span></li>`).join('')}</ol></details></section><div id="rdos"></div>`;
+      if ($('#rcancel')) $('#rcancel').onclick = async () => { await post(`/api/suite/pesquisa/${id}/cancelar`, {}); };
       if (j.result) { renderDossier(j, $('#rdos')); return; }
       if (!location.hash.startsWith('#pesquisa-produtos')) return;
       await new Promise((r) => setTimeout(r, 700));
@@ -62,17 +70,24 @@ window.GPI_V091 = function (H, PAGES) {
   function renderDossier(j, box) {
     const R = j.result, A = R.abas, ov = A.visao_geral || {};
     const pid = ov.produto_id;
+    const idf = ov.identificacao || {};
     box.innerHTML = `<section class="panel"><h2>${escH(ov.produto || R.consulta)} ${dec(R.decisao)}</h2>
+      <p class="small muted">${idf.familia ? `Família: ${escH(idf.familia.nome)}${idf.variante ? ' · variante: ' + escH(idf.variante.rotulo) : ''} · ` : ''}${escH(Object.entries(idf.traducoes || {}).map(([k, v]) => `${k}: ${v}`).join(' · '))}${pid ? ` · <span title="identificador canônico interno">ID ${escH(pid)}</span>` : ''} · modo ${escH(R.modo || '')}${ov.registro_criado ? ' · <b>registro canônico criado nesta pesquisa</b>' : ''}</p>
       <p class="small">${escH((R.decisao || {}).significado || '')}</p>${notes((R.decisao || {}).motivos)}
-      <div class="btnrow" style="flex-wrap:wrap">${pid ? `<button class="btn small" id="dmon">Monitorar</button>` : ''}<button class="btn small" id="dsave">${j.saved ? 'Salva ✓' : 'Salvar pesquisa'}</button>
+      <div class="btnrow" style="flex-wrap:wrap"><button class="btn small" id="dmon">Monitorar semanalmente</button><button class="btn small" id="dsave">${j.saved ? 'Salva ✓' : 'Salvar pesquisa'}</button>
         <a class="btn small" href="/api/suite/pesquisa/${j.id}.xlsx">Exportar XLSX</a><a class="btn small" href="/api/suite/pesquisa/${j.id}.pdf">Exportar PDF</a>
         ${ov.investigar_url ? `<a class="btn small" href="${ov.investigar_url}">Abrir dossiê / Investigar</a>` : ''}
         <a class="btn small" href="#palavras-chave/${encodeURIComponent(qs({ termo: R.consulta }))}">Palavras-chave</a>
-        <a class="btn small" href="#fornecedores-intel/${encodeURIComponent(qs({ q: R.consulta }))}">Investigar fornecedores</a>
+        <a class="btn small" href="#fornecedores-intel/${encodeURIComponent(qs({ q: ov.produto || R.consulta }))}">Investigar fornecedores</a>
         <a class="btn small" href="#importacao-intel/${encodeURIComponent(qs({ q: R.consulta, produto: pid || '' }))}">Investigação de importação</a>
         <a class="btn small" href="#pesquisa-imagem">Pesquisa por imagem</a><span id="dmsg" class="small"></span></div>
+      <details class="panel" open><summary><b>Fontes e cobertura desta investigação</b></summary>${tbl([['fonte', 'Fonte'], ['capacidade', 'Capacidade requerida'], ['mercado', 'Mercado'],
+        ['estado_integracao', 'Integração'], ['autenticacao', 'Autenticação'], ['consulta_realizada', 'Consultada', (r) => r.consulta_realizada ? 'sim' : 'não'],
+        ['estado', 'Resultado', (r) => `<span class="badge ${['com dados', 'cache válido'].includes(r.estado) ? 'ok' : ['não autorizada', 'indisponível', 'falhou'].includes(r.estado) ? 'bad' : ''}">${escH(r.estado)}</span>`],
+        ['registros', 'Registros válidos', (r) => num(r.registros)], ['motivo', 'Motivo da ausência', (r) => escH(r.motivo || (r.cache ? 'cache ' + r.cache : '') || '—')],
+        ['ultima_coleta', 'Última coleta', (r) => escH((r.ultima_coleta || '—').slice(0, 16))], ['acao', 'Ação recomendada', (r) => escH(r.acao || '—')]], R.fontes || [], 'Diagnóstico indisponível.')}</details>
       <div class="tabs" id="dtabs">${TABS.map(([k, l], i) => `<button class="btn small ${i ? '' : 'primary'}" data-t="${k}">${l}</button>`).join('')}</div><div id="dtab"></div></section>`;
-    if (pid) $('#dmon').onclick = () => monitor('produto', pid, ov.produto, $('#dmsg'));
+    $('#dmon').onclick = async () => { try { const r = await post(`/api/suite/pesquisa/${j.id}/monitorar`, {}); $('#dmsg').innerHTML = `<span class="badge ok">monitoramento semanal</span> termos: ${escH(Object.values(r.parametros.termos).join(' / '))} · mercado ${escH(r.parametros.mercado)} · <a href="#monitorados">ver</a>`; } catch (e) { $('#dmsg').innerHTML = errBox(e); } };
     $('#dsave').onclick = async () => { await post(`/api/suite/pesquisa/${j.id}/salvar`, { salvar: true }); $('#dsave').textContent = 'Salva ✓'; };
     const show = (k) => { document.querySelectorAll('#dtabs [data-t]').forEach((b) => b.classList.toggle('primary', b.dataset.t === k)); $('#dtab').innerHTML = TAB[k](A[k] || {}, R); };
     document.querySelectorAll('#dtabs [data-t]').forEach((b) => { b.onclick = () => show(b.dataset.t); });
@@ -92,8 +107,11 @@ window.GPI_V091 = function (H, PAGES) {
     marketplaces: (t) => { const s = t.ultimos_30_dias || t.ultimos_90_dias; return `${s ? `<section class="kpis compact">${[['Anúncios', s.anuncios], ['Vendedores', s.vendedores_distintos], ['Marcas', s.marcas_distintas], ['Preço mediano', s.preco_mediano], ['HHI (anúncios)', s.concentracao_anuncios_hhi]].map(([l, v]) => `<div class="kpi"><div class="v">${num(v, 2)}</div><div class="l">${l}</div></div>`).join('')}</section><p class="small">Janela: ${s.janela_dias} dias · moeda ${escH(s.moeda || '—')} · competição: <b>${escH(t.competicao)}</b> · fontes: ${escH(s.fontes.join(', '))}</p>` : ''}
       ${tbl([['titulo', 'Anúncio', (r) => `<a href="#mkt-intel/${encodeURIComponent(qs({ ref: r.item_id }))}">${escH(r.title)}</a>`], ['brand', 'Marca'], ['price', 'Preço', (r) => num(r.price, 2) + ' ' + escH(r.currency || '')], ['seller', 'Vendedor (pseud.)'], ['dia', 'Última obs.'], ['source', 'Fonte']], t.anuncios, t.vazio)}
       ${notes([t.aviso, 'Não disponível: ' + (t.nao_disponivel || []).join(', ')])}`; },
-    semelhantes: (t) => tbl([['nome', 'Produto', (r) => `<a href="${goResearch(r.nome)}">${escH(r.nome)}</a>`], ['relacao', 'Relação'], ['situacao', 'Situação'], ['opportunity_score', 'Score', (r) => num(r.opportunity_score, 1)], ['anuncios_30d', 'Anúncios 30d', (r) => num(r.anuncios_30d)]], t.itens, t.vazio) + notes([t.nota]),
-    fornecedores: (t) => tbl([['empresa', 'Empresa', (r) => r.company_id ? `<a href="#fornecedores-intel/${encodeURIComponent(qs({ id: r.company_id }))}">${escH(r.empresa)}</a>` : escH(r.empresa)], ['pais', 'País'], ['tipo', 'Tipo'], ['confianca', 'Confiança'], ['motivos', 'Motivos', (r) => escH(r.motivos.join('; '))], ['fontes', 'Fontes', (r) => escH(r.fontes.join(', '))]], t.candidatos, t.vazio) + notes([t.aviso]),
+    semelhantes: (t) => (t.classes || []).map((c) => (t.grupos[c] || []).length ? `<h3>${escH(c)}</h3>${tbl([['nome', 'Produto', (r) => `<a href="${goResearch(r.nome)}">${escH(r.nome)}</a>`], ['motivo', 'Por quê'], ['situacao', 'Situação'], ['opportunity_score', 'Score', (r) => num(r.opportunity_score, 1)], ['anuncios_30d', 'Anúncios 30d', (r) => num(r.anuncios_30d)]], t.grupos[c])}` : '').join('') + (t.itens && t.itens.length ? '' : `<p class="small muted">${escH(t.vazio || 'Nenhum produto relacionado.')}</p>`) + notes(t.avisos),
+    fornecedores: (t) => tbl([['empresa', 'Empresa', (r) => r.company_id ? `<a href="#fornecedores-intel/${encodeURIComponent(qs({ id: r.company_id }))}">${escH(r.empresa)}</a>` : escH(r.empresa)], ['pais', 'País'],
+      ['produto_relacionado', 'Produto relacionado', () => escH(t.produto || t.consulta)], ['tipo_correspondencia', 'Tipo de correspondência'], ['comprovacao', 'Comprovação'],
+      ['fontes', 'Fonte', (r) => escH(r.fontes.join(', '))], ['evid', 'Evidência', (r) => escH((r.correspondencias || []).map((c) => c.evidencia).join(' | '))],
+      ['confianca', 'Confiança'], ['limitacoes', 'Limitações', (r) => escH((r.limitacoes || []).join(' · '))]], t.candidatos, t.vazio) + notes([t.aviso]),
     importacao: (t) => `<h3>NCM candidatas</h3>${tbl([['codigo', 'NCM'], ['descricao', 'Descrição'], ['pontuacao', 'Pontos']], (t.ncm || {}).candidatas, (t.ncm || {}).sem_tabela ? 'Tabela NCM não carregada (Conformidade › Classificação NCM).' : 'Nenhuma candidata.')}
       <h3>Estatísticas agregadas (Comex Stat)</h3>${tbl([['series_key', 'Série'], ['indicator', 'Indicador'], ['country', 'País'], ['ultimos_12', 'Últimos 12 períodos', (r) => num(r.ultimos_12, 0)], ['fim', 'Até']], (t.ncm || {}).estatisticas_agregadas, 'Sem séries do Comex Stat para as NCM candidatas.')}
       ${notes((t.ncm || {}).avisos)}<h3>Regulatório (preliminar)</h3><p class="small">${num((t.regulatorio || {}).registros_encontrados)} registro(s) de produtos semelhantes. ${escH((t.regulatorio || {}).regra || '')}</p>
@@ -227,7 +245,7 @@ window.GPI_V091 = function (H, PAGES) {
     const results = (r) => {
       $('#imout').innerHTML = `<section class="panel"><h2>Resultados (${r.resultados.length} de ${r.catalogo_total} imagem(ns) no catálogo) · ${escH(r.nivel)}</h2>
         <p class="small">Consulta: ${escH(r.consulta.formato)} ${r.consulta.largura}×${r.consulta.altura}${r.consulta.recorte ? ' (recortada)' : ''} · metadados removidos · não gravada.</p>
-        ${r.resultados.length ? `<div class="imgrid">${r.resultados.map((x) => `<figure><img src="${x.miniatura}" alt="" loading="lazy"><figcaption><span class="badge">${escH(x.classe)}</span> ${num(x.similaridade, 2)}<br>${escH(x.rotulo || '')}${x.product_id ? `<br><a href="${goResearch(x.product_id.replace(/[+:]/g, ' '))}">Pesquisar Mercado</a> · <a href="#fornecedores-intel/${encodeURIComponent(qs({ q: x.product_id.replace(/[+:]/g, ' ') }))}">Investigar Fornecedores</a> · <a href="#" data-mi="${escH(x.product_id)}">Monitorar</a>` : ''}<br><span class="muted">${escH(x.motivos.join(' · '))}</span></figcaption></figure>`).join('')}</div>` : '<p class="small muted">Nenhuma correspondência no catálogo visual. Adicione imagens de referência ao catálogo.</p>'}
+        ${r.resultados.length ? `<div class="imgrid">${r.resultados.map((x) => `<figure><img src="${x.miniatura}" alt="" loading="lazy"><figcaption><span class="badge">${escH(x.classe)}</span> ${num(x.similaridade, 2)}<br>${escH(x.nome_comercial || x.rotulo || '')}${(x.nome_comercial || x.rotulo) ? `<br><a href="${goResearch(x.nome_comercial || x.rotulo)}">Pesquisar Mercado</a> · <a href="#fornecedores-intel/${encodeURIComponent(qs({ q: x.nome_comercial || x.rotulo }))}">Investigar Fornecedores</a>` : ''}${x.product_id ? ` · <a href="#" data-mi="${escH(x.product_id)}">Monitorar</a>` : ''}<br><span class="muted">${escH(x.motivos.join(' · '))}</span></figcaption></figure>`).join('')}</div>` : '<p class="small muted">Nenhuma correspondência no catálogo visual. Adicione imagens de referência ao catálogo.</p>'}
         <p class="small"><b>${escH(r.aviso)}</b></p><p class="small muted">${escH(r.nota_similaridade)}</p>
         <h3>Busca reversa assistida (abre no seu navegador)</h3><ul class="small">${r.busca_externa.servicos.map((s) => `<li>${escH(s.servico)}: ${s.por_url ? `<a href="${escH(s.por_url)}" target="_blank" rel="noopener noreferrer">buscar esta URL</a>` : `<a href="${escH(s.abrir)}" target="_blank" rel="noopener noreferrer">abrir página de envio</a> (envio manual, se você quiser)`}</li>`).join('')}</ul>${notes(r.busca_externa.regras)}<div id="immsg" class="small"></div></section>`;
       document.querySelectorAll('[data-mi]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); monitor('produto', a.dataset.mi, a.dataset.mi, $('#immsg')); }; });
@@ -253,7 +271,7 @@ window.GPI_V091 = function (H, PAGES) {
       <section class="panel"><h2>Empresas</h2><form class="btnrow" id="ss"><input name="q" placeholder="nome" value="${escH(a.nome || '')}"><select name="tipo"><option value="">tipo</option></select><input name="pais" size="4" placeholder="país"><button class="btn small">Buscar</button></form><div id="sl">${loading()}</div></section>
       <details class="panel"><summary><b>Cadastrar empresa</b></summary><form id="sa" class="btnrow" style="flex-wrap:wrap">${[['legal_name', 'Razão social*'], ['display_name', 'Nome exibido'], ['country', 'País'], ['city', 'Cidade'], ['website', 'Site'], ['product_families', 'Produtos (separados por vírgula)'], ['contact', 'Contato'], ['notes', 'Observações']].map(([k, l]) => `<label class="f">${l}<input name="${k}"></label>`).join('')}<label class="f">Tipo<select name="company_type"></select></label><button class="btn small primary">Salvar</button></form><div id="sam" class="small"></div></details>
       <details class="panel"><summary><b>Importar planilha (CSV/XLSX)</b></summary><p class="small">Empresas: razão social, país, cidade, site, produtos, tipo… · Embarques: bill_of_lading, shipper/exportador, consignee/importador, origem, destino, data, descrição, peso. Arquivos com macros são recusados; fórmulas não são executadas.</p>
-        <div class="btnrow"><select id="sik"><option value="empresas">Empresas</option><option value="embarques">Embarques</option></select><input id="sif" placeholder="fonte (opcional)"><input type="file" id="sifile" accept=".csv,.xlsx"></div><div id="sio" class="small"></div></details>
+        <div class="btnrow"><select id="sik"><option value="empresas">Empresas</option><option value="embarques">Embarques</option></select><input id="sif" placeholder="fonte (opcional)"><label class="small"><input type="checkbox" id="sidemo"> dados demonstrativos/de teste</label><input type="file" id="sifile" accept=".csv,.xlsx"></div><div id="sio" class="small"></div></details>
       <details class="panel"><summary><b>Relações documentadas gratuitas (Anatel/Inmetro)</b></summary><p class="small">Gera relações fabricante ↔ titular brasileiro a partir dos registros já carregados. Não comprova exclusividade, volume nem relação comercial ativa.</p><button class="btn small" id="sreg">Gerar a partir dos registros</button><div id="sro" class="small"></div></details>
       <details class="panel" id="sdup"><summary><b>Possíveis duplicidades</b> <span id="sdn"></span></summary><div id="sdl"></div></details>
       <details class="panel"><summary><b>ImportYeti (opcional, pago)</b></summary><div id="siy"></div></details>`;
@@ -269,7 +287,7 @@ window.GPI_V091 = function (H, PAGES) {
     $('#ss').onsubmit = (e) => { e.preventDefault(); load(Object.fromEntries(new FormData($('#ss')))); };
     $('#sa').onsubmit = async (e) => { e.preventDefault(); try { const r = await post('/api/suite/empresas', Object.fromEntries(new FormData($('#sa')))); $('#sam').innerHTML = r.criada ? 'Empresa criada.' : 'Empresa já existia (campos vazios completados).'; load(); } catch (er) { $('#sam').innerHTML = errBox(er); } };
     $('#sifile').onchange = async () => { const f = $('#sifile').files[0]; if (!f) return; $('#sio').innerHTML = loading('Validando e importando…');
-      try { const r = await raw(`/api/suite/importar/${$('#sik').value}?` + qs({ fonte: $('#sif').value }), f, f.name, f.name.endsWith('.csv') ? 'text/csv' : 'application/octet-stream');
+      try { const r = await raw(`/api/suite/importar/${$('#sik').value}?` + qs({ fonte: $('#sif').value, demonstrativo: $('#sidemo').checked ? '1' : '' }), f, f.name, f.name.endsWith('.csv') ? 'text/csv' : 'application/octet-stream');
         $('#sio').innerHTML = `<p>${r.linhas} linha(s): ${r.criadas != null ? `${r.criadas} criada(s), ${r.atualizadas} atualizada(s)` : `${r.novos} novo(s), ${r.duplicados} duplicado(s), ${r.relacoes} relação(ões)`}; ${(r.rejeitadas || r.rejeitados || []).length} rejeitada(s).</p>${tbl([['linha', 'Linha'], ['motivo', 'Motivo']], (r.rejeitadas || r.rejeitados || []).slice(0, 30), '')}`; load(); dups(); } catch (er) { $('#sio').innerHTML = errBox(er); } };
     $('#sreg').onclick = async () => { $('#sro').innerHTML = loading(); try { const r = await post('/api/suite/relacoes/regulatorias', {}); $('#sro').innerHTML = `${r.relacoes} relação(ões) a partir de ${r.anatel_registros_lidos} registro(s) Anatel e ${r.inmetro_registros_lidos} Inmetro. ${escH(r.nota)}`; load(); } catch (er) { $('#sro').innerHTML = errBox(er); } };
     async function dups() {
@@ -322,7 +340,7 @@ window.GPI_V091 = function (H, PAGES) {
       $('#io').innerHTML = loading();
       try { const d = await api('/api/suite/importacao?' + qs({ q: a.q, produto: a.produto }));
         fields = d.simulador.campos; req = d.simulador.obrigatorios;
-        $('#io').innerHTML = `<section class="panel"><h2>${escH(d.consulta)} ${dec(d.decisao)}</h2><p class="small">${escH(d.decisao.significado)}</p>${notes(d.decisao.motivos)}<section class="kpis compact">${ind(d.indicadores)}</section>
+        $('#io').innerHTML = `<section class="panel"><h2>${escH((d.identificacao || {}).nome_comercial || d.consulta)} ${dec(d.decisao)}</h2><p class="small">${escH(d.decisao.significado)}</p>${notes(d.decisao.motivos)}<section class="kpis compact">${ind(d.indicadores)}</section>
           ${TAB.importacao({ ncm: d.ncm, regulatorio: d.regulatorio, riscos: d.riscos })}
           <h3>Cenários salvos</h3>${tbl([['name', 'Nome'], ['created_at', 'Criado'], ['id', 'Exportar', (r) => `<a href="/api/suite/cenarios/${r.id}.xlsx">XLSX</a> · <a href="/api/suite/cenarios/${r.id}.pdf">PDF</a>`]], d.cenarios, 'Nenhum cenário salvo.')}</section>`;
       } catch (e) { $('#io').innerHTML = errBox(e); }
@@ -346,7 +364,7 @@ window.GPI_V091 = function (H, PAGES) {
     main.innerHTML = head('Produtos Monitorados', 'Produtos e fornecedores acompanhados. Atualizados ao fim de cada sincronização (mesma rotina semanal).') + `<div class="btnrow"><button class="btn small" id="mra">Atualizar agora</button></div><div id="mo">${loading()}</div>`;
     const load = async () => { try { const d = await api('/api/suite/monitorados');
       $('#mo').innerHTML = tbl([['kind', 'Tipo'], ['label', 'Item', (r) => r.kind === 'produto' ? `<a href="#dossie/${encodeURIComponent(r.ref)}">${escH(r.label)}</a>` : `<a href="#fornecedores-intel/${encodeURIComponent(qs({ id: r.ref }))}">${escH(r.label)}</a>`],
-        ['last_checked', 'Verificado'], ['snap', 'Situação atual', (r) => escH(Object.entries(r.last_snapshot || {}).filter(([, v]) => v != null).map(([k, v]) => `${k}: ${typeof v === 'number' ? fmt(v, 1) : v}`).join(' · ') || 'ainda não verificado')],
+        ['semanal', 'Coleta', (r) => r.semanal ? `<span class="badge ok">semanal</span> <span class="muted">${escH(Object.values(r.params.termos || {}).join(' / '))} · ${escH(r.params.mercado || '')}</span>` : '<span class="muted">só acompanhamento</span>'], ['last_checked', 'Verificado'], ['snap', 'Situação atual', (r) => escH(Object.entries(r.last_snapshot || {}).filter(([, v]) => v != null).map(([k, v]) => `${k}: ${typeof v === 'number' ? fmt(v, 1) : v}`).join(' · ') || 'ainda não verificado')],
         ['ev', 'Mudanças recentes', (r) => r.eventos.length ? r.eventos.slice(0, 3).map((e) => `${escH(e.at.slice(0, 10))}: ${escH(e.mudancas.map((m) => `${m.campo} ${m.antes ?? '—'} → ${m.depois ?? '—'}`).join('; '))}`).join('<br>') : '<span class="muted">nenhuma</span>'],
         ['x', '', (r) => `<a href="#" data-x="${r.id}">remover</a>`]], d.itens, 'Nada monitorado. Use “Monitorar” na pesquisa, no nicho ou no fornecedor.') + notes([d.nota]);
       document.querySelectorAll('[data-x]').forEach((a) => { a.onclick = async (e) => { e.preventDefault(); await post(`/api/suite/monitorados/${a.dataset.x}/excluir`, {}); load(); }; });
@@ -357,7 +375,7 @@ window.GPI_V091 = function (H, PAGES) {
   async function pageHistory() {
     main.innerHTML = head('Histórico de Pesquisas', 'Todas as pesquisas de produto, com parâmetros e resultado.') + `<div id="ho">${loading()}</div>`;
     try { const d = await api('/api/suite/historico');
-      $('#ho').innerHTML = tbl([['query', 'Pesquisa', (r) => `<a href="#pesquisa-produtos/${encodeURIComponent(qs({ id: r.id }))}">${escH(r.query)}</a>`], ['p', 'Parâmetros', (r) => escH(`${r.params.mercado || ''} · ${r.params.periodo_meses || ''} meses · ${r.params.profundidade || ''}`)], ['status', 'Estado'], ['product_id', 'Produto'], ['created_at', 'Criada'], ['saved', 'Salva', (r) => r.saved ? '✓' : ''], ['x', 'Exportar', (r) => r.finished_at ? `<a href="/api/suite/pesquisa/${r.id}.xlsx">XLSX</a> · <a href="/api/suite/pesquisa/${r.id}.pdf">PDF</a>` : '']], d.itens, 'Nenhuma pesquisa ainda.');
+      $('#ho').innerHTML = tbl([['query', 'Pesquisa', (r) => `<a href="#pesquisa-produtos/${encodeURIComponent(qs({ id: r.id }))}">${escH(r.query)}</a>${r.nome_comercial && r.nome_comercial !== r.query ? ` <span class="muted">(${escH(r.nome_comercial)})</span>` : ''}`], ['decisao', 'Decisão', (r) => r.decisao ? dec({ cor: r.decisao }) : '—'], ['cobertura', 'Fontes c/ evidência', (r) => num(r.cobertura)], ['p', 'Parâmetros', (r) => escH(`${r.params.mercado || ''} · ${r.params.periodo_meses || ''} meses · ${r.params.profundidade || ''}`)], ['status', 'Estado'], ['product_id', 'Produto'], ['created_at', 'Criada'], ['saved', 'Salva', (r) => r.saved ? '✓' : ''], ['x', 'Exportar', (r) => r.finished_at ? `<a href="/api/suite/pesquisa/${r.id}.xlsx">XLSX</a> · <a href="/api/suite/pesquisa/${r.id}.pdf">PDF</a>` : '']], d.itens, 'Nenhuma pesquisa ainda.');
     } catch (e) { $('#ho').innerHTML = errBox(e); }
   }
   async function pageConfig() {
@@ -396,7 +414,10 @@ window.GPI_V091 = function (H, PAGES) {
     box.innerHTML = `<h2>Product Intelligence</h2><div id="pi">${loading()}</div>`;
     main.insertBefore(box, main.children[2] || null);
     try { const v = await api('/api/suite/visao'), c = v.contagens;
-      $('#pi').innerHTML = `<section class="kpis compact">${[['Pesquisas', c.pesquisas, '#historico-pesquisas'], ['Monitorados', c.monitorados, '#monitorados'], ['Empresas', c.empresas, '#fornecedores-intel'], ['Embarques', c.embarques, '#fornecedores-intel'], ['Imagens no catálogo', c.imagens_catalogo, '#pesquisa-imagem'], ['Duplicidades p/ revisar', c.duplicidades_pendentes, '#fornecedores-intel']].map(([l, n, h]) => `<a class="kpi" href="${h}"><div class="v">${num(n)}</div><div class="l">${l}</div></a>`).join('')}</section>
+      const pr = v.produtos, nt = v.notas;
+      $('#pi').innerHTML = `${v.tem_demonstrativos ? `<div class="banner warn small">Há dados <b>demonstrativos/de teste</b> no banco (${escH(Object.entries(v.demonstrativos).filter(([, n]) => n).map(([k, n]) => `${n} ${k.replace(/_/g, ' ')}`).join(' · '))}); eles ficam fora das contagens abaixo.</div>` : ''}
+        <p class="small"><b>Produtos</b></p><section class="kpis compact">${[['Cadastrados', pr.cadastrados, '#catalogo', nt.cadastrados], ['Identificados', pr.identificados, '#catalogo', nt.identificados], ['Com evidência comercial', pr.com_evidencias_comerciais, '#inteligencia-oportunidades', nt.com_evidencias_comerciais], ['Monitorados', pr.monitorados, '#monitorados', ''], ['Investigação concluída', pr.investigacao_concluida, '#historico-pesquisas', nt.investigacao_concluida], ['Investigação inconclusiva', pr.investigacao_inconclusiva, '#historico-pesquisas', nt.investigacao_inconclusiva]].map(([l, n, h, tip]) => `<a class="kpi" href="${h}" title="${escH(tip)}"><div class="v">${num(n)}</div><div class="l">${l}</div></a>`).join('')}</section>
+        <p class="small"><b>Fornecedores e imagens</b></p><section class="kpis compact">${[['Empresas', c.empresas, '#fornecedores-intel'], ['Embarques', c.embarques, '#fornecedores-intel'], ['Fornecedores monitorados', c.fornecedores_monitorados, '#monitorados'], ['Imagens no catálogo', c.imagens_catalogo, '#pesquisa-imagem'], ['Duplicidades p/ revisar', c.duplicidades_pendentes, '#fornecedores-intel']].map(([l, n, h]) => `<a class="kpi" href="${h}"><div class="v">${num(n)}</div><div class="l">${l}</div></a>`).join('')}</section>
         <div class="btnrow" style="flex-wrap:wrap"><a class="btn small primary" href="#pesquisa-produtos">Pesquisar produto</a><a class="btn small" href="#nichos">Explorar nichos</a><a class="btn small" href="#palavras-chave">Palavras-chave</a><a class="btn small" href="#pesquisa-imagem">Pesquisa por imagem</a><a class="btn small" href="#fornecedores-intel">Fornecedores</a><a class="btn small" href="#importacao-intel">Importação</a></div>
         <p class="small muted">${v.modo_sem_custos ? 'Modo sem custos externos ativo.' : '<b>Modo sem custos desligado</b> — consultas pagas exigem autorização e orçamento.'} <a href="#suite-config">Configurações</a></p>
         ${v.recentes.length ? `<p class="small">Recentes: ${v.recentes.map((r) => `<a href="#pesquisa-produtos/${encodeURIComponent(qs({ id: r.id }))}">${escH(r.query)}</a>`).join(' · ')}</p>` : ''}`;

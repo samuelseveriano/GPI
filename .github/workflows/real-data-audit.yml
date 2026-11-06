@@ -9,6 +9,8 @@ on:
       - "backend/gpi/products/trends.py"
       - "backend/gpi/intel/**"
       - "backend/gpi/products/**"
+      - "backend/gpi/suite/**"
+      - "scripts/real_targeted_research_v091.py"
       - ".github/workflows/real-data-audit.yml"
   workflow_dispatch:
 
@@ -35,6 +37,15 @@ jobs:
           cat audit.log | tail -40
           { echo "### Auditoria v0.8.1 com dados reais"; echo '```'; tail -20 audit.log | cut -c1-600; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $code
+      - name: Pesquisa direcionada REAL num banco vazio (v0.9.1, sem credenciais — GDELT público; demais devem ficar 'não autorizada')
+        if: always()
+        run: |
+          set +e
+          python scripts/real_targeted_research_v091.py pesquisa_direcionada_real.json > targeted.log 2>&1
+          code=$?
+          cat targeted.log
+          { echo "### Pesquisa direcionada com APIs reais (v0.9.1)"; echo '```'; cut -c1-300 targeted.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
       - uses: actions/upload-artifact@v5
         if: always()
         with:
@@ -42,4 +53,6 @@ jobs:
           path: |
             auditoria_real_v081.json
             audit.log
+            pesquisa_direcionada_real.json
+            targeted.log
           retention-days: 30

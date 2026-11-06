@@ -123,10 +123,10 @@ def test_quick_skips_forecast_full_runs_it_and_progress_is_real(db):            
     assert j["progresso"]["concluidas"] == 0                                        # nada é marcado antes de executar
     RS.run(db, rid, ctx(db))
     j = RS.get(db, rid)
-    assert next(s for s in j["steps"] if s["id"] == "previsoes")["estado"] == "ignorada" and j["progresso"]["pct"] == 100
+    assert next(s for s in j["steps"] if s["id"] == "previsoes")["estado"] == "ignorada por configuração" and j["progresso"]["pct"] == 100
     rid2 = RS.create(db, "carregador GaN 65W", {"profundidade": "completa"})
     out = RS.run(db, rid2, ctx(db))
-    assert next(s for s in RS.get(db, rid2)["steps"] if s["id"] == "previsoes")["estado"] == "concluída"
+    assert next(s for s in RS.get(db, rid2)["steps"] if s["id"] == "previsoes")["estado"] == "concluída com dados"
     s = out["abas"]["previsoes"]["series"][0]
     assert s["n"] >= 24 and s["previsao"]["modelo"] and "backtest_wape" in s["previsao"] and "não de vendas" in s["previsao"]["nota"]
 

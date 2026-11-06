@@ -292,3 +292,5 @@ details.inline{display:inline-block;margin-left:6px}details.inline>summary{curso
 .imgrid img { width: 100%; height: 130px; object-fit: contain; background: var(--bg, #fff); border-radius: 4px; }
 a.kpi { text-decoration: none; color: inherit; }
 label.f[hidden] { display: none; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+#rdos table.compact td:first-child, #rdos table.compact th:first-child { min-width: 170px; }

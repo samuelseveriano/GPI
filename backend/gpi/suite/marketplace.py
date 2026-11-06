@@ -28,12 +28,16 @@ def _median(xs):
 
 
 # ------------------------------------------------------------------------------------------------ agregados de anúncios
-def listing_stats(db, product_id: str, days: int = 30, today: date | None = None) -> dict | None:
+def listing_stats(db, product_id: str | None, days: int = 30, today: date | None = None, terms: list[str] | None = None) -> dict | None:
+    """Anúncios do produto (pelo ID canônico e suas variantes) e, se informado, pelos termos da consulta direcionada."""
     today = today or date.today()
     since = (today - timedelta(days=days)).isoformat()
-    fam = product_id.split(":")[0]
+    pid = product_id or "§"
+    fam = pid.split(":")[0]
+    terms = [t for t in (terms or []) if t]
     rows = db.query("SELECT source, item_id, day, title, brand, price, currency, seller, country FROM market_listings "
-                    "WHERE (product_id = ? OR product_id = ? OR product_id LIKE ?) AND day >= ?", (product_id, fam, fam + ":%", since))
+                    "WHERE (product_id = ? OR product_id = ? OR product_id LIKE ?" + (" OR query IN (%s)" % ",".join("?" * len(terms)) if terms else "") +
+                    ") AND day >= ?", (pid, fam, fam + ":%", *terms, since))
     if not rows:
         return None
     latest = {}
@@ -91,7 +95,8 @@ def niche_rows(payload: dict, db, catalog: dict, stages: dict, today: date) -> l
         s = st.get(pid)
         dec = classify_decision(p, s["estagio_evidencia"] if s else None)
         cov = idx.get("evidence_coverage")
-        out.append({"produto_id": pid, "produto": (p.get("identificacao") or {}).get("produto") or pid,
+        from . import naming as NM
+        out.append({"produto_id": pid, "produto": (p.get("identificacao") or {}).get("produto") or NM.name_of(db, pid) or pid,
                     "categoria": (p.get("identificacao") or {}).get("categoria") or cat.get("category"),
                     "familia": (p.get("identificacao") or {}).get("familia") or cat.get("family"), "situacao": p.get("situacao"),
                     "opportunity_score": idx.get("opportunity_score"), "evidence_coverage": cov,
@@ -295,7 +300,7 @@ def _monthly(points: list[tuple[str, float]]) -> tuple[list[str], list[float]]:
     return ks, [float(np.mean(by[k])) for k in ks]
 
 
-def trend_explorer(db, product_id: str, horizon: int = 6) -> dict:
+def trend_explorer(db, product_id: str, horizon: int = 6, terms: list[str] | None = None) -> dict:
     from ..analytics.classification import trend_test
     from ..products import trends as T
     fam = product_id.split(":")[0]
@@ -306,8 +311,11 @@ def trend_explorer(db, product_id: str, horizon: int = 6) -> dict:
         obs = db.query("SELECT ref_date, value FROM market_obs WHERE series_id = ? ORDER BY ref_date", (s["id"],))
         out.append({"rotulo": f"{s['indicator']} · {s['source']} · {s['country'] or '—'}", "fonte": s["source"], "tipo": s["kind"],
                     "pontos": [(o["ref_date"], o["value"]) for o in obs], "unidade": s["unit"]})
-    so = db.query("SELECT source, country, metric, ref_date, value, unit FROM search_observations WHERE product_id IN (?, ?) "
-                    "OR product_id LIKE ? ORDER BY ref_date", (product_id, fam, fam + ":%"))
+    from ..products import nlp
+    tn = [nlp._norm(t) for t in (terms or []) if t]
+    so = db.query("SELECT source, country, metric, ref_date, value, unit FROM search_observations WHERE (product_id IN (?, ?) "
+                  "OR product_id LIKE ?" + (" OR LOWER(term) IN (%s)" % ",".join("?" * len(tn)) if tn else "") + ") ORDER BY ref_date",
+                  (product_id, fam, fam + ":%", *tn))
     grp = defaultdict(list)
     for o in so:
         grp[(o["source"], o["country"], o["metric"], o["unit"])].append((o["ref_date"], o["value"]))

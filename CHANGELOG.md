@@ -31,5 +31,14 @@ Somente ferramentas gratuitas; nenhuma dependência paga obrigatória.
 - `requirements.txt` declara Pillow explicitamente (já vinha com o ReportLab).
 - `tests/test_v05.py` passa a verificar as rotas dos módulos `v09*.js`.
 
+### Revisão do PR #18
+- Product Research em duas camadas: dados locais + **consultas direcionadas** por capacidade (Mercado Livre busca de
+  anúncios, eBay, Google Ads KP, Microsoft Ads, YouTube, GDELT), com cache, cotas, falhas isoladas e motivos concretos.
+- Rápida × completa com diferenças reais; estados explícitos das etapas; progresso × cobertura; cancelamento.
+- Nome comercial × ID canônico; semelhantes em 6 classes; fornecedores com tipo de correspondência e evidência.
+- Painel "Fontes e cobertura desta investigação"; Dashboard com contagens separadas e dados demonstrativos à parte.
+- Monitoramento semanal a partir de uma pesquisa (termos, mercado e fontes). Ver docs/V091_REVISAO.md.
+
 ### Banco de dados
 - Apenas tabelas novas, criadas sob demanda; nenhuma tabela existente alterada. Cadastro antigo de fornecedores copiado.
+- Revisão: tabela `research_source_runs` (cache das consultas direcionadas) e coluna `monitored.params` (ADD COLUMN).

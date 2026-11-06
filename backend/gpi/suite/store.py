@@ -48,7 +48,7 @@ SCHEMA = [
         period_start TEXT, period_end TEXT, collected_at TEXT, source_url TEXT, source_capability TEXT, confidence TEXT,
         quality_status TEXT, usage_restrictions TEXT, origin TEXT NOT NULL DEFAULT 'REAL')""",
     """CREATE TABLE IF NOT EXISTS monitored (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT NOT NULL, label TEXT,
-        created_at TEXT NOT NULL, last_checked TEXT, last_snapshot TEXT, notes TEXT, UNIQUE (kind, ref))""",
+        created_at TEXT NOT NULL, last_checked TEXT, last_snapshot TEXT, notes TEXT, params TEXT, UNIQUE (kind, ref))""",
     """CREATE TABLE IF NOT EXISTS import_scenarios (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, product_id TEXT, company_id INTEGER,
         params TEXT NOT NULL, result TEXT, created_at TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS provider_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, endpoint TEXT,
@@ -69,6 +69,9 @@ def now() -> str:
 def ensure(db):
     for s in SCHEMA:
         db.execute(s)
+    # coluna acrescentada na revisão do PR #18 (bancos criados pela 1ª versão da suíte): só ADD COLUMN, sem perda
+    if "params" not in {r["name"] for r in db.query("PRAGMA table_info(monitored)")}:
+        db.execute("ALTER TABLE monitored ADD COLUMN params TEXT")
     _migrate_legacy_suppliers(db)
 
 

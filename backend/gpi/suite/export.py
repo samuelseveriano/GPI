@@ -36,7 +36,8 @@ def tables_from(kind: str, data: dict) -> list[tuple[str, list[dict], list[str]]
         ov = ab.get("visao_geral") or {}
         dec = data.get("decisao") or {}
         t = [("Visão geral", [{"campo": k, "valor": v} for k, v in {
-            "consulta": data.get("consulta"), "produto": ov.get("produto"), "produto_id": ov.get("produto_id"), "estágio": ov.get("nome_estagio"),
+            "consulta": data.get("consulta"), "produto": ov.get("produto"), "id canônico (interno)": ov.get("produto_id"),
+            "modo": data.get("modo"), "resultado": data.get("mensagem_final"), "estágio": ov.get("nome_estagio"),
             "situação": ov.get("situacao"), "decisão": dec.get("cor"), "significado": dec.get("significado"),
             "motivos": "; ".join(dec.get("motivos") or []),
             **{f"indicador: {k}": (v or {}).get("valor") for k, v in (ov.get("indicadores") or {}).items()}}.items()],
@@ -62,6 +63,11 @@ def tables_from(kind: str, data: dict) -> list[tuple[str, list[dict], list[str]]
                                  "melhor_que_ingenuo": (s.get("previsao") or {}).get("melhor_que_ingenuo")} for s in pv.get("series", [])],
                   [pv.get("nota") or ""]))
         t.append(("Evidências", (ab.get("evidencias") or {}).get("itens") or [], [(ab.get("evidencias") or {}).get("regra") or ""]))
+        cov = data.get("cobertura") or {}
+        t.append(("Fontes e cobertura", [{k: r.get(k) for k in ("fonte", "tipo", "capacidade", "mercado", "autenticacao", "consulta_realizada", "estado",
+                                                                 "registros", "motivo", "ultima_coleta", "acao")} for r in data.get("fontes") or []],
+                  [data.get("mensagem_final") or "", f"Fontes com evidência útil: {cov.get('fontes_com_evidencia', 0)} de "
+                   f"{cov.get('fontes_previstas', 0)} consultas direcionadas previstas."]))
         return t
     if kind == "nichos":
         return [("Nichos", [{k: v for k, v in r.items() if k != "atributos"} for r in data.get("itens", [])],

@@ -9,8 +9,9 @@ Uploads são enviados como **corpo binário** (`Content-Type: application/octet-
 | GET | `/api/suite/visao` | contagens, pesquisas recentes, modo sem custos |
 | GET/POST | `/api/suite/config` | configurações (país, idioma, período, modo, cache, modelos opcionais, sem custos, orçamento, `importyeti_chave`) |
 | GET | `/api/suite/provedores` | fontes, status, capacidades, custos, limitações; serviços não usados |
-| POST | `/api/suite/pesquisa` | `{consulta, mercado, comparacao[], periodo_meses|inicio+fim, objetivo, profundidade: rapida|completa, sincrono?}` → `{id}` |
-| GET | `/api/suite/pesquisa/{id}` | estado, etapas, progresso real e resultado (dossiê) |
+| POST | `/api/suite/pesquisa` | `{consulta, mercado, comparacao[], periodo_meses|inicio+fim, objetivo, profundidade: rapida|completa, atualizar?, sincrono?}` → `{id}` |
+| GET | `/api/suite/pesquisa/{id}` | estado, etapas (7 estados), progresso do processamento, cobertura e resultado (dossiê + `fontes`) |
+| POST | `/api/suite/pesquisa/{id}/cancelar` · `/monitorar` | cancelar · transformar em monitoramento semanal |
 | POST | `/api/suite/pesquisa/{id}/salvar` | marcar como salva |
 | GET | `/api/suite/pesquisa/{id}.xlsx` · `.pdf` | exportação |
 | GET | `/api/suite/historico` | histórico de pesquisas |
@@ -35,7 +36,7 @@ Uploads são enviados como **corpo binário** (`Content-Type: application/octet-
 | POST | `/api/suite/empresas/{id}/produtos` | vínculo produto↔empresa |
 | GET | `/api/suite/empresas/{id}/correspondencia?q=&produto=&familia=` | correspondência preliminar |
 | GET | `/api/suite/duplicidades` · POST `/api/suite/duplicidades/{id}` | fila de revisão; `{decisao: mesclar|distintas}` |
-| POST | `/api/suite/importar/empresas` · `/api/suite/importar/embarques` | CSV/XLSX (`fonte` opcional) |
+| POST | `/api/suite/importar/empresas` · `/api/suite/importar/embarques` | CSV/XLSX (`fonte` e `demonstrativo=1` opcionais) |
 | POST | `/api/suite/relacoes` | relação manual `{a, b, tipo, status, fonte, evidencia, inicio, fim}` |
 | POST | `/api/suite/relacoes/regulatorias` | relações a partir dos registros Anatel/Inmetro carregados |
 | GET | `/api/suite/descobrir?q=&familia=&produto=` | fornecedores candidatos |

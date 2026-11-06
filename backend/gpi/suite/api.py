@@ -61,7 +61,7 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
 
     def ctx():
         return {"payload_fn": payload, "stages_fn": stages, "catalog_fn": catalog, "ncm": getattr(comp_state, "ncm", None),
-                "today": today(), "cfg": cfg}
+                "today": today(), "cfg": cfg, "sync_ctx_fn": sync.context}
 
     async def upload(request: Request) -> tuple[bytes, str, dict]:
         """Corpo binário (sem dependência de multipart). Campos na query string; nome em X-Filename (sanitizado e usado só
@@ -90,14 +90,38 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             S.ensure(db)
             MON.ensure(db)
             st = settings()
-            c = lambda q: db.query(q)[0]["n"]  # noqa: E731
-            return {"versao": "0.9.1", "configuracoes": st,
-                    "contagens": {"pesquisas": c("SELECT COUNT(*) AS n FROM research_jobs"), "empresas": c("SELECT COUNT(*) AS n FROM companies WHERE verification_status NOT LIKE 'mesclada%'"),
-                                  "embarques": c("SELECT COUNT(*) AS n FROM trade_shipments"), "relacoes": c("SELECT COUNT(*) AS n FROM trade_relationships"),
+            c = lambda q, p=(): db.query(q, p)[0]["n"]  # noqa: E731
+            demo = "(source LIKE '%demonstr%' OR source LIKE '%[DEMONSTRATIVO]%' OR source LIKE '%teste%' OR source LIKE '%exemplo%')"
+            try:
+                stg = stages()["itens"]
+            except Exception:  # noqa: BLE001
+                stg = []
+            jobs = db.query("SELECT result FROM research_jobs WHERE finished_at IS NOT NULL")
+            concl = sum(1 for r in jobs if (json.loads(r["result"] or "null") or {}).get("conclusiva"))
+            produtos = {"cadastrados": c("SELECT COUNT(*) AS n FROM catalog_products"),
+                        "identificados": c("SELECT COUNT(*) AS n FROM catalog_products WHERE evidence > 0"),
+                        "com_evidencias_comerciais": sum(1 for x in stg if x["estagio"] >= 1),
+                        "monitorados": c("SELECT COUNT(*) AS n FROM monitored WHERE kind = 'produto'"),
+                        "investigacao_concluida": concl, "investigacao_inconclusiva": len(jobs) - concl}
+            demos = {"vendas_demonstrativas": c("SELECT COUNT(*) AS n FROM imports WHERE is_demo = 1"),
+                     "empresas": c(f"SELECT COUNT(*) AS n FROM companies WHERE {demo}"), "embarques": c(f"SELECT COUNT(*) AS n FROM trade_shipments WHERE {demo}"),
+                     "evidencias_nao_reais": c("SELECT COUNT(*) AS n FROM research_evidence WHERE origin != 'REAL'")}
+            return {"versao": "0.9.1", "configuracoes": st, "produtos": produtos,
+                    "contagens": {"pesquisas": c("SELECT COUNT(*) AS n FROM research_jobs"),
+                                  "empresas": c(f"SELECT COUNT(*) AS n FROM companies WHERE verification_status NOT LIKE 'mesclada%' AND NOT {demo}"),
+                                  "embarques": c(f"SELECT COUNT(*) AS n FROM trade_shipments WHERE NOT {demo}"), "relacoes": c("SELECT COUNT(*) AS n FROM trade_relationships"),
                                   "imagens_catalogo": c("SELECT COUNT(*) AS n FROM product_images"), "monitorados": c("SELECT COUNT(*) AS n FROM monitored"),
+                                  "fornecedores_monitorados": c("SELECT COUNT(*) AS n FROM monitored WHERE kind = 'fornecedor'"),
                                   "duplicidades_pendentes": c("SELECT COUNT(*) AS n FROM company_merge_review WHERE estado = 'pendente'"),
                                   "cenarios": c("SELECT COUNT(*) AS n FROM import_scenarios")},
+                    "demonstrativos": demos, "tem_demonstrativos": any(demos.values()),
                     "recentes": RS.history(db, 8), "modo_sem_custos": st["sem_custos"],
+                    "notas": {"cadastrados": "produtos no catálogo canônico (sementes + descobertos + pesquisados)",
+                              "identificados": "reconhecidos em alguma fonte coletada",
+                              "com_evidencias_comerciais": "estágio ≥ 1 na inteligência (observação comercial ou de pesquisa)",
+                              "investigacao_concluida": "pesquisa com fonte de evidência útil e decisão diferente de CINZA",
+                              "investigacao_inconclusiva": "pesquisa encerrada sem evidência suficiente (dados insuficientes)",
+                              "demonstrativos": "empresas/embarques com fonte marcada como demonstrativa/teste ficam fora das contagens principais"},
                     "regras": ["Modo sem custos externos ativo por padrão: nenhum crédito pago é consumido.",
                                "Score não é probabilidade. Dados ausentes não são evidência negativa."]}
         return j(await run_in_threadpool(calc))
@@ -126,7 +150,8 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         params = {"idioma": b.get("idioma") or st["idioma"], "mercado": (b.get("mercado") or st["pais_padrao"])[:10],
                   "comparacao": [str(x)[:10] for x in (b.get("comparacao") or [])][:5], "periodo_meses": b.get("periodo_meses") or st["periodo_meses"],
                   "inicio": b.get("inicio"), "fim": b.get("fim"), "objetivo": (b.get("objetivo") or "")[:80],
-                  "profundidade": b.get("profundidade") if b.get("profundidade") in ("rapida", "completa") else st["modo"]}
+                  "profundidade": b.get("profundidade") if b.get("profundidade") in ("rapida", "completa") else st["modo"],
+                  "atualizar": bool(b.get("atualizar"))}
         try:
             rid = RS.create(db, b.get("consulta") or "", params)
         except ValueError as e:
@@ -247,6 +272,9 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
                 raw = await run_in_threadpool(fetch_image, url)
             res = await run_in_threadpool(V.search, db, data_dir, raw, crop_of(f), f.get("familia") or None, 30, settings())
             res["busca_externa"] = V.external_links(url if url else None)
+            from . import naming as NM
+            for x in res["resultados"]:
+                x["nome_comercial"] = NM.name_of(db, x["product_id"]) if x.get("product_id") else None
             res["consulta"]["nome"] = name
             return j(res)
         except (V.ImageRejected, ValueError) as e:
@@ -359,7 +387,10 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             fn = {"empresas": SP.import_companies, "embarques": SP.import_shipments}.get(kind)
             if not fn:
                 return err("tipo deve ser 'empresas' ou 'embarques'")
-            return j(await run_in_threadpool(fn, db, raw, name, (f.get("fonte") or "")[:120] or None))
+            fonte = (f.get("fonte") or "")[:110] or None
+            if f.get("demonstrativo") in ("1", "true", "sim"):
+                fonte = "[DEMONSTRATIVO] " + (fonte or name)          # fica fora das contagens principais do Dashboard
+            return j(await run_in_threadpool(fn, db, raw, name, fonte))
         except ValueError as e:
             return err(e)
 
@@ -437,7 +468,8 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             ncm = IX.ncm_block(db, getattr(comp_state, "ncm", None), q or pid, hint)
             reg = IX.regulatory_block(db, q or pid)
             ls = MK.listing_stats(db, pid or u.get("produto_id") or "§", 30, today())
-            return {"consulta": q or pid, "produto_id": pid or u.get("produto_id"), "entendimento": {k: u.get(k) for k in ("principal", "estado", "atributos")},
+            from . import naming as NM
+            return {"consulta": q or pid, "produto_id": pid or u.get("produto_id"), "identificacao": NM.describe(db, pid or u.get("produto_id"), u), "entendimento": {k: u.get(k) for k in ("principal", "estado", "atributos")},
                     "ncm": ncm, "regulatorio": reg, "riscos": IX.risks(u, reg, ncm, ls), "decisao": IX.classify_decision(p, item["estagio_evidencia"] if item else None),
                     "indicadores": IX.indicators(p, today().isoformat()), "simulador": {"campos": IX.FIELDS, "obrigatorios": IX.REQUIRED},
                     "cenarios": IX.list_scenarios(db, pid or u.get("produto_id")), "decisoes": IX.DECISION}
@@ -474,7 +506,16 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         return j(MON.remove(db, int(request.path_params["mid"])))
 
     async def mon_refresh(request):
-        return j(await run_in_threadpool(MON.refresh, db, payload, stages, today()))
+        return j(await run_in_threadpool(MON.refresh, db, payload, stages, today(), sync.context))
+
+    async def research_cancel(request):
+        return j(RS.cancel(db, int(request.path_params["rid"])))
+
+    async def research_monitor(request):
+        r = RS.get(db, int(request.path_params["rid"]))
+        if not r or not r["result"]:
+            return j({"erro": "pesquisa sem resultado"}, 404)
+        return j(await run_in_threadpool(MON.from_research, db, r["result"], r["id"]))
 
     P = "/api/suite"
     return [
@@ -482,6 +523,8 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         Route(f"{P}/provedores", providers),
         Route(f"{P}/pesquisa", research_start, methods=["POST"]), Route(f"{P}/pesquisa/{{rid:int}}", research_get),
         Route(f"{P}/pesquisa/{{rid:int}}/salvar", research_save, methods=["POST"]),
+        Route(f"{P}/pesquisa/{{rid:int}}/cancelar", research_cancel, methods=["POST"]),
+        Route(f"{P}/pesquisa/{{rid:int}}/monitorar", research_monitor, methods=["POST"]),
         Route(f"{P}/pesquisa/{{rid:int}}.{{fmt}}", research_export), Route(f"{P}/historico", research_history),
         Route(f"{P}/nichos", niches), Route(f"{P}/nichos/salvar", niches_save, methods=["POST"]), Route(f"{P}/nichos.{{fmt}}", niches_export),
         Route(f"{P}/palavras", kw), Route(f"{P}/palavras.{{fmt}}", kw_export), Route(f"{P}/palavras/anuncio/{{iid}}", kw_reverse),

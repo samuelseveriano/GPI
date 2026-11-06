@@ -608,66 +608,121 @@ def _hits(text: str, groups: list[list[str]]) -> bool:
     return False
 
 
-def discover(db, query: str, family: str | None = None, product_id: str | None = None, limit: int = 50) -> dict:
-    """Fornecedores CANDIDATOS somente a partir de registros existentes: cadastro do usuário, vínculos produto↔empresa,
-    descrições de embarques importados e fabricantes em registros Anatel/Inmetro. Nenhum fornecedor é inventado."""
+MATCH_TYPES = {
+    "fabricante confirmado": ("documento registrado pelo usuário liga a empresa à fabricação do produto", "alta",
+                              "confirmação vale para o produto/modelo do documento"),
+    "fabricante documentado em registro regulatório": ("a empresa aparece como FABRICANTE em registro oficial de produto compatível", "média",
+                                                       "o registro é de um produto compatível, não necessariamente o modelo pesquisado"),
+    "exportador (embarques)": ("a empresa exportou mercadorias com descrição compatível", "baixa",
+                               "embarques não comprovam que a empresa fabrica, nem capacidade, preço ou qualidade"),
+    "fornecedor declarado": ("vínculo informado (pelo usuário ou pela empresa) sem documento", "baixa", "informação não verificada"),
+    "fornecedor cadastrado": ("o cadastro da empresa lista produtos compatíveis", "baixa", "cadastro informado, não verificado"),
+    "candidato por similaridade": ("correspondência apenas pelo nome do produto em outro idioma/sinônimo", "baixa",
+                                   "similaridade de texto — pode ser outro produto"),
+}
+TYPE_ORDER = list(MATCH_TYPES)
+
+
+def discover(db, query: str, family: str | None = None, product_id: str | None = None, limit: int = 50,
+             extra_terms: list[str] | None = None) -> dict:
+    """Fornecedores CANDIDATOS somente a partir de registros existentes: cadastro, vínculos produto↔empresa, embarques
+    importados e fabricantes em registros Anatel. Cada candidato traz o TIPO de correspondência, a fonte, a evidência
+    concreta, a confiança e as limitações. Nenhum fornecedor é inventado e nenhuma relação inferida vira comprovação."""
     S.ensure(db)
     terms = _terms(query)
-    found: dict[int, dict] = {}
+    orig = [terms] if terms else []
+    groups = term_groups(db, query, family, product_id)
+    for t in extra_terms or []:
+        g = _terms(t)
+        if g and g not in groups:
+            groups.append(g)
+    found: dict = {}
 
-    def add(cid, motivo, fonte, peso):
-        c = _row(db, cid)
-        if not c or c["verification_status"].startswith("mesclada"):
-            return
-        f = found.setdefault(cid, {"company_id": cid, "empresa": c["display_name"] or c["legal_name"], "pais": c["country"],
-                                   "tipo": c["company_type"], "motivos": [], "fontes": set(), "pontos": 0.0})
-        f["motivos"].append(motivo)
+    def add(key, cid, nome, pais, tipo_emp, mtype, fonte, evidencia, peso):
+        f = found.setdefault(key, {"company_id": cid, "empresa": nome, "pais": pais, "tipo": tipo_emp, "correspondencias": [],
+                                   "fontes": set(), "pontos": 0.0})
+        desc, conf, lim = MATCH_TYPES[mtype]
+        f["correspondencias"].append({"tipo": mtype, "fonte": fonte, "evidencia": evidencia, "confianca": conf, "significado": desc, "limitacao": lim})
         f["fontes"].add(fonte)
         f["pontos"] += peso
+
+    def add_c(cid, mtype, fonte, evidencia, peso):
+        c = _row(db, cid)
+        if c and not c["verification_status"].startswith("mesclada"):
+            add(cid, cid, c["display_name"] or c["legal_name"], c["country"], c["company_type"], mtype, fonte, evidencia, peso)
+
     for r in db.query("SELECT * FROM supplier_products"):
-        hit = (product_id and r["product_id"] == product_id) or (family and r["family"] and family.lower() in r["family"].lower()) or \
-              (terms and r["family"] and all(t in r["family"].lower() for t in terms[:2]))
-        if hit:
-            add(r["company_id"], f"vínculo '{r['relation']}' com {r['product_id'] or r['family']}", r["source"], 3.0)
-    groups = term_groups(db, query, family, product_id)
+        hit = (product_id and r["product_id"] in (product_id, product_id.split(":")[0])) or \
+              (family and r["family"] and family.lower() == r["family"].lower()) or (groups and r["family"] and _hits(r["family"], groups))
+        if not hit:
+            continue
+        rel = (r["relation"] or "").lower()
+        mtype = ("fabricante documentado em registro regulatório" if "registro" in rel else
+                 "fabricante confirmado" if "fabricante" in rel and "documentado" in rel and r["evidence"] else "fornecedor declarado")
+        add_c(r["company_id"], mtype, r["source"], f"vínculo '{r['relation']}' com {r['product_id'] or r['family']}" + (f" — {r['evidence']}" if r["evidence"] else ""),
+              {"fabricante confirmado": 5, "fabricante documentado em registro regulatório": 3}.get(mtype, 1.5))
     for c in db.query("SELECT company_id, product_families, business_categories FROM companies WHERE verification_status NOT LIKE 'mesclada%'"):
         txt = ((c["product_families"] or "") + " " + (c["business_categories"] or "")).lower()
         if groups and _hits(txt, groups):
-            add(c["company_id"], "famílias/categorias do cadastro contêm os termos pesquisados", "cadastro", 1.5)
-    if terms:
+            direct = bool(orig) and _hits(txt, orig)
+            add_c(c["company_id"], "fornecedor cadastrado" if direct else "candidato por similaridade", "cadastro",
+                  "produtos no cadastro: " + ", ".join(json.loads(c["product_families"] or "[]")[:5]), 1.0 if direct else 0.5)
+    if groups:
         allt = sorted({w for g in groups for w in g})[:12]
         like = " OR ".join("LOWER(description) LIKE ?" for _ in allt)
-        per = defaultdict(lambda: {"n": 0, "ult": None})
-        for s in db.query(f"SELECT exporter_id, description, date FROM trade_shipments WHERE exporter_id IS NOT NULL AND ({like}) LIMIT 20000",
+        per = defaultdict(lambda: {"n": 0, "ult": None, "ini": None, "docs": [], "src": set(), "sim": True})
+        for s in db.query(f"SELECT exporter_id, description, date, doc_id, source FROM trade_shipments WHERE exporter_id IS NOT NULL AND ({like}) LIMIT 20000",
                           tuple(f"%{t}%" for t in allt)):
             if _hits(s["description"], groups):
                 p = per[s["exporter_id"]]
                 p["n"] += 1
                 p["ult"] = max(p["ult"] or "", s["date"] or "") or None
+                p["ini"] = min(p["ini"] or "9999", s["date"] or "9999") if s["date"] else p["ini"]
+                if s["doc_id"] and len(p["docs"]) < 5:
+                    p["docs"].append(s["doc_id"])
+                p["src"].add(s["source"])
+                if orig and _hits(s["description"], orig):
+                    p["sim"] = False
         for eid, p in sorted(per.items(), key=lambda kv: -kv[1]["n"])[:100]:
-            add(eid, f"{p['n']} embarque(s) com descrição compatível (último {p['ult'] or 'sem data'})", "embarques importados",
-                1.0 + min(2.0, p["n"] / 5))
+            ev = f"{p['n']} embarque(s) com descrição compatível ({p['ini'] or '?'} a {p['ult'] or '?'})" + (f"; documentos: {', '.join(p['docs'])}" if p["docs"] else "")
+            add_c(eid, "exportador (embarques)", ", ".join(sorted(p["src"])), ev + (" — correspondência pelo nome em outro idioma" if p["sim"] and orig else ""),
+                  1.0 + min(2.0, p["n"] / 5))
         try:
             from ..regulatory import registry as R
-            an = R.search_anatel(db, {"produto": query}, limit=200)["resultados"]
+            an = []
+            for q in dict.fromkeys([query, *(extra_terms or [])]):
+                an += R.search_anatel(db, {"produto": q}, limit=200)["resultados"]
         except Exception:  # noqa: BLE001
             an = []
-        fabs = Counter(r.get("fabricante") for r in an if r.get("fabricante"))
-        for fab, n in fabs.most_common(30):
+        fabs = defaultdict(list)
+        for r in an:
+            if r.get("fabricante"):
+                fabs[r["fabricante"]].append(r)
+        for fab, regs in sorted(fabs.items(), key=lambda kv: -len(kv[1]))[:30]:
+            ev = f"fabricante em {len(regs)} homologação(ões) Anatel: " + ", ".join(str(x.get("registro") or "") for x in regs[:4]) + \
+                 (f" (modelo {regs[0].get('modelo')})" if regs[0].get("modelo") else "")
             m = db.query("SELECT company_id FROM companies WHERE norm_name = ? LIMIT 1", (S.norm_company(fab),))
             if m:
-                add(m[0]["company_id"], f"fabricante em {n} homologação(ões) Anatel com produto compatível", "registros Anatel", 2.0)
+                add_c(m[0]["company_id"], "fabricante documentado em registro regulatório", "registros Anatel", ev, 3.0)
             else:
-                found[-len(found) - 1] = {"company_id": None, "empresa": fab, "pais": next((r.get("pais_fabricante") for r in an if r.get("fabricante") == fab), None),
-                                          "tipo": "fabricante (registro)", "motivos": [f"fabricante em {n} homologação(ões) Anatel (ainda não cadastrado)"],
-                                          "fontes": {"registros Anatel"}, "pontos": 2.0}
+                add(f"anatel:{fab}", None, fab, regs[0].get("pais_fabricante"), "fabricante (registro, não cadastrado)",
+                    "fabricante documentado em registro regulatório", "registros Anatel", ev, 3.0)
     out = []
     for f in found.values():
         f["fontes"] = sorted(f["fontes"])
-        f["confianca"] = "média" if f["pontos"] >= 3 and len(f["fontes"]) >= 2 else "baixa"
+        types = sorted({c["tipo"] for c in f["correspondencias"]}, key=TYPE_ORDER.index)
+        f["tipo_correspondencia"] = types[0]
+        f["tipos"] = types
+        f["confianca"] = ("alta" if "fabricante confirmado" in types else
+                          "média" if types[0] == "fabricante documentado em registro regulatório" or (len(types) >= 2 and len(f["fontes"]) >= 2) else "baixa")
+        f["comprovacao"] = "documental" if types[0] in ("fabricante confirmado", "fabricante documentado em registro regulatório") else \
+            "registro de embarque" if types[0] == "exportador (embarques)" else "não comprovada (cadastro/declaração/similaridade)"
+        f["limitacoes"] = sorted({c["limitacao"] for c in f["correspondencias"]})
+        f["motivos"] = [f"{c['tipo']}: {c['evidencia']}" for c in f["correspondencias"]]
+        f["produto_relacionado"] = product_id or family or query
         out.append(f)
-    out.sort(key=lambda x: -x["pontos"])
-    return {"consulta": query, "termos": terms, "grupos_de_termos": groups if terms else [], "candidatos": out[:limit],
+    out.sort(key=lambda x: (TYPE_ORDER.index(x["tipo_correspondencia"]), -x["pontos"]))
+    return {"consulta": query, "termos": terms, "grupos_de_termos": groups if terms else [], "candidatos": out[:limit], "tipos": MATCH_TYPES,
             "aviso": "Candidatos para investigação, não fornecedores confirmados. Presença em registro ou embarque não indica "
                      "interesse em fornecer, capacidade, preço nem qualidade.",
             "vazio": None if out else "Nenhum registro compatível no cadastro, nos embarques importados ou nos registros regulatórios "
