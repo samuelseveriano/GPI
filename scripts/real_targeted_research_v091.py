@@ -56,7 +56,7 @@ def main(out_path: str) -> int:
             for c in col:
                 if c["id"] != "gdelt" and c["estado"] in ("com dados", "cache válido"):
                     report["falhas"].append(f"{q}: {c['id']} marcado com dados sem credencial")
-                if c["id"] != "gdelt" and c["estado"] not in ("não autorizada", "ignorada (modo rápido)"):
+                if c["id"] != "gdelt" and c["estado"] not in ("não autorizada", "ignorada (modo rápido)", "não cobre o mercado"):
                     report["falhas"].append(f"{q}: {c['id']} deveria ser 'não autorizada' sem credencial (veio {c['estado']})")
                 if c["id"] == "gdelt" and c["estado"] == "falhou" and "formato" in (c.get("motivo") or "").lower():
                     report["falhas"].append(f"{q}: GDELT mudou o formato: {c['motivo']}")
@@ -66,6 +66,13 @@ def main(out_path: str) -> int:
                 report["falhas"].append(f"{q}: sem volume/anúncios a decisão deveria ser CINZA (veio {res['decisao']['cor']})")
             if not useful and res.get("mensagem_final", "").startswith("Processamento concluído — dados insuficientes") is False:
                 report["falhas"].append(f"{q}: pesquisa sem evidência não marcada como dados insuficientes")
+            cv = res.get("coberturas") or {}
+            item["coberturas"] = {k: (cv.get(k) or {}).get("nivel") for k in ("comercial", "contextual", "tecnica")}
+            if gd and gd["estado"] not in ("com dados", "sem dados", "limite de requisições", "bloqueada pela rede", "indisponível"):
+                report["falhas"].append(f"{q}: GDELT com estado inesperado {gd['estado']} ({gd.get('motivo')})")
+            if (cv.get("comercial") or {}).get("n"):
+                report["falhas"].append(f"{q}: cobertura comercial sem nenhuma fonte comercial autorizada")
+            print(f"{q}: coberturas {item['coberturas']} · confiança {(cv.get('confianca') or {}).get('nivel')}")
             print(f"{q}: {item['nome_comercial']} · {j['status']} · GDELT={gd and gd['estado']} ({gd and gd['registros']} meses) · "
                   f"fontes úteis={useful} · {res.get('mensagem_final')}")
             for c in col:

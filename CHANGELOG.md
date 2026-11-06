@@ -39,6 +39,14 @@ Somente ferramentas gratuitas; nenhuma dependência paga obrigatória.
 - Painel "Fontes e cobertura desta investigação"; Dashboard com contagens separadas e dados demonstrativos à parte.
 - Monitoramento semanal a partir de uma pesquisa (termos, mercado e fontes). Ver docs/V091_REVISAO.md.
 
+### Correções finais
+- Coberturas comercial × contextual × técnica + confiança da investigação; imagens/notícias/fornecedores não contam como demanda.
+- Erros HTTP com causa específica (429 com Retry-After e backoff limitado; 403 de proxy × servidor × permissão; 401; DNS/TLS/timeout/5xx).
+- Seleção de mercados: sem substituição silenciosa (eBay EUA não vira Brasil); GDELT global; China sem cobertura informada.
+- Página "Diagnóstico de Integrações" com "Testar conexão" e teste de pesquisa do Mercado Livre (sem gravar).
+- Mercado Livre: renovação única em 401, mensagens para 403/429. Cache com chave completa e intervalo mínimo na atualização forçada.
+
 ### Banco de dados
 - Apenas tabelas novas, criadas sob demanda; nenhuma tabela existente alterada. Cadastro antigo de fornecedores copiado.
 - Revisão: tabela `research_source_runs` (cache das consultas direcionadas) e coluna `monitored.params` (ADD COLUMN).
+- Correções finais: colunas `cache_key`, `lang`, `product_id`, `params` em `research_source_runs` (ADD COLUMN).

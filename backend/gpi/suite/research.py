@@ -155,17 +155,49 @@ def run(db, rid: int, ctx: dict) -> dict:
             out.setdefault("erros", []).append({"etapa": k, "erro": type(e).__name__, "detalhe": traceback.format_exc(limit=2)[-600:]})
     if "decisao" not in out:
         out["decisao"] = IX.classify_decision(None, None)
-    cov = out.get("cobertura") or {"fontes_com_evidencia": 0}
-    out["conclusiva"] = bool(cov.get("fontes_com_evidencia")) and out["decisao"]["cor"] != "CINZA"
-    out["mensagem_final"] = (INSUFFICIENT if not cov.get("fontes_com_evidencia") or out["decisao"]["cor"] == "CINZA"
+    ncom = ((out.get("coberturas") or {}).get("comercial") or {}).get("n", 0)
+    out["conclusiva"] = bool(ncom) and out["decisao"]["cor"] != "CINZA"
+    out["mensagem_final"] = (INSUFFICIENT if not ncom or out["decisao"]["cor"] == "CINZA"
                              else "Processamento concluído — evidências suficientes para uma avaliação " +
                              ("preliminar." if out["decisao"]["cor"] == "AMARELO" else "comercial."))
+    out["resultado"] = summary(db, rid, out)
     status = ("cancelada" if was_cancelled else "concluída com falhas" if failed else
               "concluída — dados insuficientes" if not out["conclusiva"] else "concluída")
     db.execute("UPDATE research_jobs SET status = ?, result = ?, product_id = ?, finished_at = ?, steps = ? WHERE id = ?",
                (status, json.dumps(out, ensure_ascii=False, default=str), st["pid"], S.now(), json.dumps(steps, ensure_ascii=False), rid))
     _running.pop(rid, None)
     return out
+
+
+def summary(db, rid, out) -> dict:
+    """Bloco 'Resultado': classificação executiva, confiança, evidências, limitações e próximas ações objetivas
+    (cada fonte ausente vira um botão para a integração correspondente)."""
+    cov = out.get("coberturas") or {}
+    dec = out.get("decisao") or {}
+    ov = (out.get("abas") or {}).get("visao_geral") or {}
+    lim, acts = [], []
+    for r in out.get("fontes") or []:
+        if r.get("tipo") != "consulta direcionada":
+            continue
+        if r["estado"] == "não autorizada":
+            acts.append({"texto": f"{r['fonte']} não conectado — abrir Central de Integrações", "link": r.get("central") or "#integracoes"})
+        elif r["estado"] in ("limite de requisições", "bloqueada pela rede", "indisponível", "falhou"):
+            lim.append(f"{r['fonte']} ({r['mercado']}): {r.get('motivo') or r['estado']}")
+    for k, v in ((out.get("mercados") or {}).get("cobertura") or {}).items():
+        if v.get("mensagem") and k != "GLOBAL":
+            lim.append(f"{k}: {v['mensagem']}")
+    for f in ((ov.get("estagio_direto") or {}).get("faltando") or []):
+        acts.append({"texto": f"Obter {f}", "link": None})
+    if (cov.get("comercial") or {}).get("n", 0) == 0:
+        lim.append("Sem evidência comercial: a classificação permanece CINZA (imagens, notícias e fornecedores não comprovam demanda).")
+    seen, uniq = set(), []
+    for a in acts:
+        if a["texto"] not in seen:
+            seen.add(a["texto"])
+            uniq.append(a)
+    n_ev = db.query("SELECT COUNT(*) AS n FROM research_evidence WHERE research_id = ?", (rid,))[0]["n"]
+    return {"classificacao": dec.get("cor"), "significado": dec.get("significado"), "confianca": (cov.get("confianca") or {}),
+            "evidencias": n_ev, "limitacoes": lim, "proximas_acoes": uniq[:10]}
 
 
 def _with_data(n, det):
@@ -220,33 +252,47 @@ def _s_catalog(db, ctx, params, out, st, rid, today, cancelled):
     return _with_data(local_n, det)
 
 
+def _markets(params):
+    markets = [params.get("mercado") or "BR", *[m for m in (params.get("comparacao") or []) if m]][:6]
+    return list(dict.fromkeys(str(m).upper() for m in markets))
+
+
+NOT_PLANNED = ("ignorada (modo rápido)", "não cobre o mercado")
+FAILED = ("indisponível", "falhou", "não autorizada", "limite de requisições", "bloqueada pela rede")
+
+
 def _s_collect(db, ctx, params, out, st, rid, today, cancelled):
     mode = "completa" if params.get("profundidade") == "completa" else "rapida"
-    markets = [params.get("mercado") or "BR", *[m for m in (params.get("comparacao") or []) if m]][:6]
-    markets = list(dict.fromkeys(m.upper() for m in markets))
+    markets = _markets(params)
     force = bool(params.get("atualizar"))
     need = force or mode == "completa" or not st.get("local_n")
+    cov = TG.market_coverage(mode, markets)
+    out["mercados"] = {"principal": markets[0], "comparativos": markets[1:], "cobertura": cov,
+                       "comparacao_ativa": mode == "completa" and len(markets) > 1}
+    st["main_market"] = markets[0]
     if not ctx.get("sync_ctx_fn"):
         st["collected"] = []
         out["coleta"] = {"realizada": False, "motivo": "conectores indisponíveis neste contexto"}
         return "indisponível", "contexto de conectores indisponível"
     if not need:
-        st["collected"] = [{"id": sid, **TG._base(sid, m), "estado": "ignorada (modo rápido)", "consulta_realizada": False, "registros": 0,
-                            "motivo": "evidências locais suficientes para a avaliação rápida; use 'Atualizar' para consultar",
-                            "acao": "marcar 'Atualizar fontes' ou usar a pesquisa completa"} for sid, m in TG.plan(mode, markets)]
+        st["collected"] = [{"id": sid, **TG._base(sid, m, role), "estado": "ignorada (modo rápido)", "consulta_realizada": False, "registros": 0,
+                            "motivo": "evidências locais suficientes para a avaliação rápida; use 'Atualizar fontes' para consultar",
+                            "acao": "marcar 'Atualizar fontes' ou usar a pesquisa completa"} for sid, m, role in TG.plan(mode, markets)]
         out["coleta"] = {"realizada": False, "motivo": "pesquisa rápida com evidências locais (cache)"}
         return "ignorada por configuração", "evidências locais disponíveis; consulta externa não necessária na rápida"
     res = TG.collect(db, ctx["sync_ctx_fn"], st["terms"]["pt"], st["terms"]["en"], st["pid"], markets, mode, force, rid, cancelled)
     st["collected"] = res
     useful = [r for r in res if r["estado"] in TG.USEFUL and r["registros"]]
+    planned = [r for r in res if r["estado"] not in NOT_PLANNED]
     out["coleta"] = {"realizada": True, "modo": mode, "mercados": markets, "atualizacao_forcada": force, "resultados": res}
-    det = f"{len(useful)} fonte(s) com dados de {sum(1 for r in res if r['estado'] not in ('ignorada (modo rápido)',))} prevista(s)"
+    if not any(r["papel"] == "principal" for r in planned):
+        return "indisponível", f"{markets[0]}: {TG.NO_COVERAGE}"
+    det = f"{len(useful)} fonte(s) com dados de {len(planned)} consulta(s) prevista(s)"
     if useful:
         return "concluída com dados", det
-    planned = [r for r in res if r["estado"] != "ignorada (modo rápido)"]
     if planned and all(r["estado"] == "não autorizada" for r in planned):
         return "não autorizada", "nenhuma fonte direcionada autorizada: " + "; ".join(sorted({r["fonte"] for r in planned}))
-    if planned and all(r["estado"] in ("indisponível", "falhou", "não autorizada") for r in planned):
+    if planned and all(r["estado"] in FAILED for r in planned):
         return "indisponível", det
     return "concluída sem dados", det
 
@@ -272,7 +318,7 @@ def _volume_series(db, terms, pid, since):
 def _s_demand(db, ctx, params, out, st, rid, today, cancelled):
     from ..analytics.classification import trend_test
     since, until = _period(params, today)
-    markets = list(dict.fromkeys([params.get("mercado") or "BR", *[m for m in (params.get("comparacao") or []) if m]]))[:6]
+    markets = _markets(params)
     evs = [e for e in (st["p"] or {}).get("evidencias") or []]
     kw = MK.keywords(db, st["terms"]["pt"] if st.get("terms") else out["consulta"])
     vols = _volume_series(db, _terms_q(st, out), st["pid"], since)
@@ -282,20 +328,22 @@ def _s_demand(db, ctx, params, out, st, rid, today, cancelled):
         tt = trend_test(np.asarray(y)) if len(y) >= 6 else None
         series.append({"fonte": src, "mercado": cc, "meses": len(pts), "ultimo": pts[-1][1] if pts else None, "inicio": pts[0][0] if pts else None,
                        "fim": pts[-1][0] if pts else None, "tendencia": {k: tt.get(k) for k in ("direcao", "p_valor", "significativa")} if tt else None,
-                       "pontos": pts})
-    st["direct"]["volume"] = series
+                       "pontos": pts, "papel": "principal" if cc == markets[0] else ("comparativo" if cc in markets else "fora da seleção")})
+    series = [x for x in series if x["papel"] != "fora da seleção"]
+    st["direct"]["volume"] = [x for x in series if x["papel"] == "principal"]        # decisão = mercado principal
+    st["direct"]["volume_all"] = series
     news = db.query("SELECT ref_date, value FROM search_observations WHERE source = 'gdelt' AND term IN (%s) AND ref_date >= ? ORDER BY ref_date"
                     % ",".join("?" * len(_terms_q(st, out))), (*_terms_q(st, out), since[:7] + "-01"))
     rows = []
-    for m in markets:
+    for i, m in enumerate(markets):
         mrows = [r for r in kw["observadas"] if r["mercado"] in (m, f"GLOBAL:{params.get('idioma') or 'pt'}") and r["ultimo"] >= since[:len(r["ultimo"])]]
         rows.append({"mercado": m, "termos_observados": len(mrows), "com_volume": sum(1 for r in mrows if r["classe"] == "com volume verificado"),
                      "com_historico": sum(1 for r in mrows if r["classe"] == "com histórico"), "exemplos": mrows[:8],
-                     "volume": [s for s in series if s["mercado"] == m]})
+                     "volume": [s for s in series if s["mercado"] == m], "papel": "principal" if i == 0 else "comparativo"})
     out["abas"]["demanda"] = {"periodo": [since, until], "mercados": rows, "volume_autorizado": series,
                               "comparacao_mercados": params.get("profundidade") == "completa" and len(markets) > 1,
-                              "noticias_gdelt": {"meses": len(news), "artigos": sum(n["value"] for n in news),
-                                                 "nota": "Atenção pública na imprensa — NÃO é demanda."} if news else None,
+                              "noticias_gdelt": {"meses": len(news), "artigos": sum(n["value"] for n in news), "mercado": "GLOBAL",
+                                                 "nota": "Atenção pública na imprensa, cobertura GLOBAL — NÃO é demanda e não é atribuída ao Brasil."} if news else None,
                               "evidencias_inteligencia": [{k: e.get(k) for k in ("fonte_nome", "tipo_rotulo", "indicador", "mercado", "periodo",
                                                                                   "observacoes_n", "nao_e")} for e in evs],
                               "traducoes": kw["traducoes"], "palavras_geradas": kw["geradas"][:20], "legenda": kw["legenda"], "aviso": kw["aviso"],
@@ -307,22 +355,37 @@ def _s_demand(db, ctx, params, out, st, rid, today, cancelled):
 def _s_markets(db, ctx, params, out, st, rid, today, cancelled):
     pid = st["pid"]
     terms = _terms_q(st, out)
-    ls = MK.listing_stats(db, pid, 30, today, terms) if (pid or terms) else None
-    ls90 = MK.listing_stats(db, pid, 90, today, terms) if (pid or terms) else None
-    recent = db.query("SELECT source, item_id, title, brand, price, currency, seller, MAX(day) AS dia, url, country FROM market_listings "
-                      "WHERE product_id = ? OR product_id LIKE ? OR query IN (%s) GROUP BY source, item_id ORDER BY dia DESC LIMIT 40"
-                      % ",".join("?" * len(terms)), (pid or "§", (pid or "§") + ":%", *terms))
+    markets = _markets(params)
+    mode = "completa" if params.get("profundidade") == "completa" else "rapida"
+    src_of = lambda m: [k for k, v in MK.SOURCE_MARKET.items() if v == m]  # noqa: E731
     per_market = {}
+    for i, m in enumerate(markets if mode == "completa" else markets[:1]):
+        srcs = src_of(m)
+        ls = MK.listing_stats(db, pid, 30, today, terms, srcs) if srcs else None
+        ls90 = MK.listing_stats(db, pid, 90, today, terms, srcs) if srcs else None
+        per_market[m] = {"papel": "principal" if i == 0 else "comparativo", "fontes": srcs, "ultimos_30_dias": ls, "ultimos_90_dias": ls90,
+                         "mensagem": None if srcs else "Nenhum marketplace com consulta direcionada para este mercado."}
+    main = per_market[markets[0]]
+    ls, ls90 = main["ultimos_30_dias"], main["ultimos_90_dias"]
+    recent = db.query("SELECT source, item_id, title, brand, price, currency, seller, MAX(day) AS dia, MIN(day) AS primeiro, COUNT(DISTINCT day) AS dias, url "
+                      "FROM market_listings WHERE product_id = ? OR product_id LIKE ? OR query IN (%s) GROUP BY source, item_id ORDER BY dia DESC LIMIT 60"
+                      % ",".join("?" * len(terms)), (pid or "§", (pid or "§") + ":%", *terms))
     for r in recent:
-        per_market.setdefault(r["country"] or "—", []).append(r["price"])
-    st["direct"]["listings"] = (ls or ls90 or {}).get("anuncios", 0)
+        r["mercado"] = MK.SOURCE_MARKET.get(r["source"], "—")
+        r["papel"] = "principal" if r["mercado"] == markets[0] else "comparativo"
+    main_items = [r for r in recent if r["papel"] == "principal"]
+    st["direct"]["listings"] = (ls or ls90 or {}).get("anuncios", 0)                # SÓ o mercado principal entra na decisão
     st["direct"]["listing_sources"] = (ls or ls90 or {}).get("fontes", [])
-    out["abas"]["marketplaces"] = {"ultimos_30_dias": ls, "ultimos_90_dias": ls90, "anuncios": recent, "competicao": MK.competition(ls),
-                                   "por_mercado": {k: {"anuncios": len(v), "preco_mediano": MK._median(v)} for k, v in per_market.items()},
+    st["direct"]["price_history"] = sum(1 for r in main_items if r["dias"] >= 2)
+    out["abas"]["marketplaces"] = {"mercado_principal": markets[0], "ultimos_30_dias": ls, "ultimos_90_dias": ls90, "por_mercado": per_market,
+                                   "anuncios": recent[:40], "competicao": MK.competition(ls),
+                                   "historico_precos": {"anuncios_com_2_ou_mais_coletas": st["direct"]["price_history"],
+                                                        "nota": "histórico só com observações reais (dias sem coleta não são preenchidos)"},
                                    "nao_disponivel": ["vendas", "receita", "unidades vendidas"],
-                                   "vazio": None if ls or ls90 else "Nenhum anúncio para este produto (veja 'Fontes e cobertura').",
-                                   "aviso": MK.AUTH_NOTE + " Quantidade de anúncios não é demanda."}
-    return _with_data(st["direct"]["listings"], f"{st['direct']['listings']} anúncio(s)")
+                                   "vazio": None if ls or ls90 else (main["mensagem"] or "Nenhum anúncio no mercado principal (veja 'Fontes e cobertura')."),
+                                   "aviso": MK.AUTH_NOTE + " Preço anunciado ≠ preço de venda; quantidade de anúncios não é demanda. "
+                                            "Anúncios de mercados comparativos não são atribuídos ao mercado principal."}
+    return _with_data(st["direct"]["listings"], f"{st['direct']['listings']} anúncio(s) no mercado principal ({markets[0]})")
 
 
 def _s_similar(db, ctx, params, out, st, rid, today, cancelled):
@@ -457,15 +520,103 @@ def _s_quality(db, ctx, params, out, st, rid, today, cancelled):
     cov = TG.coverage(diag)
     out["fontes"] = diag
     out["cobertura"] = cov
+    out["coberturas"] = coverage_by_type(db, out, st, diag)
+    out["cobertura"]["confianca"] = out["coberturas"]["confianca"]
     ind = IX.indicators(st["p"], today.isoformat())
     out["abas"]["qualidade"] = {"evidence_coverage": ind["evidence_coverage"], "frescor": ind["data_freshness"], "origens": origins,
                                 "identificacao": (st["u"] or {}).get("estado"), "associacoes_em_revisao": pend[0]["n"],
-                                "cobertura_investigacao": cov, "fontes": sorted({e.get("fonte_nome") or e.get("fonte") for e in evs} | set(cov["fontes"])),
+                                "cobertura_investigacao": cov, "coberturas": out["coberturas"], "fontes": sorted({e.get("fonte_nome") or e.get("fonte") for e in evs} | set(cov["fontes"])),
                                 "regras": ["Dados DEMONSTRATIVOS/SIMULADOS nunca entram como evidência comercial.",
                                            "Identificação não confirmada impede recomendação (VERDE).",
                                            "Notícias e vídeos são contexto de atenção pública, não demanda.",
                                            "Ausência de dado não é evidência negativa."]}
-    return _with_data(cov["fontes_com_evidencia"], f"{cov['fontes_com_evidencia']} fonte(s) com evidência útil")
+    c = out["coberturas"]
+    return _with_data(c["comercial"]["n"], f"comercial: {c['comercial']['nivel']} · contextual: {c['contextual']['nivel']} · "
+                                           f"técnica: {c['tecnica']['nivel']} · confiança: {c['confianca']['nivel']}")
+
+
+def _level(n, good):
+    return "nenhuma" if not n else ("boa" if n >= good else "parcial")
+
+
+def coverage_by_type(db, out, st, diag) -> dict:
+    """Três coberturas que NÃO se misturam:
+    * comercial — volume autorizado, histórico de procura, anúncios e histórico de preços do mercado principal, evidências
+      comerciais locais (anúncios ≠ vendas);
+    * contextual — notícias, vídeos, imagens, produtos relacionados e categoria (enriquecem, não comprovam intenção de compra);
+    * técnica — identificação, família/variante, especificações, fornecedores candidatos, NCM e registros regulatórios.
+    A classificação comercial (cor) continua dependendo apenas de evidências elegíveis."""
+    from ..intel.semantics import COMMERCIAL, DEMAND, SEARCH
+    ab = out["abas"]
+    com = []
+    for v in st["direct"].get("volume") or []:
+        com.append({"indicador": "volume de buscas autorizado", "fonte": v["fonte"], "mercado": v["mercado"], "registros": v["meses"],
+                    "detalhe": f"{v['meses']} mês(es)" + (f", tendência {v['tendencia']['direcao']}" if v.get("tendencia") else "")})
+    for v in [x for x in st["direct"].get("volume_all") or [] if x.get("papel") == "comparativo"]:
+        com.append({"indicador": "volume de buscas autorizado (mercado comparativo)", "fonte": v["fonte"], "mercado": v["mercado"],
+                    "registros": v["meses"], "detalhe": "não entra na decisão do mercado principal", "comparativo": True})
+    if st["direct"].get("listings"):
+        com.append({"indicador": "anúncios e preços anunciados (oferta observada, não vendas)", "fonte": ", ".join(st["direct"].get("listing_sources") or []),
+                    "mercado": st.get("main_market"), "registros": st["direct"]["listings"], "detalhe": "não é quantidade de vendas"})
+    if st["direct"].get("price_history"):
+        com.append({"indicador": "histórico de preços", "fonte": "anúncios coletados", "mercado": st.get("main_market"),
+                    "registros": st["direct"]["price_history"], "detalhe": "anúncios com ≥ 2 coletas"})
+    for e in (st["p"] or {}).get("evidencias") or []:
+        if e.get("tipo") in (COMMERCIAL, DEMAND, SEARCH):
+            com.append({"indicador": e.get("indicador") or e.get("metrica"), "fonte": e.get("fonte_nome") or e.get("fonte"), "mercado": e.get("mercado"),
+                        "registros": e.get("observacoes_n"), "detalhe": "histórico local (sincronizações anteriores)"})
+    ctx_items = []
+    for c in st.get("collected") or []:
+        if c["estado"] in TG.USEFUL and c["registros"] and c["capacidade"] in ("news_mentions", "product_search"):
+            ctx_items.append({"indicador": c["indicador"], "fonte": c["fonte"], "mercado": c["mercado"], "registros": c["registros"]})
+    imgs = db.query("SELECT COUNT(*) AS n FROM product_images WHERE product_id = ? OR product_id LIKE ?", (st["pid"] or "§", (st["pid"] or "§").split(":")[0] + "%"))[0]["n"]
+    if imgs:
+        ctx_items.append({"indicador": "imagens do produto no catálogo visual", "fonte": "catálogo local", "mercado": "—", "registros": imgs})
+    rel = len((ab.get("semelhantes") or {}).get("itens") or [])
+    if rel:
+        ctx_items.append({"indicador": "produtos relacionados", "fonte": "catálogo", "mercado": "—", "registros": rel})
+    cat = ((ab.get("visao_geral") or {}).get("identificacao") or {}).get("familia") or {}
+    if cat.get("categoria"):
+        ctx_items.append({"indicador": "categoria", "fonte": "catálogo", "mercado": "—", "registros": 1, "detalhe": cat["categoria"]})
+    u = st.get("u") or {}
+    idf = (ab.get("visao_geral") or {}).get("identificacao") or {}
+    tec = []
+    if u.get("estado") == "confirmada":
+        tec.append({"indicador": "identificação técnica confirmada", "fonte": "Product Understanding", "registros": 1, "detalhe": u.get("nivel_rotulo")})
+    if idf.get("familia"):
+        tec.append({"indicador": "família", "fonte": "catálogo", "registros": 1, "detalhe": idf["familia"]["nome"]})
+    if idf.get("variante"):
+        tec.append({"indicador": "variante", "fonte": "catálogo", "registros": 1, "detalhe": idf["variante"]["rotulo"]})
+    specs = {k: v for k, v in (u.get("atributos") or {}).items() if v}
+    if specs:
+        tec.append({"indicador": "especificações explícitas", "fonte": "texto da consulta", "registros": len(specs), "detalhe": ", ".join(specs)})
+    sup = (ab.get("fornecedores") or {}).get("candidatos") or []
+    if sup:
+        tec.append({"indicador": "fornecedores candidatos", "fonte": "cadastro/embarques/registros", "registros": len(sup), "detalhe": "candidatos, não confirmados"})
+    imp = ab.get("importacao") or {}
+    if (imp.get("ncm") or {}).get("candidatas"):
+        tec.append({"indicador": "NCM candidata", "fonte": "tabela NCM", "registros": len(imp["ncm"]["candidatas"]), "detalhe": "não é classificação fiscal"})
+    if (imp.get("regulatorio") or {}).get("registros_encontrados"):
+        tec.append({"indicador": "registros regulatórios", "fonte": "Anatel/Inmetro", "registros": imp["regulatorio"]["registros_encontrados"]})
+    main_com = [x for x in com if not x.get("comparativo")]
+    srcs = {x["fonte"] for x in main_com}
+    ident = u.get("estado") == "confirmada"
+    if main_com and ident and len(srcs) >= 2:
+        conf, why = "alta", "evidência comercial de ≥ 2 fontes no mercado principal e identificação confirmada"
+    elif main_com and ident:
+        conf, why = "média", "evidência comercial de uma fonte no mercado principal"
+    elif main_com:
+        conf, why = "baixa", "há evidência comercial, mas a identificação do produto não está confirmada"
+    elif ctx_items or tec:
+        conf, why = "baixa", "somente evidências contextuais e/ou técnicas — não comprovam demanda"
+    else:
+        conf, why = "insuficiente", "nenhuma evidência"
+    return {"comercial": {"nivel": _level(len(main_com), 2), "n": len(main_com), "itens": com,
+                          "nota": "volume autorizado, procura, anúncios/preços do mercado principal; anúncios não são vendas"},
+            "contextual": {"nivel": _level(len(ctx_items), 2), "n": len(ctx_items), "itens": ctx_items,
+                           "nota": "notícias, vídeos, imagens, relacionados e categoria — enriquecem, não comprovam intenção de compra"},
+            "tecnica": {"nivel": _level(len(tec), 4), "n": len(tec), "itens": tec, "nota": "identificação, especificações, fornecedores, NCM, regulatório"},
+            "confianca": {"nivel": conf, "motivo": why}}
 
 
 def _s_forecast(db, ctx, params, out, st, rid, today, cancelled):
@@ -520,7 +671,7 @@ def _s_evidence(db, ctx, params, out, st, rid, today, cancelled):
                                  "usage_restrictions": e.get("nao_e"), "origin": origin_of(e.get("fonte") or "", e.get("camada") or "observado",
                                                                                            e.get("metrica") or "")})
         n += 1
-    for s in st["direct"].get("volume") or []:
+    for s in st["direct"].get("volume_all") or st["direct"].get("volume") or []:
         S.add_evidence(db, rid, {"entity_type": "produto", "entity_id": ent, "source": s["fonte"], "source_record_id": f"{s['mercado']}:{s['inicio']}:{s['fim']}",
                                  "indicator": "volume mensal de buscas", "value": s["ultimo"], "unit": "buscas/mês", "country": s["mercado"],
                                  "period_start": s["inicio"], "period_end": s["fim"], "source_capability": "search_volume",

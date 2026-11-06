@@ -28,7 +28,11 @@ def _median(xs):
 
 
 # ------------------------------------------------------------------------------------------------ agregados de anúncios
-def listing_stats(db, product_id: str | None, days: int = 30, today: date | None = None, terms: list[str] | None = None) -> dict | None:
+SOURCE_MARKET = {"mercadolivre": "BR", "ebay": "US"}        # marketplace consultado (não o país do vendedor)
+
+
+def listing_stats(db, product_id: str | None, days: int = 30, today: date | None = None, terms: list[str] | None = None,
+                  sources: list[str] | None = None) -> dict | None:
     """Anúncios do produto (pelo ID canônico e suas variantes) e, se informado, pelos termos da consulta direcionada."""
     today = today or date.today()
     since = (today - timedelta(days=days)).isoformat()
@@ -37,7 +41,8 @@ def listing_stats(db, product_id: str | None, days: int = 30, today: date | None
     terms = [t for t in (terms or []) if t]
     rows = db.query("SELECT source, item_id, day, title, brand, price, currency, seller, country FROM market_listings "
                     "WHERE (product_id = ? OR product_id = ? OR product_id LIKE ?" + (" OR query IN (%s)" % ",".join("?" * len(terms)) if terms else "") +
-                    ") AND day >= ?", (pid, fam, fam + ":%", *terms, since))
+                    ") AND day >= ?" + (" AND source IN (%s)" % ",".join("?" * len(sources)) if sources else ""),
+                    (pid, fam, fam + ":%", *terms, since, *(sources or [])))
     if not rows:
         return None
     latest = {}

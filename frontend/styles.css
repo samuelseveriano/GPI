@@ -294,3 +294,4 @@ a.kpi { text-decoration: none; color: inherit; }
 label.f[hidden] { display: none; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 #rdos table.compact td:first-child, #rdos table.compact th:first-child { min-width: 170px; }
+#rdos details.panel table.compact, #dg table.compact { min-width: 1500px; } #rdos details.panel table.compact td, #dg table.compact td { vertical-align: top; }

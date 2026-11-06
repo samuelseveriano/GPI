@@ -27,7 +27,7 @@ window.GPI_V091 = function (H, PAGES) {
       <form class="panel" id="rf"><div class="btnrow" style="flex-wrap:wrap;gap:8px">
         <label class="f" style="flex:2 1 260px">Produto<input name="consulta" required minlength="2" value="${escH(a.q || '')}" placeholder="ex.: carregador GaN 65W, robot vacuum"></label>
         <label class="f">Mercado<select name="mercado">${['BR', 'US', 'CN'].map((m) => `<option ${a.mercado === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
-        <label class="f">Comparar com<input name="comparacao" placeholder="US, CN" size="8" value="${escH(a.comparacao || '')}"></label>
+        <div class="f">Comparar com (completa)<div>${[['US', 'EUA'], ['BR', 'Brasil'], ['CN', 'China']].map(([v, l]) => `<label class="small"><input type="checkbox" name="cmp" value="${v}"> ${l}</label>`).join(' ')}</div></div>
         <label class="f">Período<select name="periodo_meses">${[3, 6, 12, 24].map((m) => `<option value="${m}" ${m === 12 ? 'selected' : ''}>${m} meses</option>`).join('')}<option value="custom">personalizado</option></select></label>
         <label class="f" id="rfc" hidden>De<input type="date" name="inicio"></label><label class="f" id="rfd" hidden>Até<input type="date" name="fim"></label>
         <label class="f">Objetivo<select name="objetivo"><option>importar para revenda</option><option>avaliar demanda</option><option>comparar mercados</option><option>encontrar fornecedores</option><option>monitorar</option></select></label>
@@ -39,7 +39,7 @@ window.GPI_V091 = function (H, PAGES) {
     f.periodo_meses.onchange = () => { const c = f.periodo_meses.value === 'custom'; $('#rfc').hidden = !c; $('#rfd').hidden = !c; };
     f.onsubmit = async (ev) => {
       ev.preventDefault();
-      const b = { consulta: f.consulta.value, mercado: f.mercado.value, comparacao: f.comparacao.value.split(/[,; ]+/).filter(Boolean),
+      const b = { consulta: f.consulta.value, mercado: f.mercado.value, comparacao: [...f.querySelectorAll('[name=cmp]:checked')].map((o) => o.value).filter((v) => v !== f.mercado.value),
         periodo_meses: f.periodo_meses.value === 'custom' ? 12 : +f.periodo_meses.value, inicio: f.periodo_meses.value === 'custom' ? f.inicio.value : null,
         fim: f.periodo_meses.value === 'custom' ? f.fim.value : null, objetivo: f.objetivo.value, profundidade: f.profundidade.value, atualizar: f.atualizar.checked };
       try { const r = await post('/api/suite/pesquisa', b); location.hash = '#pesquisa-produtos/' + encodeURIComponent(qs({ id: r.id })); } catch (e) { $('#rout').innerHTML = errBox(e); }
@@ -52,14 +52,19 @@ window.GPI_V091 = function (H, PAGES) {
       let j;
       try { j = await api('/api/suite/pesquisa/' + id); } catch (e) { out.innerHTML = errBox(e); return; }
       if ($('#rf') && j.query) $('#rf').consulta.value = j.query;
-      const p = j.progresso, cov = j.cobertura, fin = (j.result || {}).mensagem_final;
+      const p = j.progresso, R = j.result || {}, fin = R.mensagem_final, cvs = R.coberturas;
       const SB = { 'concluída com dados': 'ok', 'concluída sem dados': 'demo', 'não autorizada': 'bad', 'indisponível': 'bad', 'falhou': 'bad', 'cancelada': '' };
+      const pe = p.por_estado || {}, unav = (pe['não autorizada'] || 0) + (pe['indisponível'] || 0) + (pe['falhou'] || 0);
+      const LV = { boa: 'ok', parcial: 'demo', nenhuma: 'bad', alta: 'ok', média: 'demo', baixa: 'bad', insuficiente: 'bad' };
+      const covBox = (t, c, tip) => `<div class="kpi" title="${escH(tip || '')}"><div class="v"><span class="badge ${LV[c.nivel] || ''}">${escH(c.nivel)}</span> ${num(c.n)}</div><div class="l">${t}</div></div>`;
+      const mk = R.mercados || {};
       out.innerHTML = `<section class="panel"><p><b>${escH(j.query)}</b> · ${escH(j.status)} ${j.finished_at ? '' : '<button class="btn small" id="rcancel">Cancelar</button>'}</p>
-        <div class="two"><div><p class="small"><b>Progresso do processamento</b>: ${p.encerradas}/${p.total} etapas encerradas (${p.pct}%)</p><div class="pbar"><div style="width:${p.pct}%"></div></div>
-          <p class="small muted">${escH(Object.entries(p.por_estado || {}).map(([k, v]) => `${v} ${k}`).join(' · '))}</p></div>
-        <div><p class="small"><b>Cobertura da investigação</b>: ${cov ? `${cov.fontes_com_evidencia} fonte(s) com evidência útil · ${cov.registros_validos} registro(s) válidos · capacidades: ${escH(cov.capacidades_cobertas.join(', ') || 'nenhuma')}` : 'calculada ao fim do processamento'}</p>
-          ${cov ? `<div class="pbar"><div style="width:${Math.min(100, 100 * cov.fontes_com_evidencia / Math.max(1, cov.fontes_previstas + 1))}%;background:${cov.fontes_com_evidencia ? 'var(--accent)' : 'var(--bad, #c33)'}"></div></div>` : ''}</div></div>
-        ${fin ? `<div class="banner ${(j.result || {}).conclusiva ? 'info' : ''}"><b>${escH(fin)}</b></div>` : ''}
+        ${mk.principal ? `<p class="small">Mercado principal: <b>${escH(mk.principal)}</b>${mk.comparativos && mk.comparativos.length ? ` · comparativo: ${escH(mk.comparativos.join(', '))}${mk.comparacao_ativa ? '' : ' (só na pesquisa completa)'}` : ''}
+          ${Object.entries(mk.cobertura || {}).map(([m, c]) => `<br><span class="muted">${escH(m)} (${escH(c.papel)}): ${escH(c.fontes.join(', ') || '—')}${c.mensagem ? ' — <b>' + escH(c.mensagem) + '</b>' : ''}</span>`).join('')}</p>` : ''}
+        <p class="small"><b>Progresso do processamento</b>: ${p.encerradas}/${p.total} etapas encerradas (${p.pct}%) · <span class="badge ok">${pe['concluída com dados'] || 0} com dados</span> <span class="badge demo">${pe['concluída sem dados'] || 0} sem dados</span> <span class="badge bad">${unav} indisponíveis/não autorizadas/falhas</span> ${pe['ignorada por configuração'] ? `<span class="badge">${pe['ignorada por configuração']} ignoradas por configuração</span>` : ''}</p>
+        <div class="pbar"><div style="width:${p.pct}%"></div></div>
+        ${cvs ? `<p class="small"><b>Cobertura da investigação</b> (não se somam)</p><section class="kpis compact">${covBox('Cobertura comercial', cvs.comercial, cvs.comercial.nota)}${covBox('Cobertura contextual', cvs.contextual, cvs.contextual.nota)}${covBox('Cobertura técnica', cvs.tecnica, cvs.tecnica.nota)}<div class="kpi" title="${escH(cvs.confianca.motivo)}"><div class="v"><span class="badge ${LV[cvs.confianca.nivel] || ''}">${escH(cvs.confianca.nivel)}</span></div><div class="l">Confiança da investigação</div></div></section>` : '<p class="small muted">Cobertura calculada ao fim do processamento.</p>'}
+        ${fin ? `<div class="banner ${R.conclusiva ? 'info' : ''}"><b>${escH(fin)}</b></div>` : ''}
         <details ${j.finished_at ? '' : 'open'}><summary class="small">Etapas</summary><ol class="small">${j.steps.map((s) => `<li>${escH(s.nome)} — <span class="badge ${SB[s.estado] || ''}">${escH(s.estado)}</span> <span class="muted">${escH(s.detalhe || '')}</span></li>`).join('')}</ol></details></section><div id="rdos"></div>`;
       if ($('#rcancel')) $('#rcancel').onclick = async () => { await post(`/api/suite/pesquisa/${id}/cancelar`, {}); };
       if (j.result) { renderDossier(j, $('#rdos')); return; }
@@ -72,6 +77,7 @@ window.GPI_V091 = function (H, PAGES) {
     const pid = ov.produto_id;
     const idf = ov.identificacao || {};
     box.innerHTML = `<section class="panel"><h2>${escH(ov.produto || R.consulta)} ${dec(R.decisao)}</h2>
+      <p class="small">${idf.familia ? `Categoria: <b>${escH(idf.familia.categoria || '—')}</b> · ` : ''}Mercado: <b>${escH(((R.mercados || {}).principal) || (R.parametros || {}).mercado || 'BR')}</b></p>
       <p class="small muted">${idf.familia ? `Família: ${escH(idf.familia.nome)}${idf.variante ? ' · variante: ' + escH(idf.variante.rotulo) : ''} · ` : ''}${escH(Object.entries(idf.traducoes || {}).map(([k, v]) => `${k}: ${v}`).join(' · '))}${pid ? ` · <span title="identificador canônico interno">ID ${escH(pid)}</span>` : ''} · modo ${escH(R.modo || '')}${ov.registro_criado ? ' · <b>registro canônico criado nesta pesquisa</b>' : ''}</p>
       <p class="small">${escH((R.decisao || {}).significado || '')}</p>${notes((R.decisao || {}).motivos)}
       <div class="btnrow" style="flex-wrap:wrap"><button class="btn small" id="dmon">Monitorar semanalmente</button><button class="btn small" id="dsave">${j.saved ? 'Salva ✓' : 'Salvar pesquisa'}</button>
@@ -81,11 +87,14 @@ window.GPI_V091 = function (H, PAGES) {
         <a class="btn small" href="#fornecedores-intel/${encodeURIComponent(qs({ q: ov.produto || R.consulta }))}">Investigar fornecedores</a>
         <a class="btn small" href="#importacao-intel/${encodeURIComponent(qs({ q: R.consulta, produto: pid || '' }))}">Investigação de importação</a>
         <a class="btn small" href="#pesquisa-imagem">Pesquisa por imagem</a><span id="dmsg" class="small"></span></div>
-      <details class="panel" open><summary><b>Fontes e cobertura desta investigação</b></summary>${tbl([['fonte', 'Fonte'], ['capacidade', 'Capacidade requerida'], ['mercado', 'Mercado'],
+      ${R.resultado ? `<section class="panel"><h3>Resultado</h3><p class="small">Classificação executiva: ${dec({ cor: R.resultado.classificacao, significado: R.resultado.significado })} · confiança: <b>${escH((R.resultado.confianca || {}).nivel || '—')}</b> <span class="muted">${escH((R.resultado.confianca || {}).motivo || '')}</span> · ${num(R.resultado.evidencias)} evidência(s) registradas</p>
+        ${R.resultado.limitacoes.length ? `<p class="small"><b>Limitações</b></p>${notes(R.resultado.limitacoes)}` : ''}
+        ${R.resultado.proximas_acoes.length ? `<p class="small"><b>Próximas ações</b></p><div class="btnrow" style="flex-wrap:wrap">${R.resultado.proximas_acoes.map((a) => a.link ? `<a class="btn small" href="${escH(a.link)}">${escH(a.texto)}</a>` : `<span class="small badge">${escH(a.texto)}</span>`).join('')}</div>` : ''}</section>` : ''}
+      <details class="panel" open><summary><b>Fontes e cobertura desta investigação</b></summary>${tbl([['fonte', 'Fonte'], ['capacidade', 'Capacidade requerida'], ['mercado', 'Mercado consultado'], ['papel', 'Papel', (r) => escH(r.papel || r.tipo || '—')], ['cobertura_geografica', 'Cobertura geográfica', (r) => escH(r.cobertura_geografica || '—')],
         ['estado_integracao', 'Integração'], ['autenticacao', 'Autenticação'], ['consulta_realizada', 'Consultada', (r) => r.consulta_realizada ? 'sim' : 'não'],
         ['estado', 'Resultado', (r) => `<span class="badge ${['com dados', 'cache válido'].includes(r.estado) ? 'ok' : ['não autorizada', 'indisponível', 'falhou'].includes(r.estado) ? 'bad' : ''}">${escH(r.estado)}</span>`],
         ['registros', 'Registros válidos', (r) => num(r.registros)], ['motivo', 'Motivo da ausência', (r) => escH(r.motivo || (r.cache ? 'cache ' + r.cache : '') || '—')],
-        ['ultima_coleta', 'Última coleta', (r) => escH((r.ultima_coleta || '—').slice(0, 16))], ['acao', 'Ação recomendada', (r) => escH(r.acao || '—')]], R.fontes || [], 'Diagnóstico indisponível.')}</details>
+        ['ultima_coleta', 'Última coleta', (r) => escH((r.ultima_coleta || '—').slice(0, 16))], ['acao', 'Ação recomendada', (r) => r.central ? `<a class="btn small" href="${escH(r.central)}">${escH(r.fonte.split(' —')[0])} não conectado — abrir Central de Integrações</a>` : escH(r.acao || '—')]], R.fontes || [], 'Diagnóstico indisponível.')}</details>
       <div class="tabs" id="dtabs">${TABS.map(([k, l], i) => `<button class="btn small ${i ? '' : 'primary'}" data-t="${k}">${l}</button>`).join('')}</div><div id="dtab"></div></section>`;
     $('#dmon').onclick = async () => { try { const r = await post(`/api/suite/pesquisa/${j.id}/monitorar`, {}); $('#dmsg').innerHTML = `<span class="badge ok">monitoramento semanal</span> termos: ${escH(Object.values(r.parametros.termos).join(' / '))} · mercado ${escH(r.parametros.mercado)} · <a href="#monitorados">ver</a>`; } catch (e) { $('#dmsg').innerHTML = errBox(e); } };
     $('#dsave').onclick = async () => { await post(`/api/suite/pesquisa/${j.id}/salvar`, { salvar: true }); $('#dsave').textContent = 'Salva ✓'; };
@@ -438,7 +447,45 @@ window.GPI_V091 = function (H, PAGES) {
     $('#v91m').onclick = () => monitor('produto', pid, name, $('#v91o'));
   }
 
+  /* ======================================================================= DIAGNÓSTICO DE INTEGRAÇÕES */
+  const DST = { 'Funcional': 'ok', 'Funcional sem resultados': 'demo', 'Autorizada': 'demo', 'Configurada': '', 'Não configurada': '', 'Permissão insuficiente': 'bad',
+    'Token expirado': 'bad', 'Bloqueada pela rede': 'bad', 'Limite de requisições': 'bad', 'Indisponível': 'bad' };
+  async function pageDiagnostics() {
+    main.innerHTML = head('Diagnóstico de Integrações', 'Estado real de cada fonte usada pela Pesquisa de Produtos. O teste usa uma operação autorizada de baixo custo, não consome créditos pagos e não altera credenciais.') + `
+      <p class="small">Configuração das contas: <a href="#integracoes">Central de Integrações</a> · histórico das coletas: <a href="#fontes">Saúde das Fontes</a></p><div id="dg">${loading()}</div>
+      <section class="panel"><h2>Teste de pesquisa no Mercado Livre</h2><p class="small">Mostra anúncios devolvidos pela API oficial <b>sem gravar</b> no banco. Preço anunciado não é preço de venda; vendas não são informadas.</p>
+        <div class="btnrow"><input id="mlq" value="Carregador GaN 65W" size="28">${['Fritadeira elétrica', 'Carregador GaN 65W', 'Aspirador robô'].map((q) => `<button class="btn small" data-mlq="${escH(q)}">${escH(q)}</button>`).join('')}<button class="btn primary small" id="mlgo">Pesquisar</button></div><div id="mlo"></div></section>`;
+    const load = async () => { try { const d = await api('/api/suite/diagnostico');
+      $('#dg').innerHTML = tbl([['nome', 'Integração'], ['estado', 'Estado', (r) => `<span class="badge ${DST[r.estado] || ''}">${escH(r.estado)}</span>`], ['configuracao', 'Configuração'], ['autenticacao', 'Autenticação'],
+        ['permissoes', 'Permissões verificadas', (r) => escH(r.permissoes.join(', ') || '—')], ['capacidades', 'Capacidades', (r) => escH(r.capacidades.join(', '))],
+        ['ultima_tentativa', 'Última tentativa', (r) => escH((r.ultima_tentativa || '—').slice(0, 16))], ['ultima_sucesso', 'Último sucesso', (r) => escH((r.ultima_sucesso || '—').slice(0, 16))],
+        ['erro_recente', 'Erro mais recente', (r) => escH(r.erro_recente || '—')], ['dados', 'Dados', (r) => escH(r.dados.registros_na_ultima_coleta != null ? `${r.dados.registros_na_ultima_coleta} registro(s)` : '—')],
+        ['acao', 'Ação necessária', (r) => `${escH(r.acao || '—')}${r.configuracao === 'não configurada' ? ` <a class="btn small" href="${escH(r.central)}">Configurar</a>` : ''}`],
+        ['t', '', (r) => `<button class="btn small" data-test="${escH(r.id)}">Testar conexão</button>`]], d.itens) + notes(d.regras);
+      document.querySelectorAll('[data-test]').forEach((b) => { b.onclick = async () => { b.disabled = true; b.textContent = 'Testando…';
+        try { const r = await post(`/api/suite/diagnostico/${b.dataset.test}/testar`, {}); await load();
+          const tr = document.querySelector(`[data-test="${r.id}"]`); if (tr) tr.closest('tr').insertAdjacentHTML('afterend', `<tr><td colspan="12" class="small">${escH(r.estado)} — ${escH(r.mensagem || '')}${(r.etapas || []).map((e) => `<br>· ${escH(e.etapa)}: ${e.ok ? 'ok' : 'falhou'} ${escH(e.detalhe || '')}`).join('')}${r.acao ? `<br><b>Ação:</b> ${escH(r.acao)}` : ''}</td></tr>`);
+        } catch (e) { b.textContent = 'Falhou'; } }; });
+    } catch (e) { $('#dg').innerHTML = errBox(e); } };
+    load();
+    const ml = async (q) => { $('#mlo').innerHTML = loading('Consultando a API do Mercado Livre…');
+      try { const r = await post('/api/suite/diagnostico/mercadolivre/pesquisa', { q });
+        $('#mlo').innerHTML = r.ok ? `<p class="small">${r.itens.length} anúncio(s) exibidos (total informado pela API: ${num(r.total_api)}).</p>${tbl([['produto', 'Produto'], ['titulo', 'Título', (x) => x.link ? `<a href="${escH(x.link)}" target="_blank" rel="noopener noreferrer">${escH(x.titulo)}</a>` : escH(x.titulo)], ['preco_anunciado', 'Preço anunciado', (x) => num(x.preco_anunciado, 2)], ['moeda', 'Moeda'], ['marketplace', 'Marketplace'], ['id', 'Identificador'], ['coletado_em', 'Coleta'], ['caracteristicas', 'Características', (x) => escH(Object.entries(x.caracteristicas).map(([k, v]) => `${k}: ${v}`).join(' · '))]], r.itens, 'A API não devolveu anúncios para o termo.')}${notes(r.avisos)}`
+          : `<div class="banner"><b>${escH(r.estado)}</b> — ${escH(r.mensagem)}<br>${escH(r.acao || '')} ${r.estado === 'Não configurada' || r.causa === 'token' ? '<a class="btn small" href="#integracoes/mercadolivre">Abrir Central de Integrações</a>' : ''}</div>`;
+      } catch (e) { $('#mlo').innerHTML = errBox(e); } };
+    $('#mlgo').onclick = () => ml($('#mlq').value);
+    document.querySelectorAll('[data-mlq]').forEach((b) => { b.onclick = () => { $('#mlq').value = b.dataset.mlq; ml(b.dataset.mlq); }; });
+  }
+  const baseInteg = PAGES.integracoes;
+  async function integracoes(arg) {           // #integracoes/<id>: abre a Central já posicionada na integração pedida
+    await baseInteg(arg);
+    const id = decodeURIComponent(arg || '');
+    if (!id) return;
+    const el = document.getElementById('integ-' + id);
+    if (el) { el.scrollIntoView({ block: 'start' }); el.style.outline = '2px solid var(--accent)'; setTimeout(() => { el.style.outline = ''; }, 4000); }
+  }
+
   return { 'pesquisa-produtos': pageResearch, nichos: pageNiches, 'palavras-chave': pageKeywords, 'mkt-intel': pageMarket, 'pesquisa-imagem': pageImage,
     'fornecedores-intel': pageSuppliers, 'importacao-intel': pageImport, monitorados: pageMonitored, 'historico-pesquisas': pageHistory, 'suite-config': pageConfig,
-    dashboard, dossie };
+    'diagnostico-integracoes': pageDiagnostics, ...(baseInteg ? { integracoes } : {}), dashboard, dossie };
 };

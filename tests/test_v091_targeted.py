@@ -143,12 +143,13 @@ def test_product_absent_from_sqlite_triggers_targeted_queries(db):
     rid, out, j = run(db, "carregador GaN 65W", fn, profundidade="rapida", mercado="BR")
     col = {r["id"]: r for r in out["coleta"]["resultados"]}
     assert col["mercadolivre_busca"]["estado"] == "com dados" and col["mercadolivre_busca"]["registros"] == 8
-    assert col["google_ads_kp"]["estado"] == "com dados" and col["ebay"]["estado"] == "com dados"
+    assert col["google_ads_kp"]["estado"] == "com dados"
+    assert col["ebay"]["estado"] == "não cobre o mercado" and not any("item_summary" in u for u in http.calls)   # EUA não substitui BR
     assert any("mercadolibre.com/sites/MLB/search" in u for u in http.calls)
-    assert out["abas"]["marketplaces"]["ultimos_30_dias"]["anuncios"] == 13
+    assert out["abas"]["marketplaces"]["ultimos_30_dias"]["anuncios"] == 8
     sellers = {r["seller"] for r in db.query("SELECT seller FROM market_listings")}
     assert all(s.startswith("h:") for s in sellers)                                     # vendedor pseudonimizado
-    assert out["cobertura"]["fontes_com_evidencia"] >= 3 and out["conclusiva"]
+    assert out["cobertura"]["fontes_com_evidencia"] >= 2 and out["conclusiva"]
     assert out["abas"]["demanda"]["volume_autorizado"][0]["meses"] >= 12      # dentro do período de 12 meses
 
 
@@ -163,13 +164,14 @@ def test_no_source_available_reports_concrete_impediments(db):
 
 
 def test_isolated_api_failure_does_not_stop_others(db):
-    http = FakeHttp(fail={"mercadolibre.com": SourceError("acesso negado (HTTP 403)", "restrita", status=403),
-                          "item_summary": SourceError("timeout", "rede")})
+    http = FakeHttp(fail={"mercadolibre.com": SourceError("permissão insuficiente (HTTP 403)", "restrita", status=403, cause="permissao"),
+                          "item_summary": SourceError("tempo de conexão esgotado", "rede", cause="timeout")})
     fn, _ = sctx(db, http)
-    rid, out, j = run(db, "carregador GaN 65W", fn)
-    col = {r["id"]: r for r in out["coleta"]["resultados"]}
-    assert col["mercadolivre_busca"]["estado"] == "não autorizada" and "403" in col["mercadolivre_busca"]["motivo"]
-    assert col["ebay"]["estado"] == "indisponível" and col["google_ads_kp"]["estado"] == "com dados"
+    rid, out, j = run(db, "carregador GaN 65W", fn, mercado="BR", comparacao=["US"], profundidade="completa")
+    col = {(r["id"], r["mercado"]): r for r in out["coleta"]["resultados"]}
+    assert col[("mercadolivre_busca", "BR")]["estado"] == "não autorizada" and "403" in col[("mercadolivre_busca", "BR")]["motivo"]
+    assert col[("ebay", "US")]["estado"] == "indisponível" and "Tempo de conexão esgotado" in col[("ebay", "US")]["motivo"]
+    assert col[("google_ads_kp", "BR")]["estado"] == "com dados"
     assert next(s for s in j["steps"] if s["id"] == "coleta")["estado"] == "concluída com dados"
 
 
@@ -178,13 +180,17 @@ def test_cache_valid_and_expired(db):
     run(db, "carregador GaN 65W", fn)
     n1 = len(http.calls)
     _, out, _ = run(db, "carregador GaN 65W", fn)                                     # 2ª rápida: cache válido, sem chamadas
-    assert len(http.calls) == n1 and all(r["estado"] in ("cache válido", "ignorada (modo rápido)") for r in out["coleta"]["resultados"])
+    assert len(http.calls) == n1 and all(r["estado"] in ("cache válido", "ignorada (modo rápido)", "não cobre o mercado") for r in out["coleta"]["resultados"])
     old = (datetime.now() - timedelta(days=8)).isoformat(timespec="seconds")
     db.execute("UPDATE research_source_runs SET at = ?", (old,))
     _, out, _ = run(db, "carregador GaN 65W", fn)
     assert len(http.calls) > n1 and any((r.get("cache") or "").startswith("expirado") for r in out["coleta"]["resultados"])
-    _, out, _ = run(db, "carregador GaN 65W", fn, atualizar=True)                     # 'Atualizar' ignora o cache
-    assert all(r["estado"] != "cache válido" for r in out["coleta"]["resultados"])
+    n2 = len(http.calls)
+    _, out, _ = run(db, "carregador GaN 65W", fn, atualizar=True)        # forçada logo após: < 10 min → não repete (limites da API)
+    assert len(http.calls) == n2 and any("não repetida" in (r.get("motivo") or "") for r in out["coleta"]["resultados"])
+    db.execute("UPDATE research_source_runs SET at = ?", ((datetime.now() - timedelta(minutes=30)).isoformat(timespec="seconds"),))
+    _, out, _ = run(db, "carregador GaN 65W", fn, atualizar=True)        # 'Atualizar' ignora o cache válido (7 dias)
+    assert len(http.calls) > n2 and all(r["estado"] != "cache válido" for r in out["coleta"]["resultados"])
 
 
 def test_quick_vs_full_are_functionally_different(db):
@@ -217,8 +223,10 @@ def test_targeted_volume_growth_gives_green_only_with_confirmed_identity(db):
 def test_news_and_videos_do_not_raise_stage(db):
     fn, _ = sctx(db, creds={"youtube": {"api_key": "k"}})
     _, out, _ = run(db, "carregador GaN 65W", fn, profundidade="completa")
-    assert out["cobertura"]["fontes_com_evidencia"] >= 1                              # GDELT/YouTube trouxeram registros...
-    assert out["decisao"]["cor"] == "CINZA"                                           # ...mas não são demanda
+    c = out["coberturas"]
+    assert c["contextual"]["n"] >= 2 and c["comercial"]["n"] == 0                      # GDELT/YouTube = contexto, não demanda
+    assert out["cobertura"]["fontes_com_evidencia"] == 0 and out["cobertura"]["fontes_contextuais"] >= 2
+    assert out["decisao"]["cor"] == "CINZA" and out["mensagem_final"] == RS.INSUFFICIENT
 
 
 # ================================================================================================ 3. progresso × cobertura
@@ -322,7 +330,7 @@ def test_monitor_from_research_and_weekly_refresh(db):
     r2 = MON.refresh(db, lambda: pl, lambda: D.stages(pl, db, TODAY), TODAY, fn)
     assert r2["consultas"] >= 2 and len(http.calls) > n
     item = MON.listing(db)[0]
-    assert item["semanal"] and item["label"] == "Carregador GaN 65W" and item["last_snapshot"]["anuncios_30d"] == 13
+    assert item["semanal"] and item["label"] == "Carregador GaN 65W" and item["last_snapshot"]["anuncios_30d"] == 8
 
 
 def test_unidentified_term_can_be_monitored(db):
@@ -362,7 +370,7 @@ def test_export_of_targeted_research(db):
 
 def test_plan_never_targets_trends_or_comex():
     for mode in ("rapida", "completa"):
-        ids = {s for s, _ in TG.plan(mode, ["BR", "US"])}
+        ids = {s for s, _m, _r in TG.plan(mode, ["BR", "US"])}
         assert not ids & {"google_trends_rss", "google_trends_bq", "comexstat", "ml_trends"}
 
 

@@ -508,6 +508,24 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
     async def mon_refresh(request):
         return j(await run_in_threadpool(MON.refresh, db, payload, stages, today(), sync.context))
 
+    async def diag_list(request):
+        from . import diagnostics as DG
+        return j({"itens": await run_in_threadpool(DG.rows, db, sync, cfg), "estados": DG.STATES,
+                  "regras": ["O teste usa uma operação autorizada de baixo custo e não consome créditos pagos.",
+                             "Credencial configurada não comprova permissão para todos os endpoints."]})
+
+    async def diag_test(request):
+        from . import diagnostics as DG
+        return j(await run_in_threadpool(DG.test, db, sync, cfg, request.path_params["pid"][:40]))
+
+    async def ml_preview(request):
+        from . import diagnostics as DG
+        b = await body(request)
+        try:
+            return j(await run_in_threadpool(DG.ml_search_preview, sync, str(b.get("q") or ""), int(b.get("limite") or 20)))
+        except ValueError as e:
+            return err(e)
+
     async def research_cancel(request):
         return j(RS.cancel(db, int(request.path_params["rid"])))
 
@@ -524,6 +542,8 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         Route(f"{P}/pesquisa", research_start, methods=["POST"]), Route(f"{P}/pesquisa/{{rid:int}}", research_get),
         Route(f"{P}/pesquisa/{{rid:int}}/salvar", research_save, methods=["POST"]),
         Route(f"{P}/pesquisa/{{rid:int}}/cancelar", research_cancel, methods=["POST"]),
+        Route(f"{P}/diagnostico", diag_list), Route(f"{P}/diagnostico/{{pid}}/testar", diag_test, methods=["POST"]),
+        Route(f"{P}/diagnostico/mercadolivre/pesquisa", ml_preview, methods=["POST"]),
         Route(f"{P}/pesquisa/{{rid:int}}/monitorar", research_monitor, methods=["POST"]),
         Route(f"{P}/pesquisa/{{rid:int}}.{{fmt}}", research_export), Route(f"{P}/historico", research_history),
         Route(f"{P}/nichos", niches), Route(f"{P}/nichos/salvar", niches_save, methods=["POST"]), Route(f"{P}/nichos.{{fmt}}", niches_export),

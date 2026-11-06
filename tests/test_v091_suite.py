@@ -512,9 +512,11 @@ def test_negative_margin_with_complete_data_is_red():
 def test_research_integrates_modules_and_registers_evidence_once(db):              # [46] [48] [49] [24 dossiê]
     _listings(db)
     SP.import_shipments(db, SHIP_CSV.encode(), "e.csv")
-    rid = RS.create(db, "carregador GaN 65W", {"profundidade": "completa"})
+    rid = RS.create(db, "carregador GaN 65W", {"profundidade": "completa", "mercado": "BR", "comparacao": ["US"]})
     out = RS.run(db, rid, ctx(db))
-    assert out["abas"]["marketplaces"]["ultimos_30_dias"]["anuncios"] == 6
+    mk = out["abas"]["marketplaces"]
+    assert mk["ultimos_30_dias"] is None                                         # anúncios do eBay (EUA) NÃO viram dados do Brasil
+    assert mk["por_mercado"]["US"]["ultimos_30_dias"]["anuncios"] == 6 and mk["por_mercado"]["US"]["papel"] == "comparativo"
     assert out["abas"]["fornecedores"]["candidatos"][0]["empresa"].startswith("Shenzhen Alpha")
     assert out["abas"]["importacao"]["simulador"]["obrigatorios"] and out["decisao"]["cor"] == "VERDE"
     n1 = db.query("SELECT COUNT(*) AS n FROM research_evidence")[0]["n"]

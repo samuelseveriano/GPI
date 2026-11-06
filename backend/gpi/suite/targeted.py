@@ -29,7 +29,10 @@ STATUS = {"com dados": "consulta feita e devolveu registros válidos", "sem dado
           "não autorizada": "credencial ausente, expirada ou permissão negada pela fonte",
           "indisponível": "fonte fora do ar, sem rede ou cota/limite atingido", "falhou": "erro inesperado na consulta",
           "ignorada (modo rápido)": "fonte reservada para a pesquisa completa", "cancelada": "pesquisa cancelada pelo usuário",
-          "não suporta consulta direcionada": "a fonte não permite consultar um produto arbitrário"}
+          "não suporta consulta direcionada": "a fonte não permite consultar um produto arbitrário",
+          "não cobre o mercado": "a fonte não fornece dados para o mercado selecionado (não é usada como substituta)",
+          "limite de requisições": "Limite de requisições atingido (Retry-After respeitado; novas tentativas limitadas)",
+          "bloqueada pela rede": "proxy, túnel ou inspeção TLS da rede impediu a conexão"}
 USEFUL = {"com dados", "cache válido"}
 TTL_DAYS = {"rapida": 7, "completa": 1}
 
@@ -37,7 +40,12 @@ TTL_DAYS = {"rapida": 7, "completa": 1}
 def ensure(db):
     S.ensure(db)
     db.execute(RUNS_SQL)
+    have = {r["name"] for r in db.query("PRAGMA table_info(research_source_runs)")}
+    for col in ("cache_key", "lang", "product_id", "params"):            # colunas da revisão final (ADD COLUMN, sem perda)
+        if col not in have:
+            db.execute(f"ALTER TABLE research_source_runs ADD COLUMN {col} TEXT")
     db.execute("CREATE INDEX IF NOT EXISTS idx_rsr ON research_source_runs(source, market, query_norm, at)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_rsr_key ON research_source_runs(cache_key, id)")
 
 
 def _norm(t: str) -> str:
@@ -61,7 +69,18 @@ def _ml_search(ctx, job):
     from ..products import nlp
     tok = ml_token(ctx.http, ctx.creds)
     url = "https://api.mercadolibre.com/sites/MLB/search?" + urllib.parse.urlencode({"q": job["q"], "limit": 50})
-    r = ctx.http.request_json(url, headers={"Authorization": f"Bearer {tok}"}, ttl=0)
+    try:
+        r = ctx.http.request_json(url, headers={"Authorization": f"Bearer {tok}"}, ttl=0)
+    except SourceError as e:
+        if getattr(e, "status", None) != 401:
+            raise
+        # 401: token recusado antes do vencimento local → UMA renovação pelo fluxo OAuth oficial (refresh token) e nova tentativa
+        c = ctx.creds.get("mercadolivre")
+        if not c.get("refresh_token"):
+            raise
+        ctx.creds.set("mercadolivre", {"expires_at": "0"})
+        tok = ml_token(ctx.http, ctx.creds)
+        r = ctx.http.request_json(url, headers={"Authorization": f"Bearer {tok}"}, ttl=0)
     if not isinstance(r, dict) or not isinstance(r.get("results"), list):
         raise SourceError("Mercado Livre: resposta sem 'results'", "formato")
     day, ts = ctx.today.isoformat(), datetime.now().isoformat(timespec="seconds")
@@ -144,18 +163,18 @@ def _run(sid, ctx, q_pt, q_en, pid, market):
 
 SOURCES = {
     "mercadolivre_busca": {"nome": "Mercado Livre — busca de anúncios", "capacidade": "marketplace_listings", "mercados": ["BR"],
-                           "indicador": "anúncios e preços (não são vendas)", "modo": "rapida",
+                           "geo": "Brasil (site MLB)", "indicador": "anúncios e preços anunciados (não são vendas)", "modo": "rapida",
                            "acao_sem_dados": "verificar o termo; o Mercado Livre pode não ter anúncios para esta descrição"},
-    "ebay": {"nome": "eBay Browse API", "capacidade": "marketplace_listings", "mercados": ["US"], "indicador": "anúncios e preços (não são vendas)",
-             "modo": "rapida", "acao_sem_dados": "testar o nome em inglês mais comum do produto"},
-    "google_ads_kp": {"nome": "Google Ads Keyword Planner", "capacidade": "search_volume", "mercados": ["BR", "US"],
+    "ebay": {"nome": "eBay Browse API", "capacidade": "marketplace_listings", "mercados": ["US"], "geo": "Estados Unidos (EBAY_US)",
+             "indicador": "anúncios e preços anunciados (não são vendas)", "modo": "rapida", "acao_sem_dados": "testar o nome em inglês mais comum do produto"},
+    "google_ads_kp": {"nome": "Google Ads Keyword Planner", "capacidade": "search_volume", "mercados": ["BR", "US"], "geo": "por país (geoTarget)",
                       "indicador": "volume mensal aproximado de buscas (12 meses)", "modo": "rapida",
                       "acao_sem_dados": "o Google não retornou ideias associáveis ao produto; testar sinônimos"},
-    "msads_kp": {"nome": "Microsoft Advertising (Bing)", "capacidade": "search_volume", "mercados": ["BR", "US"],
+    "msads_kp": {"nome": "Microsoft Advertising (Bing)", "capacidade": "search_volume", "mercados": ["BR", "US"], "geo": "por país",
                  "indicador": "volume mensal de buscas no Bing", "modo": "completa", "acao_sem_dados": "testar sinônimos"},
-    "youtube": {"nome": "YouTube Data API", "capacidade": "product_search", "mercados": ["BR"], "indicador": "vídeos sobre o produto (não são avaliações de compradores)",
-                "modo": "completa", "acao_sem_dados": "poucos vídeos recentes sobre o termo"},
-    "gdelt": {"nome": "GDELT (notícias, público)", "capacidade": "news_mentions", "mercados": ["GLOBAL"],
+    "youtube": {"nome": "YouTube Data API", "capacidade": "product_search", "mercados": ["BR"], "geo": "Brasil (regionCode BR)",
+                "indicador": "vídeos sobre o produto (não são avaliações de compradores)", "modo": "completa", "acao_sem_dados": "poucos vídeos recentes sobre o termo"},
+    "gdelt": {"nome": "GDELT (notícias, público)", "capacidade": "news_mentions", "mercados": ["GLOBAL"], "geo": "global (sem segmentação por país)",
               "indicador": "artigos de notícias por mês (atenção pública, não demanda)", "modo": "completa",
               "acao_sem_dados": "termo pouco citado na imprensa (não indica falta de demanda)"},
 }
@@ -165,44 +184,81 @@ NOT_TARGETABLE = {
     "ml_trends": ("Mercado Livre — tendências", "keyword_ranking", "ranking geral de buscas; não consulta um termo específico"),
     "comexstat": ("Comex Stat", "trade_statistics", "agregado por NCM; consultado pela NCM candidata, nunca pelo produto"),
 }
+NO_COVERAGE = "Não existem fontes de consulta direcionada disponíveis para este mercado."
+METHOD_VERSION = "v091.2"
+PARAMS = {"mercadolivre_busca": "limit=50", "ebay": "limit=50;EBAY_US", "google_ads_kp": "12m;GOOGLE_SEARCH", "msads_kp": "12m;Monthly",
+          "youtube": "180d;review|teste|unboxing", "gdelt": "12m;timelinevolraw"}
+MIN_REPEAT_MIN = 10          # mesmo com "Atualizar fontes", a mesma consulta não é repetida em menos de 10 minutos
 
 
-def plan(mode: str, markets: list[str]) -> list[tuple[str, str]]:
-    """(fonte, mercado). Rápida: poucas fontes no mercado principal. Completa: tudo que for pertinente nos mercados escolhidos."""
-    main = markets[0]
+def plan(mode: str, markets: list[str]) -> list[tuple[str, str, str]]:
+    """(fonte, mercado consultado, papel). Papel: principal | comparativo | global.
+    * Rápida: só fontes do mercado PRINCIPAL (nunca o mercado nativo de outra fonte como substituto).
+    * Completa: principal + comparativos escolhidos + fontes globais (rotuladas GLOBAL, nunca atribuídas ao Brasil)."""
+    main, comps = markets[0], [m for m in markets[1:] if m != markets[0]]
     out = []
     for sid, s in SOURCES.items():
-        ms = [m for m in s["mercados"] if m in markets or m == "GLOBAL"]
-        if mode == "rapida":
-            if s["modo"] != "rapida":
-                continue
-            # rápida: mercado principal; para anúncios, se o principal não tiver a fonte, usa o mercado nativo dela
-            ms = [main] if main in s["mercados"] else ([] if sid == "google_ads_kp" else s["mercados"][:1])
-        elif not ms:
-            ms = s["mercados"][:1] if s["capacidade"] == "marketplace_listings" else []
-        out += [(sid, m) for m in ms]
+        if mode == "rapida" and s["modo"] != "rapida":
+            continue
+        if main in s["mercados"]:
+            out.append((sid, main, "principal"))
+        if mode == "completa":
+            out += [(sid, m, "comparativo") for m in comps if m in s["mercados"]]
+            if "GLOBAL" in s["mercados"]:
+                out.append((sid, "GLOBAL", "global"))
     return out
+
+
+def market_coverage(mode: str, markets: list[str]) -> dict:
+    p = plan(mode, markets)
+    cov = {}
+    for i, m in enumerate(markets):
+        srcs = sorted({sid for sid, mk, _ in p if mk == m})
+        role = "principal" if i == 0 else ("comparativo" if mode == "completa" else "comparativo (só na pesquisa completa)")
+        cov[m] = {"papel": role, "fontes": [SOURCES[x]["nome"] for x in srcs], "mensagem": None if srcs or (i and mode != "completa") else NO_COVERAGE}
+    if any(mk == "GLOBAL" for _, mk, _ in p):
+        cov["GLOBAL"] = {"papel": "global", "fontes": [SOURCES[x]["nome"] for x, mk, _ in p if mk == "GLOBAL"],
+                         "mensagem": "Fonte global — não é atribuída a nenhum país."}
+    return cov
+
+
+def cache_key(sid, market, lang, term, pid) -> str:
+    import hashlib
+    return hashlib.sha1("|".join([sid, market, lang or "", _norm(term), pid or "", PARAMS.get(sid, ""), METHOD_VERSION]).encode()).hexdigest()[:32]
+
+
+def _lang(sid, market):
+    return "en" if market in ("US", "GLOBAL") or sid in ("ebay", "gdelt") else "pt"
 
 
 def collect(db, ctx_fn, q_pt: str, q_en: str, pid: str | None, markets: list[str], mode: str, force: bool = False,
             research_id: int | None = None, cancelled=lambda: False) -> list[dict]:
     """Executa (ou reaproveita do cache) as consultas direcionadas. Uma fonte com erro não interrompe as demais."""
-    ensure(db)
     from ..connectors.http import SourceError
-    ctx = None
+    from . import diagnostics as DG
+    ensure(db)
+    markets = list(dict.fromkeys(m.upper() for m in markets if m)) or ["BR"]
+    planned = plan(mode, markets)
     try:
         ctx = ctx_fn()
     except Exception as e:  # noqa: BLE001
-        return [{"id": sid, **_base(sid, m), "estado": "indisponível", "consulta_realizada": False, "registros": 0,
-                 "motivo": f"contexto de sincronização indisponível ({type(e).__name__})", "acao": "reiniciar o GPI"} for sid, m in plan(mode, markets)]
+        return [{"id": sid, **_base(sid, m, role), "estado": "indisponível", "consulta_realizada": False, "registros": 0,
+                 "motivo": f"contexto dos conectores indisponível ({type(e).__name__})", "acao": "reiniciar o GPI"} for sid, m, role in planned]
     out = []
-    planned = plan(mode, markets)
-    for sid, s in SOURCES.items():
-        if not any(p[0] == sid for p in planned) and mode == "rapida" and s["modo"] == "completa":
-            out.append({"id": sid, **_base(sid, s["mercados"][0]), "estado": "ignorada (modo rápido)", "consulta_realizada": False,
-                        "registros": 0, "motivo": "reservada para a pesquisa completa", "acao": "usar a pesquisa completa"})
-    for sid, market in planned:
-        b = _base(sid, market)
+    for sid, s in SOURCES.items():                      # transparência: o que NÃO foi consultado e por quê
+        if any(p[0] == sid for p in planned):
+            continue
+        if mode == "rapida" and s["modo"] == "completa":
+            st, why, act = "ignorada (modo rápido)", "reservada para a pesquisa completa", "usar a pesquisa completa"
+        else:
+            st = "não cobre o mercado"
+            why = f"{s['nome']} cobre {s['geo']}; não é usada como substituta de {', '.join(markets)}"
+            act = None if mode == "completa" else "incluir esse mercado na comparação (pesquisa completa)"
+        out.append({"id": sid, **_base(sid, s["mercados"][0], "não consultado"), "estado": st, "consulta_realizada": False, "registros": 0,
+                    "motivo": why, "acao": act})
+    for sid, market, role in planned:
+        b = _base(sid, market, role)
+        s = SOURCES[sid]
         if cancelled():
             out.append({"id": sid, **b, "estado": "cancelada", "consulta_realizada": False, "registros": 0, "motivo": "pesquisa cancelada", "acao": None})
             continue
@@ -210,45 +266,54 @@ def collect(db, ctx_fn, q_pt: str, q_en: str, pid: str | None, markets: list[str
         b["autenticacao"] = "não exigida" if sid == "gdelt" else ("configurada" if ok else "ausente")
         if not ok:
             out.append({"id": sid, **b, "estado": "não autorizada", "consulta_realizada": False, "registros": 0, "motivo": why,
-                        "acao": "configurar a integração na Central de Integrações"})
+                        "acao": "abrir a Central de Integrações", "central": _central(sid)})
             continue
-        q = q_en if (market in ("US", "GLOBAL") or sid in ("ebay", "gdelt")) else q_pt
-        qn = _norm(q)
-        last = db.query("SELECT * FROM research_source_runs WHERE source = ? AND market = ? AND query_norm = ? AND status IN ('com dados', 'sem dados') "
-                        "ORDER BY id DESC LIMIT 1", (sid, market, qn))
-        if last and not force:
+        lang = _lang(sid, market)
+        q = q_en if lang == "en" else q_pt
+        ck = cache_key(sid, market, lang, q, pid)
+        last = db.query("SELECT * FROM research_source_runs WHERE cache_key = ? AND status IN ('com dados', 'sem dados') ORDER BY id DESC LIMIT 1", (ck,))
+        if last:
             age = datetime.now() - datetime.fromisoformat(last[0]["at"])
-            if age <= timedelta(days=TTL_DAYS.get(mode, 7)):
-                out.append({"id": sid, **b, "estado": "cache válido" if last[0]["status"] == "com dados" else "sem dados",
-                            "consulta_realizada": False, "registros": last[0]["n"], "ultima_coleta": last[0]["at"],
-                            "motivo": None if last[0]["status"] == "com dados" else "a última consulta (dentro da validade do cache) não trouxe registros",
-                            "acao": None if last[0]["status"] == "com dados" else s["acao_sem_dados"], "cache": f"válido ({age.days} dia(s))"})
+            fresh = age <= timedelta(days=TTL_DAYS.get(mode, 7))
+            recent = age <= timedelta(minutes=MIN_REPEAT_MIN)
+            if (fresh and not force) or recent:
+                why_cache = (f"consulta idêntica há {int(age.total_seconds() // 60)} min — não repetida para respeitar os limites da API"
+                             if force and recent else None)
+                out.append({"id": sid, **b, "estado": "cache válido" if last[0]["status"] == "com dados" else "sem dados", "consulta_realizada": False,
+                            "registros": last[0]["n"], "ultima_coleta": last[0]["at"], "termo": q,
+                            "motivo": why_cache or (None if last[0]["status"] == "com dados" else "a última consulta (dentro da validade do cache) não trouxe registros"),
+                            "acao": None if last[0]["status"] == "com dados" else s["acao_sem_dados"],
+                            "cache": f"válido ({age.days} dia(s); chave: fonte+mercado+idioma+termo+produto+parâmetros+versão)"})
                 continue
-            b["cache"] = f"expirado ({age.days} dia(s)) — consultado novamente"
+            b["cache"] = f"expirado ({age.days} dia(s)) — consultado novamente" if not force else "atualização forçada"
+        diag = None
         try:
             n = int(_run(sid, ctx, q_pt, q_en, pid, market) or 0)
             st, motivo, acao = ("com dados", None, None) if n else ("sem dados", "a fonte respondeu sem registros válidos para o termo", s["acao_sem_dados"])
         except SourceError as e:
             n = 0
-            st = {"restrita": "não autorizada", "limite": "indisponível", "rede": "indisponível", "tls": "indisponível", "bloqueada": "indisponível",
-                  "cancelada": "cancelada"}.get(e.kind, "falhou")
-            motivo = str(e)[:300]
-            acao = {"não autorizada": "reconectar a integração ou verificar as permissões do aplicativo",
-                    "indisponível": "tentar mais tarde ou pedir à TI a liberação do endereço (cota, limite, rede ou proxy)"}.get(st, "ver o registro de diagnóstico")
+            diag = DG.classify(e)
+            st, motivo, acao = ("cancelada", str(e), None) if e.kind == "cancelada" else (diag["consulta"], diag["mensagem"], diag["acao"])
         except Exception as e:  # noqa: BLE001
             n, st, motivo, acao = 0, "falhou", f"{type(e).__name__}: {str(e)[:200]}", "ver o registro de diagnóstico"
         now = datetime.now().isoformat(timespec="seconds")
-        db.execute("INSERT INTO research_source_runs (source, market, query_norm, at, status, n, detail, research_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                   (sid, market, qn, now, st, n, motivo, research_id))
-        out.append({"id": sid, **b, "estado": st, "consulta_realizada": st not in ("cancelada",) and not (st == "não autorizada" and "não conectado" in (motivo or "")),
-                    "registros": n, "motivo": motivo, "acao": acao, "ultima_coleta": now, "termo": q})
+        db.execute("INSERT INTO research_source_runs (source, market, query_norm, at, status, n, detail, research_id, cache_key, lang, product_id, params) "
+                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   (sid, market, _norm(q), now, st, n, motivo, research_id, ck, lang, pid, PARAMS.get(sid)))
+        out.append({"id": sid, **b, "estado": st, "consulta_realizada": True, "registros": n, "motivo": motivo, "acao": acao, "ultima_coleta": now,
+                    "termo": q, "causa": (diag or {}).get("causa"), "http": (diag or {}).get("http"),
+                    "central": _central(sid) if st == "não autorizada" else None})
     return out
 
 
-def _base(sid, market):
+def _central(sid):
+    return "#integracoes/" + {"mercadolivre_busca": "mercadolivre", "google_ads_kp": "google_ads", "msads_kp": "msads"}.get(sid, sid)
+
+
+def _base(sid, market, role="principal"):
     s = SOURCES[sid]
-    return {"fonte": s["nome"], "capacidade": s["capacidade"], "mercado": market, "indicador": s["indicador"], "autenticacao": None,
-            "estado_integracao": None, "ultima_coleta": None, "cache": None}
+    return {"fonte": s["nome"], "capacidade": s["capacidade"], "mercado": market, "papel": role, "cobertura_geografica": s["geo"],
+            "indicador": s["indicador"], "autenticacao": None, "estado_integracao": None, "ultima_coleta": None, "cache": None}
 
 
 def diagnostics(db, collected: list[dict], local: dict, ncm_state: dict, visual_count: int) -> list[dict]:
@@ -285,11 +350,16 @@ def diagnostics(db, collected: list[dict], local: dict, ncm_state: dict, visual_
     return rows
 
 
-def coverage(rows: list[dict]) -> dict:
-    useful = [r for r in rows if r["estado"] in USEFUL and r.get("registros")]
-    queried = [r for r in rows if r.get("tipo") == "consulta direcionada"]
-    return {"fontes_com_evidencia": len(useful), "fontes_consultadas": sum(1 for r in queried if r["consulta_realizada"]),
-            "fontes_previstas": len(queried), "registros_validos": sum(r.get("registros") or 0 for r in useful),
-            "capacidades_cobertas": sorted({r["capacidade"] for r in useful}),
-            "fontes": [r["fonte"] for r in useful]}
+COMMERCIAL_CAPS = {"search_volume", "marketplace_listings", "historical_data", "sales"}
 
+
+def coverage(rows: list[dict]) -> dict:
+    """Resumo das fontes. `fontes_com_evidencia` conta SÓ fontes com evidência COMERCIAL (volume autorizado, anúncios/preços,
+    histórico local de procura); notícias, vídeos e imagens ficam em `fontes_contextuais`."""
+    useful = [r for r in rows if r["estado"] in USEFUL and r.get("registros")]
+    comm = [r for r in useful if r["capacidade"] in COMMERCIAL_CAPS]
+    queried = [r for r in rows if r.get("tipo") == "consulta direcionada" and r["estado"] not in ("não cobre o mercado", "ignorada (modo rápido)")]
+    return {"fontes_com_evidencia": len(comm), "fontes_contextuais": len(useful) - len(comm),
+            "fontes_consultadas": sum(1 for r in queried if r["consulta_realizada"]), "fontes_previstas": len(queried),
+            "registros_validos": sum(r.get("registros") or 0 for r in comm), "capacidades_cobertas": sorted({r["capacidade"] for r in comm}),
+            "fontes": [r["fonte"] for r in comm]}

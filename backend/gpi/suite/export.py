@@ -63,8 +63,14 @@ def tables_from(kind: str, data: dict) -> list[tuple[str, list[dict], list[str]]
                                  "melhor_que_ingenuo": (s.get("previsao") or {}).get("melhor_que_ingenuo")} for s in pv.get("series", [])],
                   [pv.get("nota") or ""]))
         t.append(("Evidências", (ab.get("evidencias") or {}).get("itens") or [], [(ab.get("evidencias") or {}).get("regra") or ""]))
+        cvs = data.get("coberturas") or {}
+        t.append(("Coberturas", [{"cobertura": k, "nivel": (cvs.get(k) or {}).get("nivel"), "indicador": i.get("indicador"), "fonte": i.get("fonte"),
+                                  "mercado": i.get("mercado"), "registros": i.get("registros"), "detalhe": i.get("detalhe")}
+                                 for k in ("comercial", "contextual", "tecnica") for i in ((cvs.get(k) or {}).get("itens") or [{}])],
+                  [f"Confiança da investigação: {(cvs.get('confianca') or {}).get('nivel')} — {(cvs.get('confianca') or {}).get('motivo')}",
+                   "Cobertura contextual e técnica não comprovam demanda; a classificação comercial depende só de evidências elegíveis."]))
         cov = data.get("cobertura") or {}
-        t.append(("Fontes e cobertura", [{k: r.get(k) for k in ("fonte", "tipo", "capacidade", "mercado", "autenticacao", "consulta_realizada", "estado",
+        t.append(("Fontes e cobertura", [{k: r.get(k) for k in ("fonte", "tipo", "capacidade", "mercado", "papel", "cobertura_geografica", "autenticacao", "consulta_realizada", "estado",
                                                                  "registros", "motivo", "ultima_coleta", "acao")} for r in data.get("fontes") or []],
                   [data.get("mensagem_final") or "", f"Fontes com evidência útil: {cov.get('fontes_com_evidencia', 0)} de "
                    f"{cov.get('fontes_previstas', 0)} consultas direcionadas previstas."]))
