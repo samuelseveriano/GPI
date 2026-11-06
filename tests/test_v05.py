@@ -381,5 +381,6 @@ def test_windows_packaging_metadata():
     spec = (ROOT / "packaging" / "gpi.spec").read_text(encoding="utf-8")
     assert "upx=False" in spec and "uac_admin" not in spec.replace("uac_admin=False", "") and 'icon=' in spec
     wf = (ROOT / ".github" / "workflows" / "windows-build.yml").read_text(encoding="utf-8")
-    assert "MpCmdRun" in wf and "Get-FileHash" in wf and (f"GPI-Windows-Portable-v{__version__}.zip" in wf or f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf)
+    assert "MpCmdRun" in wf and "Get-FileHash" in wf and (f"GPI-Windows-Portable-v{__version__}.zip" in wf or f"GPI-Windows-Portable-v{__version__}-MVP-RC.zip" in wf
+                                                                        or f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf)
     assert "SIGNING_ENABLED" in wf                                               # assinatura opcional, só com secrets configurados

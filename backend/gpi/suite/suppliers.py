@@ -600,7 +600,8 @@ def term_groups(db, query: str, family: str | None = None, product_id: str | Non
 
 
 def _hits(text: str, groups: list[list[str]]) -> bool:
-    t = (text or "").lower()
+    from ..products import nlp
+    t = nlp._norm(text or "")                       # mesma normalização dos termos (sem acentos)
     for g in groups:
         need = max(1, -(-len(g) * 3 // 5))
         if sum(1 for w in g if w in t) >= need:
@@ -720,6 +721,10 @@ def discover(db, query: str, family: str | None = None, product_id: str | None =
         f["limitacoes"] = sorted({c["limitacao"] for c in f["correspondencias"]})
         f["motivos"] = [f"{c['tipo']}: {c['evidencia']}" for c in f["correspondencias"]]
         f["produto_relacionado"] = product_id or family or query
+        if (f.get("pais") or "").upper() in ("CN", "CHINA"):
+            # verificação ASSISTIDA no sistema oficial chinês (GSXT/SAMR): o GPI só abre o link; não consulta automaticamente
+            f["validar_registro"] = {"servico": "National Enterprise Credit Information Publicity System (GSXT/SAMR)",
+                                     "url": "https://www.gsxt.gov.cn/", "como": "pesquise pelo nome legal em chinês ou pelo código de crédito social"}
         out.append(f)
     out.sort(key=lambda x: (TYPE_ORDER.index(x["tipo_correspondencia"]), -x["pontos"]))
     return {"consulta": query, "termos": terms, "grupos_de_termos": groups if terms else [], "candidatos": out[:limit], "tipos": MATCH_TYPES,

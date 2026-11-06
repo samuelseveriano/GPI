@@ -162,7 +162,7 @@ def test_niche_filters_exclude_missing_data(db):                                
     assert MK.filter_niches(rows, {"preco_max": "30"}) and not MK.filter_niches(rows, {"preco_max": "5"})
     rows[0]["preco_mediano"] = None
     assert not MK.filter_niches(rows, {"preco_min": "1"})                           # sem dado não passa num filtro numérico
-    assert MK.filter_niches(rows, {"cor": "verde", "competicao": "baixa"})
+    assert MK.filter_niches(rows, {"cor": "verde", "competicao": "não avaliada"})   # 6 anúncios: concorrência não avaliada
 
 
 def test_keywords_observed_vs_generated_and_volume_only_from_authorized(db):       # [8] [13]

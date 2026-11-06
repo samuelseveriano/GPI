@@ -284,7 +284,8 @@ def _s_collect(db, ctx, params, out, st, rid, today, cancelled):
     st["collected"] = res
     useful = [r for r in res if r["estado"] in TG.USEFUL and r["registros"]]
     planned = [r for r in res if r["estado"] not in NOT_PLANNED]
-    out["coleta"] = {"realizada": True, "modo": mode, "mercados": markets, "atualizacao_forcada": force, "resultados": res}
+    out["coleta"] = {"realizada": True, "modo": mode, "mercados": markets, "atualizacao_forcada": force, "resultados": res,
+                     "invalidados": TG.invalidate(db, res)}
     if not any(r["papel"] == "principal" for r in planned):
         return "indisponível", f"{markets[0]}: {TG.NO_COVERAGE}"
     det = f"{len(useful)} fonte(s) com dados de {len(planned)} consulta(s) prevista(s)"
@@ -370,13 +371,17 @@ def _s_markets(db, ctx, params, out, st, rid, today, cancelled):
     recent = db.query("SELECT source, item_id, title, brand, price, currency, seller, MAX(day) AS dia, MIN(day) AS primeiro, COUNT(DISTINCT day) AS dias, url "
                       "FROM market_listings WHERE product_id = ? OR product_id LIKE ? OR query IN (%s) GROUP BY source, item_id ORDER BY dia DESC LIMIT 60"
                       % ",".join("?" * len(terms)), (pid or "§", (pid or "§") + ":%", *terms))
+    from . import listing_match as LM
     for r in recent:
+        r["correspondencia"] = LM.classify(r["title"], pid)
         r["mercado"] = MK.SOURCE_MARKET.get(r["source"], "—")
         r["papel"] = "principal" if r["mercado"] == markets[0] else "comparativo"
     main_items = [r for r in recent if r["papel"] == "principal"]
-    st["direct"]["listings"] = (ls or ls90 or {}).get("anuncios", 0)                # SÓ o mercado principal entra na decisão
+    # SÓ o mercado principal e SÓ anúncios do produto/variante compatível entram na decisão (cabos/acessórios ficam fora)
+    st["direct"]["listings"] = (ls or ls90 or {}).get("anuncios_elegiveis") if pid else 0
+    st["direct"]["listings"] = st["direct"]["listings"] or 0
     st["direct"]["listing_sources"] = (ls or ls90 or {}).get("fontes", [])
-    st["direct"]["price_history"] = sum(1 for r in main_items if r["dias"] >= 2)
+    st["direct"]["price_history"] = sum(1 for r in main_items if r["dias"] >= 2 and r["correspondencia"]["elegivel"])
     out["abas"]["marketplaces"] = {"mercado_principal": markets[0], "ultimos_30_dias": ls, "ultimos_90_dias": ls90, "por_mercado": per_market,
                                    "anuncios": recent[:40], "competicao": MK.competition(ls),
                                    "historico_precos": {"anuncios_com_2_ou_mais_coletas": st["direct"]["price_history"],
@@ -385,7 +390,8 @@ def _s_markets(db, ctx, params, out, st, rid, today, cancelled):
                                    "vazio": None if ls or ls90 else (main["mensagem"] or "Nenhum anúncio no mercado principal (veja 'Fontes e cobertura')."),
                                    "aviso": MK.AUTH_NOTE + " Preço anunciado ≠ preço de venda; quantidade de anúncios não é demanda. "
                                             "Anúncios de mercados comparativos não são atribuídos ao mercado principal."}
-    return _with_data(st["direct"]["listings"], f"{st['direct']['listings']} anúncio(s) no mercado principal ({markets[0]})")
+    return _with_data(st["direct"]["listings"], f"{(ls or ls90 or {}).get('anuncios', 0)} anúncio(s) no mercado principal ({markets[0]}), "
+                                                f"{st['direct']['listings']} elegível(is) para comparação")
 
 
 def _s_similar(db, ctx, params, out, st, rid, today, cancelled):

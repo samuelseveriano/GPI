@@ -72,9 +72,18 @@ def creds_for(creds, modulo: str) -> dict:
 def authorize_url(c: dict, ver: str, redirect_uri: str, state: str, modulo: str = "basico", rerequest: bool = False) -> str:
     if modulo not in MODULES:
         raise SourceError("módulo Meta desconhecido", "restrita")
-    q = {"client_id": c.get("client_id", ""), "redirect_uri": redirect_uri, "state": state, "response_type": "code",
-         "scope": ",".join(MODULES[modulo]["escopos"])}
-    if rerequest:
+    q = {"client_id": c.get("client_id", ""), "redirect_uri": redirect_uri, "state": state, "response_type": "code"}
+    cfg_id = str(c.get("config_id") or "").strip()
+    if modulo != "basico" and cfg_id:
+        # Facebook Login for Business: as permissões vêm da CONFIGURAÇÃO criada na Meta (config_id); `scope` não é enviado
+        # junto (misturar os dois causa "Invalid Scopes"/"needs at least one supported permission").
+        if not cfg_id.isdigit():
+            raise SourceError("Configuration ID inválido (deve conter só dígitos)", "restrita")
+        q["config_id"] = cfg_id
+        q["override_default_response_type"] = "true"
+    else:
+        q["scope"] = ",".join(MODULES[modulo]["escopos"])
+    if rerequest and "scope" in q:
         q["auth_type"] = "rerequest"
     return f"https://www.facebook.com/{ver}/dialog/oauth?" + up.urlencode(q)
 
@@ -311,8 +320,13 @@ def start(flows, creds, cfg: dict, port: int, modulo: str = "basico") -> dict:
         state = f"{int(port)}.{rnd}"
         flows.rekey(rnd, state)
     url = authorize_url(c, ver, uri, state, modulo, rerequest=bool(c.get("escopos")))
+    biz_cfg = app == BUSINESS_APP and modulo != "basico" and str(c.get("config_id") or "").strip()
     return {"url": url, "redirect_uri": uri, "modo": mode, "app_id_enviado": cid, "modulo": modulo, "app": app,
-            "aviso": None if app == BUSINESS_APP or modulo == "basico" else
+            "fluxo": "Facebook Login for Business (config_id)" if biz_cfg else "Facebook Login (scope)",
+            "aviso": ("App de negócios sem Configuration ID: se a Meta responder 'Invalid Scopes' ou 'This app needs at least one "
+                      "supported permission', crie uma configuração em Facebook Login for Business e informe o Configuration ID "
+                      "na Central de Integrações.") if app == BUSINESS_APP and modulo != "basico" and not biz_cfg else
+            None if app == BUSINESS_APP or modulo == "basico" else
             "Este módulo será pedido ao app de Login. Se a Meta mostrar 'Invalid Scopes', o app não tem o caso de uso necessário: "
             "configure o app de negócios (Central de Integrações → Meta)."}
 

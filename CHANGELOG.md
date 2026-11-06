@@ -46,6 +46,12 @@ Somente ferramentas gratuitas; nenhuma dependência paga obrigatória.
 - Página "Diagnóstico de Integrações" com "Testar conexão" e teste de pesquisa do Mercado Livre (sem gravar).
 - Mercado Livre: renovação única em 401, mensagens para 403/429. Cache com chave completa e intervalo mínimo na atualização forçada.
 
+### MVP RC
+- Sincronização eBay passa a contar os anúncios gravados; carregador × cabo × acessório; preços comparáveis por unidade.
+- Opportunity Score parcial (não elegível) com explicação; invalidação de resultados dependentes após nova evidência.
+- URL de anúncio e imagem por URL pela API oficial (eBay/Mercado Livre); busca por imagem do eBay opcional.
+- Ficha regulatória e relatório de conformidade preliminar; Meta Business com config_id; Dashboard consolidado A–E.
+
 ### Banco de dados
 - Apenas tabelas novas, criadas sob demanda; nenhuma tabela existente alterada. Cadastro antigo de fornecedores copiado.
 - Revisão: tabela `research_source_runs` (cache das consultas direcionadas) e coluna `monitored.params` (ADD COLUMN).

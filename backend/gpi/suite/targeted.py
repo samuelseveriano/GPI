@@ -306,6 +306,23 @@ def collect(db, ctx_fn, q_pt: str, q_en: str, pid: str | None, markets: list[str
     return out
 
 
+DEPENDENT_RESULTS = ("intel08", "consumer", "opportunity3", "competition")
+
+
+def invalidate(db, res: list[dict]) -> list[str]:
+    """Nova evidência comercial de uma consulta direcionada → invalida SÓ os resultados derivados dependentes (o próximo
+    acesso recalcula), sem reiniciar o GPI e sem recalcular o banco inteiro a cada consulta."""
+    fresh = [r for r in res if r.get("consulta_realizada") and r["estado"] == "com dados"]
+    if not fresh:
+        return []
+    names = list(DEPENDENT_RESULTS) if any(r["capacidade"] == "search_volume" for r in fresh) else ["competition"]
+    try:
+        db.execute("DELETE FROM analysis_results WHERE name IN (%s)" % ",".join("?" * len(names)), tuple(names))
+    except Exception:  # noqa: BLE001
+        return []
+    return names
+
+
 def _central(sid):
     return "#integracoes/" + {"mercadolivre_busca": "mercadolivre", "google_ads_kp": "google_ads", "msads_kp": "msads"}.get(sid, sid)
 

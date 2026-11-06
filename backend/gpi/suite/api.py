@@ -106,7 +106,12 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             demos = {"vendas_demonstrativas": c("SELECT COUNT(*) AS n FROM imports WHERE is_demo = 1"),
                      "empresas": c(f"SELECT COUNT(*) AS n FROM companies WHERE {demo}"), "embarques": c(f"SELECT COUNT(*) AS n FROM trade_shipments WHERE {demo}"),
                      "evidencias_nao_reais": c("SELECT COUNT(*) AS n FROM research_evidence WHERE origin != 'REAL'")}
-            return {"versao": "0.9.1", "configuracoes": st, "produtos": produtos,
+            from . import dashboard as DB_
+            try:
+                cons = DB_.build(db, payload(), {"itens": stg}, today())
+            except Exception as e:  # noqa: BLE001
+                cons = {"erro": f"{type(e).__name__}: {str(e)[:160]}"}
+            return {"versao": "0.9.1", "configuracoes": st, "produtos": produtos, "consolidado": cons,
                     "contagens": {"pesquisas": c("SELECT COUNT(*) AS n FROM research_jobs"),
                                   "empresas": c(f"SELECT COUNT(*) AS n FROM companies WHERE verification_status NOT LIKE 'mesclada%' AND NOT {demo}"),
                                   "embarques": c(f"SELECT COUNT(*) AS n FROM trade_shipments WHERE NOT {demo}"), "relacoes": c("SELECT COUNT(*) AS n FROM trade_relationships"),
@@ -240,7 +245,21 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         ref = (request.query_params.get("ref") or "").strip()
         if not ref:
             return err("informe ?ref= (nome, URL ou ID do anúncio)")
-        return j(await run_in_threadpool(MK.listing, db, ref[:500]))
+        def calc():
+            from . import url_lookup as UL
+            r = MK.listing(db, ref[:500])
+            if r.get("encontrado"):
+                return r
+            d = UL.detect(ref)
+            if d["tipo"] != "anúncio de marketplace":
+                return {**r, "url": d}
+            api = UL.fetch_listing(db, sync, ref)            # consulta a API oficial do marketplace
+            if api.get("ok") and api.get("gravado"):
+                out = MK.listing(db, api["anuncio"]["id"])
+                out["consulta_api"] = api
+                return out
+            return {**r, "consulta_api": api}
+        return j(await run_in_threadpool(calc))
 
     async def mkt_compare(request):
         b = await body(request)
@@ -265,17 +284,25 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
 
     # ---------------------------------------------------------------- Visual Product Search
     async def img_search(request):
+        from . import url_lookup as UL
         try:
             raw, name, f = await upload(request)
-            url = f.get("url")
+            url = (f.get("url") or "").strip()
+            origem = None
             if not raw and url:
-                raw = await run_in_threadpool(fetch_image, url)
+                raw, origem = await run_in_threadpool(image_from_url, url)
             res = await run_in_threadpool(V.search, db, data_dir, raw, crop_of(f), f.get("familia") or None, 30, settings())
-            res["busca_externa"] = V.external_links(url if url else None)
+            public = url if origem and origem["tipo"] == "URL direta de imagem" else (origem or {}).get("imagem")
+            res["busca_externa"] = V.external_links(public or None)
+            res["origem_url"] = origem
             from . import naming as NM
             for x in res["resultados"]:
                 x["nome_comercial"] = NM.name_of(db, x["product_id"]) if x.get("product_id") else None
             res["consulta"]["nome"] = name
+            if f.get("ebay") in ("1", "true", "sim"):          # envio ao eBay SÓ com autorização explícita do usuário
+                res["ebay"] = await run_in_threadpool(UL.ebay_search_by_image, sync, raw)
+            else:
+                res["ebay"] = {"ok": False, "estado": "não solicitado", "motivo": "marque 'enviar ao eBay' para usar a busca por imagem oficial do eBay"}
             return j(res)
         except (V.ImageRejected, ValueError) as e:
             return err(e)
@@ -286,12 +313,38 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         if prob:
             raise ValueError(f"URL recusada: {prob}")
         try:
-            raw = sync.http.request_json(url, ttl=0, timeout=20, _binary=True, _max_bytes=V.MAX_BYTES)
+            r = sync.http.request_json(url, ttl=0, timeout=20, _binary=True, _max_bytes=V.MAX_BYTES)
         except Exception as e:  # noqa: BLE001
-            raise ValueError(f"não foi possível baixar a imagem ({type(e).__name__})") from e
+            raise ValueError(f"não foi possível baixar a imagem ({type(e).__name__}: {str(e)[:120]})") from e
+        raw = r.get("_bytes") if isinstance(r, dict) else r          # o cliente HTTP devolve {"_bytes": ...}
         if not isinstance(raw, (bytes, bytearray)):
-            raise ValueError("a URL não devolveu uma imagem")
+            raise ValueError("a URL não devolveu conteúdo binário")
+        if raw[:64].lstrip()[:1] == b"<" or b"<html" in raw[:512].lower():
+            raise ValueError("a URL devolveu uma PÁGINA (HTML), não uma imagem. Cole a URL direta da imagem ou o link de um anúncio eBay/Mercado Livre.")
+        if not V.sniff(bytes(raw)):
+            raise ValueError("o conteúdo da URL não é JPG, PNG nem WEBP")
         return bytes(raw)
+
+    def image_from_url(url: str):
+        """Imagem direta → baixa; anúncio eBay/Mercado Livre → API oficial → URL da foto autorizada → baixa; página → orientação."""
+        from . import url_lookup as UL
+        d = UL.detect(url)
+        if d["tipo"] == "URL inválida":
+            raise ValueError(f"URL recusada: {d['motivo']}")
+        if d["tipo"] == "anúncio de marketplace":
+            r = UL.fetch_listing(db, sync, url)
+            if not r.get("ok"):
+                raise ValueError(f"{d['provedor']}: {r.get('motivo')} — {r.get('acao') or r.get('alternativa') or ''}")
+            img = (r.get("anuncio") or {}).get("imagem")
+            if not img:
+                raise ValueError("a API do marketplace não informou imagem para o anúncio")
+            return fetch_image(img), {**d, "imagem": img, "anuncio": r["anuncio"], "produto_identificado": r.get("produto_identificado")}
+        if d["tipo"] == "página de produto":
+            try:
+                return fetch_image(url), {**d, "tipo": "URL direta de imagem"}     # algumas URLs de imagem não têm extensão
+            except ValueError:
+                raise ValueError(d["motivo"]) from None
+        return fetch_image(url), d
 
     async def img_add(request):
         try:
@@ -526,6 +579,23 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         except ValueError as e:
             return err(e)
 
+    async def compliance_report(request):
+        from ..compliance import features as CF
+        from ..compliance import rules as CR
+        from . import regassist
+        b = await body(request)
+        q = str(b.get("q") or "").strip()[:300]
+        if not q:
+            return err("informe o produto")
+        fmt = request.path_params["fmt"]
+
+        def calc():
+            ach = CR.run(CF.extract({"descricao_tecnica": q}), None)
+            f = regassist.ficha(db, q, {"achados": ach, "fontes": []}, b.get("fabricante"), b.get("modelo"))
+            return (EX.xlsx if fmt == "xlsx" else EX.pdf)("conformidade", f, f"Conformidade preliminar: {f['produto']}")
+        data = await run_in_threadpool(calc)
+        return Response(data, media_type=MIME.get(fmt, MIME["xlsx"]), headers={"Content-Disposition": f'attachment; filename="gpi-conformidade-preliminar.{fmt}"'})
+
     async def research_cancel(request):
         return j(RS.cancel(db, int(request.path_params["rid"])))
 
@@ -542,6 +612,7 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         Route(f"{P}/pesquisa", research_start, methods=["POST"]), Route(f"{P}/pesquisa/{{rid:int}}", research_get),
         Route(f"{P}/pesquisa/{{rid:int}}/salvar", research_save, methods=["POST"]),
         Route(f"{P}/pesquisa/{{rid:int}}/cancelar", research_cancel, methods=["POST"]),
+        Route(f"{P}/conformidade/relatorio.{{fmt}}", compliance_report, methods=["POST"]),
         Route(f"{P}/diagnostico", diag_list), Route(f"{P}/diagnostico/{{pid}}/testar", diag_test, methods=["POST"]),
         Route(f"{P}/diagnostico/mercadolivre/pesquisa", ml_preview, methods=["POST"]),
         Route(f"{P}/pesquisa/{{rid:int}}/monitorar", research_monitor, methods=["POST"]),

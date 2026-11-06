@@ -140,7 +140,17 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
             nxt.append("ler avaliações de consumidores do produto")
         nome = (lst[0]["nome"] if lst else soc.get(pid, {}).get("nome")) or pid
         cat = (lst[0].get("categoria") if lst else soc.get(pid, {}).get("categoria"))
-        rows.append({"product_id": pid, "nome": nome, "categoria": cat, "indice": idx, "prioridade": prio, "dimensoes": d,
+        elig = prio != "Evidência insuficiente"
+        # v0.9.1: o índice é renormalizado pelos pesos DISPONÍVEIS — com 1 dimensão a 100 ele virava 100 com evidência
+        # insuficiente. Agora só é exibido como índice de decisão quando elegível; caso contrário fica como parcial.
+        expl = [{"dimensao": k, "peso": W[k], "valor": v, "invertido": k in INVERTED,
+                 "contribuicao": round(W[k] * ((100 - v) if k in INVERTED else v) / cov, 1) if cov else None} for k, v in avail.items()]
+        rows.append({"product_id": pid, "nome": nome, "categoria": cat, "indice": idx if elig else None, "indice_parcial": idx,
+                     "elegivel_para_decisao": elig, "explicacao": {"componentes": expl, "dimensoes_ausentes": [k for k in W if k not in avail],
+                                                                    "peso_disponivel": round(cov / sum(W.values()), 2),
+                                                                    "motivo": None if elig else "cobertura < 40% ou menos de 2 dimensões de demanda: "
+                                                                    "índice parcial NÃO elegível para decisão"},
+                     "prioridade": prio, "dimensoes": d,
                      "cobertura_indice": round(cov / sum(W.values()), 2), "fontes_em_alta": rising,
                      "fornecedores": "não verificado (sem fonte autorizada conectada)",
                      "ncm": None, "riscos": list(dict.fromkeys(risks)), "proximos_passos": nxt})
@@ -149,6 +159,6 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
         for r in rows:
             r["ncm"] = hints.get(r["product_id"])
     order = {"Alta": 0, "Média": 1, "Baixa": 2, "Evidência insuficiente": 3}
-    rows.sort(key=lambda r: (order[r["prioridade"]], -(r["indice"] or -1)))
+    rows.sort(key=lambda r: (order[r["prioridade"]], -(r["indice"] if r["indice"] is not None else -1)))
     return {"produtos": rows, "pesos": W, "metodologia": __doc__.strip(),
             "aviso": "Classificação para priorizar investigação. Não é probabilidade de sucesso, margem nem recomendação de compra."}

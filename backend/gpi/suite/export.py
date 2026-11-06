@@ -94,6 +94,12 @@ def tables_from(kind: str, data: dict) -> list[tuple[str, list[dict], list[str]]
             rows.append({"cenário": name, **{k: v2 for k, v2 in v.items() if k != "custos_adicionais"}})
         return [("Cenários", rows, data.get("avisos") or []), ("Parâmetros", [{"campo": k, "valor": v} for k, v in (data.get("parametros") or {}).items()],
                                                                ["Pendentes: " + ", ".join(data.get("pendentes") or []) if data.get("pendentes") else ""])]
+    if kind == "conformidade":
+        return [("Ficha", [{"campo": k, "valor": data.get(k)} for k in ("produto", "categoria_provavel", "familia_tecnica", "identificacao")], data.get("avisos") or []),
+                ("Questões técnicas", data.get("questoes_tecnicas") or [], []),
+                ("Requisitos potenciais", data.get("requisitos_potenciais") or [], ["Requisitos NÃO confirmados — triagem preliminar."]),
+                ("Registros locais", (data.get("registros_locais") or {}).get("itens") or [], [(data.get("registros_locais") or {}).get("regra") or ""]),
+                ("Checklist", [{"passo": i + 1, "acao": x} for i, x in enumerate(data.get("checklist") or [])], [])]
     return [("Dados", data if isinstance(data, list) else [data], [])]
 
 

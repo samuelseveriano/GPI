@@ -51,17 +51,37 @@ def listing_stats(db, product_id: str | None, days: int = 30, today: date | None
         if k not in latest or r["day"] > latest[k]["day"]:
             latest[k] = r
     items = list(latest.values())
-    prices = [r["price"] for r in items if r["price"] is not None]
-    brands = Counter((r["brand"] or "não informada").lower() for r in items)
+    from . import listing_match as LM
+    target = product_id if product_id else None
+    cls = Counter()
+    elig = []
+    for r in items:
+        m = LM.classify(r["title"], target)
+        r["correspondencia"] = m
+        cls[m["classe"]] += 1
+        if m["elegivel"] and r["price"] is not None:
+            elig.append(r)
+    unit = [r["price"] / r["correspondencia"]["unidades"] for r in elig]
+    base = elig if target else items                              # sem alvo: só descritivo (todos), marcado como não comparável
+    brands = Counter((r["brand"] or "não informada").lower() for r in base)
     total = sum(brands.values())
     hhi = round(sum((n / total) ** 2 for n in brands.values()) * 10000) if total else None
-    cur = Counter(r["currency"] for r in items if r["currency"]).most_common(1)
-    return {"anuncios": len(items), "vendedores_distintos": len({r["seller"] for r in items if r["seller"]}),
+    cur = Counter(r["currency"] for r in base if r["currency"]).most_common(1)
+    cur_all = {r["currency"] for r in elig if r["currency"]}
+    obs_days = len({r["day"] for r in rows})
+    return {"anuncios": len(items), "anuncios_elegiveis": len(elig) if target else None, "por_correspondencia": dict(cls),
+            "cobertura_amostra": round(len(elig) / len(items), 2) if target and items else None,
+            "vendedores_distintos": len({r["seller"] for r in base if r["seller"]}),
             "marcas_distintas": len([b for b in brands if b != "não informada"]), "marcas": brands.most_common(8),
-            "concentracao_anuncios_hhi": hhi, "preco_mediano": _median(prices), "preco_min": min(prices) if prices else None,
-            "preco_max": max(prices) if prices else None, "moeda": cur[0][0] if cur else None,
+            "concentracao_anuncios_hhi": hhi, "preco_mediano": _median(unit) if len(cur_all) <= 1 else None,
+            "preco_min": min(unit) if unit and len(cur_all) <= 1 else None, "preco_max": max(unit) if unit and len(cur_all) <= 1 else None,
+            "kits_ou_lotes": sum(1 for r in elig if r["correspondencia"]["kit_ou_lote"]), "moeda": cur[0][0] if cur else None,
+            "moedas_misturadas": len(cur_all) > 1, "dias_observados": obs_days,
             "fontes": sorted({r["source"] for r in items}), "mercados": sorted({r["country"] for r in items if r["country"]}),
-            "janela_dias": days, "nota": "Contagens de ANÚNCIOS observados (não são vendas). HHI sobre a participação de anúncios por marca."}
+            "janela_dias": days, "exemplos_rejeitados": [{"titulo": r["title"][:120], "classe": r["correspondencia"]["classe"],
+                                                          "motivo": r["correspondencia"]["motivo"]} for r in items if not r["correspondencia"]["elegivel"]][:8],
+            "nota": "Anúncios observados (não são vendas). Preços mínimo/mediana/máximo só entre anúncios do produto exato ou variante "
+                    "compatível, por unidade (kits/lotes divididos). Cabos, acessórios e outros produtos ficam fora."}
 
 
 # ------------------------------------------------------------------------------------------------ Niche Finder
@@ -73,14 +93,13 @@ SORTS = {"oportunidade": lambda r: -(r["opportunity_score"] or -1), "crescimento
 
 
 def competition(ls: dict | None) -> str:
-    if not ls:
-        return "sem dados"
-    n, hhi = ls["anuncios"], ls["concentracao_anuncios_hhi"] or 0
-    if n >= 100 or (n >= 40 and hhi < 1500):
-        return "alta"
-    if n >= 20:
-        return "média"
-    return "baixa"
+    """Não classifica concorrência só pela quantidade de anúncios de uma consulta. Exige ≥ 30 anúncios ELEGÍVEIS em ≥ 2
+    dias de coleta; o resultado é a concentração de ANÚNCIOS por marca (indicativa), não participação de mercado."""
+    if not ls or not ls.get("anuncios_elegiveis") or ls["anuncios_elegiveis"] < 30 or (ls.get("dias_observados") or 0) < 2:
+        return "não avaliada"
+    hhi = ls["concentracao_anuncios_hhi"] or 0
+    return "indicativa: muitos anunciantes (baixa concentração)" if hhi < 1500 else \
+        "indicativa: concentração moderada" if hhi < 2500 else "indicativa: alta concentração de anúncios"
 
 
 def niche_rows(payload: dict, db, catalog: dict, stages: dict, today: date) -> list[dict]:

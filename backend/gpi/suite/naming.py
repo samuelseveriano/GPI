@@ -49,8 +49,11 @@ def describe(db, pid: str | None, understanding: dict | None = None) -> dict:
 
 
 def _from_id(fid: str) -> str:
+    from ..products import lexicon as LX
     head, *quals = fid.split("+")
-    return " ".join([head.replace("_", " ").capitalize(), *[pretty_token(q) for q in quals]])
+    pt = ((LX.CONCEPTS.get(head) or (None, None, []))[2] or [None])[0]
+    base = pt[:1].upper() + pt[1:] if pt else head.replace("_", " ").capitalize()
+    return " ".join([base, *[pretty_token(q) for q in quals]])
 
 
 def name_of(db, pid: str | None) -> str | None:

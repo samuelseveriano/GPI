@@ -228,7 +228,15 @@ def setup(app_state, db, data_dir: Path, cfg: dict, http_getter, save_settings, 
             if a:
                 ctx.update(formulario=a.get("formulario") or {}, ncm=a.get("ncm"))
         mode = "ia_local" if b.get("modo") == "ia_local" else ("essencial" if b.get("modo") == "essencial" else None)
-        return j(await run_in_threadpool(AS.answer, q, kb, llm, cfg, ctx, mode))
+        def run():
+            r = AS.answer(q, kb, llm, cfg, ctx, mode)
+            try:                                    # v0.9.1: ficha de investigação (identificação + questões + registros + checklist)
+                from ..suite import regassist
+                r["investigacao"] = regassist.ficha(db, q, r, b.get("fabricante"), b.get("modelo"))
+            except Exception as e:  # noqa: BLE001
+                r["investigacao"] = {"erro": f"{type(e).__name__}: {str(e)[:120]}"}
+            return r
+        return j(await run_in_threadpool(run))
 
     async def ask_cancel(request):
         b = await body(request)

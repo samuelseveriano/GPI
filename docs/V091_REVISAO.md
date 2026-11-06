@@ -149,3 +149,25 @@ uma consulta idêntica com menos de 10 minutos e continua respeitando permissõe
 `tests/test_v091_final.py` (21 testes, respostas simuladas) cobre os 21 itens pedidos; a suíte completa roda no CI. Dados reais:
 somente o job real-data-audit (banco vazio, sem credenciais) — GDELT respondeu 429 no GitHub Actions e, neste ambiente de
 desenvolvimento, o proxy bloqueia o endereço (agora classificado como "Bloqueada pela rede").
+
+---
+
+# MVP RC — integração dos dados
+
+* **Sincronização eBay "30 requisições, 0 registros":** os anúncios eram gravados em `market_listings`, mas essa tabela não estava
+  entre as tabelas contadas pela sincronização → o resultado e o diagnóstico diziam "sem dados". Corrigido (`market/sync.py`).
+* **Carregador × cabo:** `suite/listing_match.py` classifica cada anúncio contra o produto (exato · variante compatível ·
+  tecnicamente semelhante · mesma família · acessório · incompatível · não confirmada); preços mín./mediana/máx. só entre
+  exato/variante, por unidade (kits/lotes divididos); concorrência "não avaliada" sem amostra suficiente (≥ 30 elegíveis, ≥ 2 coletas).
+* **Opportunity Score 100 com "Evidência insuficiente":** o índice era renormalizado pelos pesos disponíveis (1 dimensão a 100 → 100).
+  Agora fica como **parcial, não elegível** e a tela mostra componentes, pesos, contribuições e dimensões ausentes.
+* **Nova evidência → recálculo:** consulta direcionada com dados invalida só os resultados dependentes (sem reiniciar).
+* **URL de anúncio:** eBay `get_item_by_legacy_id` e Mercado Livre `/items`/`/products` (API oficial, credenciais do usuário);
+  grava pelo mesmo fluxo (vendedor pseudonimizado; eBay só com o fluxo de exclusão de contas). Páginas comuns não são lidas.
+* **Imagem por URL:** o download sempre falhava ("URL não devolveu uma imagem") porque o cliente HTTP devolve `{"_bytes": ...}`.
+  Corrigido; HTML é detectado; link de anúncio → foto pela API oficial; busca por imagem oficial do eBay só com autorização marcada.
+* **Assistente regulatório:** ficha de investigação (identificação, categoria, questões técnicas, requisitos "a confirmar" das
+  regras fundamentadas, registros Anatel/Inmetro locais por classe de correspondência, checklist) + relatório preliminar XLSX/PDF.
+* **Meta Business:** `config_id` (Facebook Login for Business) sem `scope`; Login básico inalterado; callback preservado.
+* **Dashboard:** visão consolidada A–E (portfólio, mercado, concorrência, comércio exterior, qualidade) a partir do banco real.
+* **Fornecedores na China:** link de verificação assistida no GSXT/SAMR (sem consulta automática).

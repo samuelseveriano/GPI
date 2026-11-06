@@ -187,6 +187,8 @@ PROVIDERS = [
      "conectores": [],
      "campos": [{"nome": "client_id", "rotulo": "App ID do app de negócios", "secreto": False},
                 {"nome": "client_secret", "rotulo": "App Secret do app de negócios", "secreto": True},
+                {"nome": "config_id", "rotulo": "Configuration ID do Facebook Login for Business (Meta → Facebook Login for "
+                                                "Business → Configurações)", "secreto": False},
                 {"nome": "ig_user_id", "rotulo": "ID numérico da conta profissional do Instagram (preenchido ao conectar)", "secreto": False}],
      "descricao": "v0.9: segundo app da Meta, só para os módulos de dados. O app de Login (caso de uso 'Authenticate and "
                   "request data from users with Facebook Login') é incompatível com o caso de uso de Páginas — por isso a Meta "
