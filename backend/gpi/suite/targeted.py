@@ -15,6 +15,7 @@ buscas em alta do dia), Google Trends BigQuery (só termos em alta por região),
 (lista geral) e Comex Stat (consultado por NCM, nunca por produto)."""
 from __future__ import annotations
 
+import json
 import time
 import urllib.parse
 from datetime import datetime, timedelta
@@ -309,18 +310,66 @@ def collect(db, ctx_fn, q_pt: str, q_en: str, pid: str | None, markets: list[str
 DEPENDENT_RESULTS = ("intel08", "consumer", "opportunity3", "competition")
 
 
-def invalidate(db, res: list[dict]) -> list[str]:
-    """Nova evidência comercial de uma consulta direcionada → invalida SÓ os resultados derivados dependentes (o próximo
-    acesso recalcula), sem reiniciar o GPI e sem recalcular o banco inteiro a cada consulta."""
+def _load(db, name):
+    r = db.query("SELECT payload FROM analysis_results WHERE name = ?", (name,))
+    return json.loads(r[0]["payload"]) if r else None
+
+
+def _save(db, name, payload):
+    db.execute("INSERT INTO analysis_results (name, created_at, payload) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET "
+               "created_at = excluded.created_at, payload = excluded.payload",
+               (name, datetime.now().isoformat(timespec="seconds"), json.dumps(payload, ensure_ascii=False)))
+
+
+def refresh_commercial(db, pids: set[str]) -> dict:
+    """Nova oferta observada → recalcula SÓ os indicadores comerciais (competition) dos produtos afetados e as linhas
+    desses produtos no Opportunity Engine, a partir dos demais resultados em cache (sem recalcular o banco inteiro)."""
+    from ..market import reviews2
+    from ..products import opportunity3
+    pids = {p for p in pids if p}
+    if not pids:
+        return {"produtos": [], "recalculados": []}
+    comp = reviews2.competition(db, only=pids, prev=_load(db, "competition"))
+    _save(db, "competition", comp)
+    done = ["competition"]
+    cons = _load(db, "consumer")
+    new = opportunity3.build(cons or {}, _load(db, "social"), _load(db, "reviews2"), comp, db)
+    if cons is None:        # análise de busca invalidada/ausente: não grava uma oportunidade sem a busca (recalculada no próximo acesso)
+        return {"produtos": sorted(pids), "recalculados": done, "opportunity3": new}
+    prev = _load(db, "opportunity3")
+    if prev and prev.get("produtos") is not None:
+        rows = [r for r in prev["produtos"] if r["product_id"] not in pids] + [r for r in new["produtos"] if r["product_id"] in pids]
+        order = {"Alta": 0, "Média": 1, "Baixa": 2, "Evidência insuficiente": 3}
+        rows.sort(key=lambda r: (order.get(r["prioridade"], 4), -(r["indice"] if r["indice"] is not None else -1)))
+        new = {**prev, "produtos": rows}
+        new.pop("_gerado_em", None)
+    _save(db, "opportunity3", new)
+    done.append("opportunity3")
+    return {"produtos": sorted(pids), "recalculados": done, "opportunity3": new}
+
+
+def invalidate(db, res: list[dict], pid: str | None = None) -> list[str]:
+    """Nova evidência de uma consulta direcionada → atualiza SÓ os resultados derivados dependentes. Volume de pesquisa
+    invalida tudo o que depende de busca (recalculado no próximo acesso); anúncios recalculam na hora os indicadores
+    comerciais e a oportunidade do produto afetado (sem reiniciar o GPI e sem recalcular o banco inteiro)."""
     fresh = [r for r in res if r.get("consulta_realizada") and r["estado"] == "com dados"]
     if not fresh:
         return []
-    names = list(DEPENDENT_RESULTS) if any(r["capacidade"] == "search_volume" for r in fresh) else ["competition"]
-    try:
-        db.execute("DELETE FROM analysis_results WHERE name IN (%s)" % ",".join("?" * len(names)), tuple(names))
-    except Exception:  # noqa: BLE001
+    if any(r["capacidade"] == "search_volume" for r in fresh):
+        names = list(DEPENDENT_RESULTS)
+        try:
+            db.execute("DELETE FROM analysis_results WHERE name IN (%s)" % ",".join("?" * len(names)), tuple(names))
+        except Exception:  # noqa: BLE001
+            return []
+        return names
+    pids = {pid} if pid else set()
+    if not pids:
         return []
-    return names
+    try:
+        return refresh_commercial(db, pids)["recalculados"]
+    except Exception:  # noqa: BLE001 — falha no recálculo não pode derrubar a pesquisa; o próximo acesso recalcula
+        db.execute("DELETE FROM analysis_results WHERE name IN ('competition', 'opportunity3')")
+        return ["competition", "opportunity3"]
 
 
 def _central(sid):

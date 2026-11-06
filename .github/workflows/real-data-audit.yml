@@ -36,6 +36,11 @@ jobs:
           code=$?
           cat audit.log | tail -40
           { echo "### Auditoria v0.8.1 com dados reais"; echo '```'; tail -20 audit.log | cut -c1-600; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" = "3" ]; then
+            echo "::warning title=API pública com limite (HTTP 429)::Auditoria NÃO VALIDADA por limite transitório de API pública (não é falha de implementação). Reexecute o workflow."
+            echo "**NÃO VALIDADA**: limite transitório de API pública (HTTP 429) — não é falha de implementação; reexecutar." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           exit $code
       - name: Pesquisa direcionada REAL num banco vazio (v0.9.1, sem credenciais — GDELT público; demais devem ficar 'não autorizada')
         if: always()

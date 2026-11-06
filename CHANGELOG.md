@@ -5,6 +5,10 @@
 Somente ferramentas gratuitas; nenhuma dependência paga obrigatória.
 
 ### Adicionado
+- **MVP final — evidência comercial integrada**: oferta observada filtrada por equivalência técnica (sem cabos/
+  acessórios) por produto × mercado alimenta as dimensões existentes do Opportunity Engine (só Brasil no índice; EUA
+  como contexto), recálculo só dos produtos afetados após cada coleta, Dashboard com tipos de evidência, comparador
+  comercial com especificações declaradas e síntese, aba "Oferta e oportunidade" na exportação.
 - **Pesquisa de Produtos**: pesquisa por nome (pt/en), mercado, mercados de comparação, período (3/6/12/24 meses ou
   personalizado), objetivo e profundidade; 11 etapas reais com progresso gravado; dossiê com Visão geral, Demanda,
   Marketplaces, Produtos semelhantes, Fornecedores, Importação, Qualidade, Previsões e Evidências; salvar, histórico,

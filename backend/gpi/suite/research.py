@@ -285,7 +285,7 @@ def _s_collect(db, ctx, params, out, st, rid, today, cancelled):
     useful = [r for r in res if r["estado"] in TG.USEFUL and r["registros"]]
     planned = [r for r in res if r["estado"] not in NOT_PLANNED]
     out["coleta"] = {"realizada": True, "modo": mode, "mercados": markets, "atualizacao_forcada": force, "resultados": res,
-                     "invalidados": TG.invalidate(db, res)}
+                     "invalidados": TG.invalidate(db, res, st.get("pid"))}
     if not any(r["papel"] == "principal" for r in planned):
         return "indisponível", f"{markets[0]}: {TG.NO_COVERAGE}"
     det = f"{len(useful)} fonte(s) com dados de {len(planned)} consulta(s) prevista(s)"
@@ -390,6 +390,7 @@ def _s_markets(db, ctx, params, out, st, rid, today, cancelled):
                                    "vazio": None if ls or ls90 else (main["mensagem"] or "Nenhum anúncio no mercado principal (veja 'Fontes e cobertura')."),
                                    "aviso": MK.AUTH_NOTE + " Preço anunciado ≠ preço de venda; quantidade de anúncios não é demanda. "
                                             "Anúncios de mercados comparativos não são atribuídos ao mercado principal."}
+    out["abas"]["marketplaces"]["indicadores_comerciais"] = commercial_indicators(db, pid)
     return _with_data(st["direct"]["listings"], f"{(ls or ls90 or {}).get('anuncios', 0)} anúncio(s) no mercado principal ({markets[0]}), "
                                                 f"{st['direct']['listings']} elegível(is) para comparação")
 
@@ -402,6 +403,31 @@ def _s_similar(db, ctx, params, out, st, rid, today, cancelled):
     res = similar_products(db, pid, st["u"], ctx["payload_fn"]().get("produtos") or {}, today, deep=params.get("profundidade") == "completa")
     out["abas"]["semelhantes"] = res
     return _with_data(len(res["itens"]), f"{len(res['itens'])} produto(s) em {sum(1 for v in res['grupos'].values() if v)} grupo(s)")
+
+
+def commercial_indicators(db, pid) -> dict:
+    """Indicadores comerciais do produto (oferta observada por mercado, já filtrada) e a linha correspondente do
+    Opportunity Engine — atualizados pela própria coleta (targeted.invalidate → refresh_commercial)."""
+    if not pid:
+        return {"itens": [], "oportunidade": None, "vazio": "Produto não identificado."}
+    comp = TG._load(db, "competition")
+    items = [x for x in (comp or {}).get("itens", []) if x.get("product_id") == pid]
+    opp3 = TG._load(db, "opportunity3")
+    if comp is None or opp3 is None or (not items and db.query("SELECT 1 FROM market_listings WHERE product_id = ? LIMIT 1", (pid,))):
+        opp3 = TG.refresh_commercial(db, {pid}).get("opportunity3") or opp3
+        items = [x for x in (TG._load(db, "competition") or {}).get("itens", []) if x.get("product_id") == pid]
+    opp = next((r for r in (opp3 or {}).get("produtos", []) if r.get("product_id") == pid), None)
+    lim = ["Anúncios são oferta observada: não são vendas, demanda comprovada nem participação de mercado."]
+    if items and all((x.get("dias_observados") or 0) < 2 for x in items):
+        lim.append("Coleta única: nenhuma tendência ou crescimento é atribuído.")
+    if any(x.get("mercado") != "BR" for x in items):
+        lim.append("Oferta fora do Brasil (ex.: eBay/EUA) é contexto: não altera indicadores do mercado brasileiro.")
+    if opp and not opp.get("elegivel_para_decisao"):
+        lim.append("Índice de oportunidade parcial — não elegível para decisão (evidência insuficiente).")
+    return {"itens": items, "oportunidade": opp and {k: opp.get(k) for k in ("prioridade", "indice", "indice_parcial", "elegivel_para_decisao",
+                                                                             "explicacao", "tipos_de_evidencia", "oferta_observada", "riscos",
+                                                                             "proximos_passos")},
+            "limitacoes": lim, "vazio": None if items else "Sem anúncios elegíveis deste produto."}
 
 
 SIM_CLASSES = ["Possível mesmo produto", "Variante da mesma família", "Produto tecnicamente semelhante", "Produto da mesma categoria",

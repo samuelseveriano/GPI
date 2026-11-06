@@ -46,6 +46,15 @@ def tables_from(kind: str, data: dict) -> list[tuple[str, list[dict], list[str]]
         t.append(("Demanda", [x for m in dm.get("mercados", []) for x in m.get("exemplos", [])], [dm.get("aviso") or ""]))
         mk = ab.get("marketplaces") or {}
         t.append(("Marketplaces", mk.get("anuncios") or [], [mk.get("aviso") or "", "Vendas e receita não disponíveis."]))
+        ic = mk.get("indicadores_comerciais") or {}
+        t.append(("Oferta e oportunidade", [{k: (", ".join(f"{b['marca']} ({b['anuncios']})" for b in x[k]) if k == "marcas" else x.get(k))
+                                             for k in ("tipo_evidencia", "mercado", "fonte", "moeda", "anuncios", "anuncios_elegiveis",
+                                                       "excluidos_acessorios_incompativeis", "concorrentes_observados", "marcas_distintas", "marcas",
+                                                       "preco_min", "preco_q1", "preco_mediano", "preco_q3", "preco_max", "pressao_competitiva",
+                                                       "status", "dias_observados", "ultima_coleta")} for x in ic.get("itens") or []]
+                  + ([{"tipo_evidencia": "Oportunidade", "status": (ic.get("oportunidade") or {}).get("prioridade"),
+                       "pressao_competitiva": (ic.get("oportunidade") or {}).get("indice_parcial")}] if ic.get("oportunidade") else []),
+                  ic.get("limitacoes") or ["Sem oferta observada."]))
         t.append(("Semelhantes", (ab.get("semelhantes") or {}).get("itens") or [], [(ab.get("semelhantes") or {}).get("nota") or ""]))
         fo = ab.get("fornecedores") or {}
         t.append(("Fornecedores", [{**c, "fontes": ", ".join(c.get("fontes") or []), "motivos": "; ".join(c.get("motivos") or [])}

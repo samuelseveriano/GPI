@@ -182,6 +182,12 @@ def main(out: str):
                             ("backtesting", len(res))) if not v]
     if vazio:                     # sem dados, as verificações passariam sem provar nada: falha explícita
         print("AUDITORIA SEM DADOS REAIS SUFICIENTES:", ", ".join(vazio))
+        errs = " ".join(str((v or {}).get("ultimo_erro") or "") for v in rep["coleta"].values()).lower()
+        if any(x in errs for x in ("429", "limite de requisi", "too many requests")):
+            # limite da API pública (IP compartilhado do CI): transitório, NÃO é falha de implementação — mas também
+            # não é aprovação: o passo é marcado como 'não validado' (código 3) para reexecução
+            print("FALHA TRANSITÓRIA DE API PÚBLICA (HTTP 429 / limite de requisições) — auditoria NÃO VALIDADA; reexecutar.")
+            sys.exit(3)
         sys.exit(2)
     if not rep["C_wikipedia"]["aprovado"] or rep["F_internacional"]["idioma_como_consistente"] or rep["F_internacional"]["paginas_de_pais_com_wikipedia"]:
         sys.exit(1)

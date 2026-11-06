@@ -263,7 +263,8 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
 
     async def mkt_compare(request):
         b = await body(request)
-        return j(await run_in_threadpool(MK.compare_listings, db, [str(x)[:500] for x in (b.get("refs") or [])]))
+        return j(await run_in_threadpool(MK.compare_listings, db, [str(x)[:500] for x in (b.get("refs") or [])],
+                                         (str(b["alvo"])[:120] if b.get("alvo") else None)))
 
     async def trend(request):
         pid = (request.query_params.get("produto") or "").strip()

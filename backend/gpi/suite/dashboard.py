@@ -46,20 +46,45 @@ def build(db, payload: dict, stages: dict, today: date) -> dict:
          "categorias": cats.most_common(8), "por_mercado": mk.most_common(8),
          "recem_identificados": [{"produto_id": r["product_id"], "produto": NM.name_of(db, r["product_id"]), "desde": r["first_seen"]} for r in recent]}
     # ---------------- C. concorrência (anúncios reais, só comparáveis)
-    lp = _q(db, "SELECT product_id, COUNT(DISTINCT source || item_id) AS n FROM market_listings WHERE product_id IS NOT NULL "
-                "GROUP BY product_id ORDER BY n DESC LIMIT 12")
-    comp = []
-    for r in lp:
-        ls = MK.listing_stats(db, r["product_id"], 90, today)
-        if ls:
-            comp.append({"produto_id": r["product_id"], "produto": NM.name_of(db, r["product_id"]), "anuncios": ls["anuncios"],
-                         "elegiveis": ls["anuncios_elegiveis"], "preco_min": ls["preco_min"], "mediana": ls["preco_mediano"],
-                         "preco_max": ls["preco_max"], "moeda": ls["moeda"], "marcas": ls["marcas_distintas"]})
+    from . import targeted as TG
+    cres = TG._load(db, "competition")
+    if cres is None:
+        from ..market import reviews2
+        cres = reviews2.competition(db, today=today)
+        TG._save(db, "competition", cres)
+    citems = sorted(cres.get("itens") or [], key=lambda x: -(x.get("anuncios") or 0))
+    lp = sorted({x["product_id"] for x in citems})
+    comp = [{"produto_id": x["product_id"], "produto": NM.name_of(db, x["product_id"]), "mercado": x.get("mercado"), "fonte": x.get("fonte"),
+             "tipo_evidencia": "Oferta observada", "anuncios": x.get("anuncios"), "elegiveis": x.get("anuncios_elegiveis"),
+             "excluidos": x.get("excluidos_acessorios_incompativeis"), "preco_min": x.get("preco_min"), "mediana": x.get("preco_mediano"),
+             "preco_max": x.get("preco_max"), "moeda": x.get("moeda"), "marcas": x.get("marcas_distintas"),
+             "concorrentes": x.get("concorrentes_observados"), "pressao_competitiva": x.get("pressao_competitiva"),
+             "status": x.get("status"), "dias_observados": x.get("dias_observados"), "ultima_coleta": x.get("ultima_coleta")}
+            for x in citems[:16]]
+    opp = TG._load(db, "opportunity3")
+    if opp is None:          # invalidado por nova coleta: monta a partir dos resultados em cache (sem gravar, sem recalcular o banco)
+        from ..products import opportunity3 as O3
+        opp = O3.build(TG._load(db, "consumer") or {}, TG._load(db, "social"), TG._load(db, "reviews2"), cres, db)
+    ev = Counter()
+    for r in opp.get("produtos") or []:
+        for k, v in (r.get("tipos_de_evidencia") or {}).items():
+            if v:
+                ev[k] += 1
+    b["tipos_de_evidencia"] = {k: ev.get(k, 0) for k in ("Oferta observada", "Interesse de pesquisa", "Crescimento comprovado",
+                                                           "Informações contextuais", "Evidência insuficiente")}
+    b["oportunidades_com_oferta"] = [{"produto_id": r["product_id"], "produto": r.get("nome"), "prioridade": r["prioridade"],
+                                      "indice": r.get("indice"), "indice_parcial": r.get("indice_parcial"),
+                                      "elegivel_para_decisao": r.get("elegivel_para_decisao"),
+                                      "oferta": [{"mercado": o["mercado"], "elegiveis": o["anuncios_elegiveis"], "mediana": o["preco_mediano"],
+                                                  "moeda": o["moeda"], "afeta_indicadores_do_mercado": o["afeta_indicadores_do_mercado"]}
+                                                 for o in r.get("oferta_observada") or []]}
+                                     for r in opp.get("produtos") or [] if r.get("oferta_observada")][:10]
     chg = _q(db, "SELECT source, item_id, MIN(price) AS mn, MAX(price) AS mx, COUNT(DISTINCT day) AS d, MAX(title) AS t FROM market_listings "
                  "WHERE price IS NOT NULL GROUP BY source, item_id HAVING d >= 2 AND mx > mn * 1.1 ORDER BY (mx - mn) / mn DESC LIMIT 8")
     c = {"produtos_com_anuncios": len(lp), "faixas_preco": comp, "marcas_identificadas": (_q(db, "SELECT COUNT(DISTINCT LOWER(brand)) AS n FROM market_listings WHERE brand IS NOT NULL") or [{"n": 0}])[0]["n"],
          "mudancas_preco": [{"anuncio": r["t"], "fonte": r["source"], "de": r["mn"], "ate": r["mx"], "coletas": r["d"]} for r in chg],
-         "nota": "Faixas de preço só entre anúncios do produto exato/variante compatível (por unidade). Anúncios não são vendas."}
+         "nota": "Oferta observada por mercado (eBay = EUA, Mercado Livre = Brasil; não se misturam). Faixas de preço só entre anúncios do "
+                 "produto exato/variante compatível (por unidade); cabos/acessórios excluídos. Anúncios não são vendas nem demanda."}
     # ---------------- D. comércio exterior (Comex Stat agregado por NCM)
     ser = _q(db, "SELECT id, series_key, product_key, country, indicator, unit FROM market_series WHERE source = 'comexstat' AND indicator LIKE '%FOB%' LIMIT 400")
     growth = []

@@ -309,10 +309,113 @@ def listing(db, ref: str) -> dict:
                      "Vendas e receita não são informadas pelas APIs usadas e não são estimadas."}
 
 
-def compare_listings(db, refs: list[str]) -> dict:
+SPEC_KEYS = [("potencia_w", "Potência (W)", "maior"), ("capacidade_mah", "Capacidade (mAh)", "maior"), ("capacidade_ml", "Capacidade (ml)", None),
+             ("capacidade_l", "Capacidade (L)", None), ("tensao_v", "Tensão (V)", None), ("conector", "Conector", None),
+             ("tecnologia", "Tecnologias declaradas", None), ("tamanho_pol", "Tamanho (pol.)", None)]
+
+
+def _num(v):
+    try:
+        return float(str(v).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
+def _cmp_item(db, ref: str) -> dict:
+    """Um anúncio coletado (ID/URL) ou um produto canônico ('produto:<id>', oferta observada agregada)."""
+    if str(ref).startswith("produto:"):
+        pid = ref.split(":", 1)[1]
+        from ..market import reviews2
+        offers = reviews2.competition(db, only={pid}).get("itens") or []
+        o = max(offers, key=lambda x: x.get("anuncios_elegiveis") or 0) if offers else None
+        from . import naming as NM
+        name = NM.name_of(db, pid)
+        return {"encontrado": bool(o), "tipo": "produto", "id": pid, "titulo": name, "marca": None, "produto_id": pid,
+                "preco_atual": o and o.get("preco_mediano"), "moeda": o and o.get("moeda"), "fonte": o and o.get("fonte"),
+                "mercado": o and o.get("mercado"), "base_preco": "mediana dos anúncios elegíveis" if o else None,
+                "anuncios_elegiveis": o and o.get("anuncios_elegiveis"), "titulo_specs": name}
+    d = listing(db, ref)
+    if d.get("encontrado"):
+        last = d["historico_precos"][-1]
+        d.update(tipo="anúncio", moeda=last.get("moeda"), mercado=SOURCE_MARKET.get(d["fonte"]), titulo_specs=d["titulo"])
+    return d
+
+
+def compare_listings(db, refs: list[str], alvo: str | None = None) -> dict:
+    """Comparador comercial mínimo (até 5): nome, marca declarada, preço, moeda, potência/capacidade quando DECLARADAS no
+    título, características, diferenças técnicas, vantagens observadas, limitações e fonte. Nada é inventado: atributo
+    ausente fica 'não declarado'. Itens não compatíveis com o alvo ficam fora da síntese."""
+    from ..products import nlp as pnlp
+    from . import listing_match as LM
     refs = [r for r in refs if str(r).strip()][:5]
-    items = [listing(db, r) for r in refs]
-    return {"itens": items, "limite": 5, "aviso": "Comparação de anúncios observados; não inclui vendas nem receita."}
+    items = [_cmp_item(db, r) for r in refs]
+    found = [i for i in items if i.get("encontrado")]
+    target = alvo or next((i.get("produto_id") for i in found if i.get("produto_id")), None)
+    for i in found:
+        at = pnlp.extract_attributes(i.get("titulo_specs") or "")
+        i["_at"] = at
+        i["marca_declarada"] = i.get("marca") or at.get("marca") or "não declarada"
+        m = LM.classify(i.get("titulo_specs") or "", target) if target and i.get("tipo") == "anúncio" else None
+        i["correspondencia"] = m and {"classe": m["classe"], "motivo": m.get("motivo")}
+        i["compativel"] = True if i.get("tipo") == "produto" or not target else bool(m and m["elegivel"])
+        i["unidades"] = m["unidades"] if m else 1
+        i["preco_unitario"] = round(i["preco_atual"] / i["unidades"], 2) if i.get("preco_atual") and i["unidades"] else i.get("preco_atual")
+    comp = [i for i in found if i["compativel"]]
+    keys_present = [(k, lbl, better) for k, lbl, better in SPEC_KEYS if any(i["_at"].get(k) for i in comp)]
+    for i in found:
+        i["especificacoes"] = {lbl: ((", ".join(i["_at"][k]) if isinstance(i["_at"].get(k), list) else i["_at"].get(k)) or "não declarado")
+                               for k, lbl, _ in keys_present}
+    diffs = []
+    for k, lbl, _ in keys_present:
+        vals = {str(i["_at"].get(k)) for i in comp if i["_at"].get(k)}
+        if len(vals) > 1:
+            diffs.append({"atributo": lbl, "valores": {i["titulo"][:60]: i["especificacoes"][lbl] for i in comp}})
+    curs = {i.get("moeda") for i in comp if i.get("preco_unitario") is not None}
+    priced = [i for i in comp if i.get("preco_unitario") is not None] if len(curs) == 1 else []
+    for i in found:
+        adv, lim = [], []
+        if not i["compativel"]:
+            lim.append("não é tecnicamente compatível com o alvo (" + ((i.get("correspondencia") or {}).get("classe") or "?") + ") — fora da síntese")
+        else:
+            if priced and len(priced) > 1 and i in priced and i["preco_unitario"] == min(x["preco_unitario"] for x in priced):
+                adv.append("menor preço unitário observado entre os comparáveis")
+            for k, lbl, better in keys_present:
+                v = _num(i["_at"].get(k))
+                vs = [_num(x["_at"].get(k)) for x in comp if _num(x["_at"].get(k)) is not None]
+                if better == "maior" and v is not None and len(vs) > 1 and v == max(vs) and v > min(vs):
+                    adv.append(f"maior {lbl.lower()} declarada")
+                if i["_at"].get(k) is None:
+                    lim.append(f"{lbl} não declarada no anúncio")
+            if i.get("unidades", 1) > 1:
+                lim.append(f"kit/lote de {i['unidades']} unidades — preço comparado por unidade")
+            if i["marca_declarada"] == "não declarada":
+                lim.append("marca não declarada")
+            if i.get("tipo") == "anúncio" and (i.get("observacoes") or 0) < 2:
+                lim.append("uma única observação de preço (sem histórico)")
+        i["vantagens_observadas"], i["limitacoes"] = adv, lim
+    for i in found:
+        i.pop("_at", None)
+    syn = []
+    if len(comp) < 2:
+        syn.append("Menos de dois itens tecnicamente compatíveis encontrados — comparação não conclusiva.")
+    else:
+        if priced and len(priced) > 1:
+            lo, hi = min(priced, key=lambda x: x["preco_unitario"]), max(priced, key=lambda x: x["preco_unitario"])
+            syn.append(f"Preço unitário observado de {lo['preco_unitario']:.2f} a {hi['preco_unitario']:.2f} {lo.get('moeda') or ''} "
+                       f"(menor: {lo['titulo'][:60]}; maior: {hi['titulo'][:60]}).")
+        elif len(curs) > 1:
+            syn.append("Moedas diferentes (" + ", ".join(sorted(c for c in curs if c)) + "): preços não comparados diretamente.")
+        syn.append("Diferenças técnicas declaradas: " + "; ".join(d["atributo"] for d in diffs) + "." if diffs
+                   else "Nenhuma diferença técnica declarada nos títulos entre os itens compatíveis.")
+        mk = {i.get("mercado") for i in comp if i.get("mercado")}
+        if len(mk) > 1:
+            syn.append("Itens de mercados diferentes (" + ", ".join(sorted(mk)) + "): servem de referência, não se somam.")
+    excl = [i["titulo"][:60] for i in found if not i["compativel"]]
+    if excl:
+        syn.append("Fora da comparação por incompatibilidade técnica: " + "; ".join(excl) + ".")
+    return {"itens": items, "alvo": target, "compativeis": len(comp), "diferencas_tecnicas": diffs, "sintese": syn, "limite": 5,
+            "aviso": "Comparação de anúncios/oferta observados. Especificações só quando declaradas no título (nada é inventado); "
+                     "não inclui vendas, receita nem participação de mercado."}
 
 
 # ------------------------------------------------------------------------------------------------ Trend & Seasonality Explorer

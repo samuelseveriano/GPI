@@ -171,3 +171,31 @@ desenvolvimento, o proxy bloqueia o endereço (agora classificado como "Bloquead
 * **Meta Business:** `config_id` (Facebook Login for Business) sem `scope`; Login básico inalterado; callback preservado.
 * **Dashboard:** visão consolidada A–E (portfólio, mercado, concorrência, comércio exterior, qualidade) a partir do banco real.
 * **Fornecedores na China:** link de verificação assistida no GSXT/SAMR (sem consulta automática).
+
+
+## Finalização do MVP — evidência comercial → Opportunity Engine → Dashboard
+
+- **Oferta observada por produto × mercado** (`market/reviews2.competition`, reaproveitado — sem novo motor): anúncios
+  associados ao produto canônico e filtrados pelo Listing Match; só produto exato/variante compatível entra (cabos,
+  acessórios, outros produtos e potências diferentes ficam fora; kits divididos por unidade). Indicadores: anúncios
+  elegíveis/excluídos, preços mín/Q1/mediana/Q3/máx, faixas de posicionamento (quartis), vendedores (concorrentes
+  observados), marcas declaradas e HHI, pressão competitiva (só com ≥ 10 elegíveis), dias de coleta e fonte rastreada.
+  Uma coleta única nunca gera variação/crescimento.
+- **Brasil × EUA**: eBay = EUA, Mercado Livre = Brasil; moedas nunca misturadas. O Opportunity Engine (índice para
+  importação ao Brasil) usa na dimensão existente `competition_pressure` e em "Preços observados" **só** a oferta
+  brasileira; a oferta dos EUA aparece como `oferta_observada` contextual (`afeta_indicadores_do_mercado: false`).
+- Cada linha do Opportunity Engine distingue **Oferta observada · Interesse de pesquisa · Crescimento comprovado ·
+  Informações contextuais · Evidência insuficiente**. Anúncio nunca conta como demanda; sem 2 dimensões de demanda o
+  índice continua parcial (não elegível — CINZA).
+- **Atualização após coleta**: `targeted.invalidate` → `refresh_commercial` recalcula só os indicadores e a linha de
+  oportunidade dos produtos afetados (os demais ficam do cache). Volume de busca invalida os dependentes de busca
+  (recalculados no próximo acesso). Resultados ausentes são recalculados sob demanda (`competition_cached`).
+- **Dashboard**: concorrência por mercado (elegíveis, faixa, vendedores/marcas, pressão/estado) e contagem dos tipos
+  de evidência; dossiê da pesquisa com "Indicadores comerciais" e exportação (aba "Oferta e oportunidade").
+- **Comparador comercial** (até 5 anúncios ou `produto:<id>`): marca declarada, preço unitário, moeda, potência/
+  capacidade/conector/tecnologias **só quando declaradas**, compatibilidade com o alvo, diferenças técnicas, vantagens
+  observadas, limitações, fonte/mercado e síntese. Itens incompatíveis ficam fora da síntese.
+- Cenário de demonstração (Carregador GaN 65W, EUA) coberto por `tests/test_v091_commercial.py` com respostas
+  SIMULADAS; o teste autenticado com a Browse API real ocorre no computador do usuário.
+- HTTP 429 de API pública: diagnóstico "Limite de requisições" (causa `limite`, HTTP 429), sem confundir com falha
+  de implementação.

@@ -179,7 +179,8 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
         ml = sync.store.load_result("ml_models") or {}
         ml_series = {sid: v for g in ml.get("grupos", {}).values() for sid, v in (g.get("por_serie") or {}).items()
                      if sid.split("|")[0] == fam}
-        comp = [c for c in (sync.store.load_result("competition") or {}).get("itens", []) if c["product_id"] == fam]
+        from ..market.reviews2 import competition_cached
+        comp = [c for c in competition_cached(sync.store).get("itens", []) if c["product_id"] == fam or c["product_id"].startswith(fam + ":")]
         rev = next((x for x in (sync.store.load_result("reviews2") or {}).get("produtos", []) if x["product_id"] == fam), None)
         return j({"produto": p, "series": series, "ml": ml_series, "concorrencia": comp, "reviews": rev,
                   "previsoes": {k: v for k, v in r["previsoes"].items() if k.split("|")[0] == fam},
@@ -338,7 +339,9 @@ def routes(db, sync, cfg, save_settings=None) -> list[Route]:
                                                           "aviso": "Ainda não calculado: aguarde a primeira sincronização."})
 
     async def competition(_):
-        return j(sync.store.load_result("competition") or {"itens": [], "aviso": "Sem anúncios coletados: conecte o eBay na Central de Integrações."})
+        from ..market.reviews2 import competition_cached
+        r = await run_in_threadpool(competition_cached, sync.store)
+        return j(r if r.get("itens") else {**r, "itens": [], "aviso": "Sem anúncios coletados: conecte o eBay na Central de Integrações."})
 
     async def import_defaults(_):
         r = db.query("SELECT o.value, o.ref_date FROM market_obs o JOIN market_series s ON s.id = o.series_id "

@@ -131,8 +131,13 @@ def test_ebay_listings_and_competition(tmp_path):
     assert len(parse_ebay(EBAY)) == 12
     from gpi.market.reviews2 import competition
     comp = competition(db)["itens"][0]
-    assert comp["anuncios"] == 12 and comp["vendedores_unicos"] == 4 and comp["anuncios_em_promocao"] == 3
-    assert 0 <= comp["pressao_competitiva"] <= 100 and comp["marcas"][0]["marca"] == "ninja"
+    # v0.9.1 MVP: anúncios de air fryer gravados para o produto 'baby_monitor' NÃO entram nas estatísticas dele
+    assert comp["anuncios"] == 12 and comp["anuncios_elegiveis"] == 0 and comp["excluidos_acessorios_incompativeis"] == 12
+    assert comp["pressao_competitiva"] is None and comp["status"] == "amostra insuficiente"
+    db.execute("UPDATE market_listings SET product_id = 'air_fryer'")
+    comp = competition(db)["itens"][0]
+    assert comp["anuncios"] == 12 and comp["anuncios_elegiveis"] == 12 and comp["vendedores_unicos"] == 4 and comp["anuncios_em_promocao"] == 3
+    assert 0 <= comp["pressao_competitiva"] <= 100 and comp["marcas"][0]["marca"] == "ninja" and comp["mercado"] == "US"
     sellers = {r["seller"] for r in db.query("SELECT DISTINCT seller FROM market_listings WHERE source = 'ebay'")}
     assert sellers and all(x.startswith("h:") for x in sellers)          # v0.8.2: só pseudônimos
 

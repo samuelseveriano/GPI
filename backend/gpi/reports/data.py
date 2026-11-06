@@ -192,7 +192,8 @@ class Collector:
         self.ml = st.load_result("ml_models") or {}
         self.opp3 = st.load_result("opportunity3") or {}
         self.reviews = st.load_result("reviews2") or {}
-        self.comp = st.load_result("competition") or {}
+        from ..market.reviews2 import competition_cached
+        self.comp = competition_cached(st)
         self.ablation = st.load_result("ml_social") or {}
 
     # ---------------------------------------------------------------- séries filtradas

@@ -21,7 +21,7 @@ Uploads são enviados como **corpo binário** (`Content-Type: application/octet-
 | GET | `/api/suite/palavras?termo=&mercado=` | Keyword Intelligence (+ `.xlsx`/`.pdf`) |
 | GET | `/api/suite/palavras/anuncio/{id}` | hipóteses a partir de um anúncio coletado |
 | GET | `/api/suite/anuncio?ref=` | anúncio por nome, URL ou ID (histórico de preços real) |
-| POST | `/api/suite/anuncios/comparar` | `{refs: [...]}` (até 5) |
+| POST | `/api/suite/anuncios/comparar` | `{refs: [...], alvo?: "<produto_id>"}` (até 5; anúncios ou `produto:<id>`; especificações só declaradas, compatibilidade, vantagens, limitações e síntese) |
 | GET | `/api/suite/tendencias?produto=&horizonte=` | Trend & Seasonality Explorer |
 | GET | `/api/suite/avaliacoes?produto=` | avaliações coletadas |
 | POST | `/api/suite/avaliacoes/arquivo` | CSV/XLSX de avaliações (local) |
