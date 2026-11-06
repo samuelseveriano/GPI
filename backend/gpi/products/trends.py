@@ -266,6 +266,8 @@ def indicators(s: dict, today: date) -> dict:
     tail = y[-24:]
     tt = trend_test(tail) if len(tail) >= 6 else {}
     ind["tendencia"] = {k: tt.get(k) for k in ("direcao", "significativa", "p_valor", "inclinacao_relativa")} if tt else None
+    ind["mudanca_regime"] = pettitt(y[-48:])                 # v0.9
+    ind["aceleracao_robusta"] = robust_acceleration(y)
     seas = robust_seasonality(y[-60:], [p.month for p in m.index[-60:]], s["metric"]) if len(y) >= 24 else None
     ind["sazonalidade"] = seas
     if seas:
@@ -332,6 +334,40 @@ def indicators(s: dict, today: date) -> dict:
     ind["classe"] = cls
     ind["crescimento"] = g
     return ind
+
+
+def pettitt(y) -> dict | None:
+    """v0.9 — mudança de regime (teste de Pettitt, não paramétrico). p ≈ 2·exp(−6K²/(n³+n²)) (conservador).
+    Só com n ≥ 24; o ponto de mudança precisa deixar ≥ 6 observações de cada lado."""
+    y = np.asarray(y, float)
+    n = len(y)
+    if n < 24:
+        return None
+    r = pd.Series(y).rank().to_numpy()
+    U = np.array([2 * r[:t + 1].sum() - (t + 1) * (n + 1) for t in range(n - 1)])
+    k = int(np.argmax(np.abs(U)))
+    K = float(abs(U[k]))
+    p = float(min(1.0, 2 * np.exp(-6 * K * K / (n ** 3 + n ** 2))))
+    ok = 6 <= k + 1 <= n - 6
+    before, after = float(np.median(y[:k + 1])), float(np.median(y[k + 1:]))
+    return {"indice": k + 1, "p_valor": p, "significativa": bool(p < 0.05 and ok), "mediana_antes": before, "mediana_depois": after,
+            "direcao": "alta" if after > before else "queda", "metodo": "Pettitt"}
+
+
+def robust_acceleration(y) -> dict | None:
+    """v0.9 — aceleração robusta: inclinação de Theil–Sen nos últimos 12 meses × nos 12 anteriores (relativas ao nível).
+    'acelerando' só se a inclinação recente é positiva e significativa (Mann–Kendall) e maior que a anterior em ≥ 2 p.p./mês."""
+    y = np.asarray(y, float)
+    if len(y) < 24:
+        return None
+    a, b = trend_test(y[-24:-12]), trend_test(y[-12:])
+    sa, sb = a.get("inclinacao_relativa"), b.get("inclinacao_relativa")
+    if sa is None or sb is None:
+        return None
+    d = sb - sa
+    cls = ("acelerando" if b.get("significativa") and b.get("direcao") == "crescimento" and d >= 0.02 else
+           "desacelerando" if a.get("significativa") and a.get("direcao") == "crescimento" and d <= -0.02 else "sem mudança detectada")
+    return {"inclinacao_anterior": sa, "inclinacao_recente": sb, "diferenca": d, "classe": cls}
 
 
 def robust_seasonality(y, months: list[int], metric: str) -> dict | None:

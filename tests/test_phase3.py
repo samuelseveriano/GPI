@@ -376,10 +376,13 @@ def test_youtube_data_not_mixed_or_nlp_processed(full):
 def test_review_summary_and_rankings(full):
     sm, _ = full
     rv = sm.store.load_result("reviews")
-    assert rv["total_opinioes"] > 0 and "não representam taxa de defeito" in rv["aviso"]
-    p = next(p for p in rv["produtos"] if p["n"] >= 5)
-    assert p["positivos"] + p["negativos"] + p["neutros"] == p["n"]
+    assert "não representam taxa de defeito" in rv["aviso"]
+    # v0.9: notícias e discussões gerais deixam de contar como opinião de consumidor (Review Intelligence 2.0)
+    p = next(p for p in rv["produtos"] if p["documentos"] >= 5)
+    assert p["positivos"] + p["negativos"] + p["neutros"] == p["n"] <= p["documentos"]
+    assert "Notícia" not in {e["tipo_fonte"] for e in p["exemplos_negativos"] + p["exemplos_positivos"]}
     assert all(e["url"] for e in p["exemplos_negativos"] + p["exemplos_positivos"])
+    assert rv["total_opinioes"] == sum(x["n"] for x in rv["produtos"])
     opp = sm.store.load_result("opportunities")
     assert abs(sum(opp["pesos"].values()) - 1) < 1e-9 and "diversidade_fontes" not in opp["pesos"]
     for it in opp["itens"]:

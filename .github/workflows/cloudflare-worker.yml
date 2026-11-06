@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: "22"
       - name: Testes unitários e de integração (D1 sobre SQLite)
-        run: node --test tests/worker.test.mjs
+        run: node --test tests/worker.test.mjs tests/d1_migration.test.mjs
       - name: Instalar Miniflare (runtime workerd) apenas para o teste
         run: npm install --no-save --no-audit --no-fund miniflare@3
       - name: Testes no runtime real do Cloudflare (workerd + simulador oficial do D1)

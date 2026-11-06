@@ -38,10 +38,12 @@ test('workerd: GET, ECDSA/SHA-1 (vetor oficial), POST assinado → D1, claim/ack
   });
   try {
     const db = await mf.getD1Database('DB');
-    const sql = readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8')
-      .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
-      .split(';').map((s) => s.trim()).filter(Boolean);
-    for (const s of sql) await db.prepare(s).run();
+    // v0.9: aplica a versão de CONSOLE (sem comentários) duas vezes, como o usuário faz pelo painel
+    const consoleSql = readFileSync(new URL('../console/0001_init_console.sql', import.meta.url), 'utf8').trim().split('\n');
+    for (let k = 0; k < 2; k++) await db.batch(consoleSql.map((s) => db.prepare(s)));
+    const objs = (await db.prepare("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name").all()).results.map((r) => r.name);
+    assert.deepEqual(objs, ['audit_log', 'ebay_notifications', 'ebay_public_keys', 'idx_audit_at', 'idx_ebay_notifications_status', 'rate_limits', 'schema_migrations', 'sync_nonces']);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').first()).n, 1);
 
     const g = await mf.dispatchFetch(BASE + '/ebay/notifications?challenge_code=abc');
     assert.equal(g.status, 200);

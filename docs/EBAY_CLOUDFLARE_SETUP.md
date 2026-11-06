@@ -21,12 +21,41 @@ botão Sincronizar) → exclui os dados → confirma ao Worker → Worker apaga 
 3. Clique em **Deploy**. O endereço continua o mesmo; a verificação GET continua igual (mesma fórmula e o mesmo
    secret `EBAY_VERIFICATION_TOKEN`).
 
-## 2. Aplicar a migração no D1 existente
+## 2. Aplicar a migração no D1 existente (v0.9: versão para o Console)
+
+**Por que aparecia "No SQL statements detected."** O Console do D1 apaga as linhas que começam com `--` (comentários)
+antes de executar. O arquivo `migrations/0001_init.sql` começa com comentários; se as quebras de linha se perdem ao
+colar, tudo vira uma linha iniciada por `--` e nada sobra. Use a **versão de console**, que não tem nenhum comentário
+e funciona com ou sem quebras de linha. (O arquivo `migrations/0001_init.sql` continua sendo o usado pelo Wrangler.)
+
+**Copiar o arquivo RAW do GitHub** (evita copiar números de linha ou HTML):
+
+1. Abra `https://github.com/samuelseveriano/GPI/blob/main/cloudflare/ebay-notifications/console/0001_init_console.sql`.
+2. Clique em **Raw** (canto superior direito do quadro do arquivo). Abre uma página só com texto, começando por
+   `CREATE TABLE IF NOT EXISTS ebay_notifications`.
+3. `Ctrl+A` e `Ctrl+C` nessa página Raw. Não copie da visualização normal do GitHub.
+
+**Executar no Console:**
 
 1. **Storage & Databases → D1 SQL Database → `gpi-ebay-notifications-db` → Console**.
-2. Cole o conteúdo de [`migrations/0001_init.sql`](../cloudflare/ebay-notifications/migrations/0001_init.sql) e execute.
-   É idempotente (`IF NOT EXISTS`): não apaga nada e pode ser executada de novo.
-3. Confira: `SELECT version FROM schema_migrations;` deve mostrar `0001_init`.
+2. Cole e clique em **Execute**. São 9 instruções; todas usam `IF NOT EXISTS`/`OR IGNORE`: não apagam nada, podem
+   ser repetidas, e completam uma migração aplicada pela metade.
+3. Se o Console recusar o bloco inteiro, cole **uma linha por vez** (cada linha do arquivo Raw é uma instrução
+   completa, terminada em `;`).
+
+**Verificar:** cole o conteúdo de `console/verificar.sql` (uma linha). O resultado deve listar 6 tabelas
+(`audit_log`, `ebay_notifications`, `ebay_public_keys`, `rate_limits`, `schema_migrations`, `sync_nonces`) e 2 índices
+(`idx_audit_at`, `idx_ebay_notifications_status`). Depois: `SELECT version FROM schema_migrations;` → `0001_init`.
+
+**Se algo falhar:** nada é destrutivo — corrija e execute de novo. Se uma tabela antiga com o mesmo nome e estrutura
+diferente já existir (por exemplo, criada pelo seu código anterior), **não a apague**: anote o resultado de
+`PRAGMA table_info(ebay_notifications);` e abra uma issue; o GPI não executa `DROP` em produção.
+
+**O Worker publicado é o da v0.8.2+?** Abra no navegador
+`https://gpi-ebay-notifications.samuelseveriano.workers.dev/gpi/v1/status`. O código atual responde
+`{"error":"não autorizado"}` (HTTP 401) ou, sem o secret de sincronização, uma mensagem sobre `EBAY_GPI_SYNC_TOKEN`
+(HTTP 503). Qualquer outra resposta (por exemplo, 404 ou 503 genérico) indica que ainda está publicado o código
+antigo — refaça o passo 1.
 
 ## 3. Secrets do Worker
 

@@ -10,10 +10,12 @@ Regras de uso:
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import Counter, defaultdict
 
 from ..connectors.content import ProductMatcher
+from . import taxonomy as tx
 from ..nlp import reviews as nlp
 from .content_store import ContentStore
 from .store import MarketStore
@@ -24,15 +26,22 @@ NLP_SOURCES = ("reddit", "rss", "google_news")
 def process(store: MarketStore, content: ContentStore) -> dict:
     db = store.db
     matcher = ProductMatcher(store.products())
-    rows = db.query("SELECT source, item_id, title, text, product_key, sentiment FROM content_items")
+    rows = db.query("SELECT source, item_id, title, text, product_key, sentiment, lang FROM content_items")
     matched = analysed = 0
+    from ..intel import understanding as U
+    U.ensure(db)
     with db.lock:
         for r in rows:
             sets, vals = [], []
-            if not r["product_key"]:
-                pk = matcher.match(f"{r['title'] or ''} {r['text'] or ''}")
+            # v0.9: vídeos do YouTube só se associam pela correspondência com o produto consultado (understanding.reassess_
+            # content). Antes este casador por palavras reassociava vídeos que a v0.8 tinha rejeitado.
+            if not r["product_key"] and r["source"] != "youtube":
+                u = U.understand(f"{r['title'] or ''}", (r["lang"] or "")[:2] or None)
+                pk = matcher.match(f"{r['title'] or ''} {r['text'] or ''}") if u["estado"] == "confirmada" else None
                 if pk:
                     sets.append("product_key = ?"); vals.append(pk); matched += 1
+                elif u["estado"] in ("ambigua", "provavel"):
+                    U.queue_review(db, r["source"], r["item_id"], r["title"] or "", r["lang"], u)
             if r["sentiment"] is None and r["source"] in NLP_SOURCES:
                 text = r["text"] if (r["text"] and len(r["text"]) > 40) else f"{r['title'] or ''}. {r['text'] or ''}"
                 a = nlp.analyze(text)
@@ -68,6 +77,48 @@ def mention_series(store: MarketStore) -> int:
     return len(by)
 
 
+# v0.9 — Review Intelligence 2.0 -------------------------------------------------------------------------------
+SOURCE_TYPES = {"avaliacao_comprador": "Avaliação de comprador", "relato_experiencia": "Relato de experiência",
+                "discussao_publica": "Discussão pública", "noticia": "Notícia", "promocional": "Material promocional",
+                "tecnica": "Informação técnica", "desconhecida": "Fonte desconhecida"}
+OPINION_TYPES = ("avaliacao_comprador", "relato_experiencia")
+_FIRST_PERSON = re.compile(r"\b(comprei|recebi|meu|minha|tenho|uso|usei|instalei|bought|my|i have|i use|i got|mine)\b")
+_PROMO = re.compile(r"(#publi|\bpubli\b|patrocinad|cupom|codigo de desconto|sponsored|oferta imperdivel|link na bio|compre agora)")
+_TECH = re.compile(r"\b(datasheet|especificacoes tecnicas|ficha tecnica|manual|specifications|spec sheet|norma|portaria)\b")
+THEMES = {"aquecimento": "Aquecimento", "bateria": "Bateria", "durabilidade": "Durabilidade", "qualidade": "Acabamento",
+          "defeito_eletrico": "Defeito elétrico", "assistencia_tecnica": "Assistência técnica", "montagem": "Compatibilidade/instalação",
+          "garantia": "Garantia/troca"}
+_EXTRA_THEMES = {"ruido": re.compile(r"\b(barulh\w*|ruido|noise|noisy|zumbido)\b"),
+                 "seguranca": re.compile(r"\b(choque|pegou fogo|incendio|explodiu|fire|shock|smoke|fumaca)\b"),
+                 "falha_funcionamento": re.compile(r"\b(parou de funcionar|nao liga|desliga sozinho|stopped working|won.?t turn on|travando)\b"),
+                 "compatibilidade": re.compile(r"\b(incompativel|nao e compativel|nao reconhece|not compatible|doesn.?t work with)\b")}
+_EXTRA_NAMES = {"ruido": "Ruído", "seguranca": "Segurança", "falha_funcionamento": "Falha de funcionamento", "compatibilidade": "Compatibilidade"}
+
+
+def source_type(r: dict) -> str:
+    """Tipo de documento. Notícias e material promocional nunca contam como opinião de consumidor."""
+    t = " " + tx.strip_accents(f"{r.get('title') or ''} {r.get('text') or ''}").lower() + " "
+    src = r.get("source") or ""
+    if _PROMO.search(t):
+        return "promocional"
+    if src in ("rss", "google_news", "gdelt"):
+        return "noticia"
+    if _TECH.search(t):
+        return "tecnica"
+    if src in ("mercadolivre_reviews", "ml_reviews", "reviews"):
+        return "avaliacao_comprador"
+    if src == "reddit":
+        return "relato_experiencia" if _FIRST_PERSON.search(t) else "discussao_publica"
+    return "desconhecida"
+
+
+def _wilson_lb(k: int, n: int, z: float = 1.96) -> float | None:
+    if not n:
+        return None
+    p = k / n
+    return (p + z * z / (2 * n) - z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / (1 + z * z / n)
+
+
 def review_summary(store: MarketStore, content: ContentStore, min_n: int = 5) -> dict:
     rows = store.db.query(
         "SELECT source, item_id, kind, title, text, url, author, published_at, product_key, sentiment, sentiment_label,"
@@ -76,21 +127,38 @@ def review_summary(store: MarketStore, content: ContentStore, min_n: int = 5) ->
     by = defaultdict(list)
     for r in rows:
         r["aspects"] = json.loads(r["aspects"]) if r["aspects"] else {}
+        r["tipo_fonte"] = source_type(r)
         by[r["product_key"]].append(r)
     prods = []
-    for pk, lst in by.items():
-        c = Counter(r["sentiment_label"] for r in lst)
+    for pk, docs in by.items():
+        tipos = Counter(r["tipo_fonte"] for r in docs)
+        lst = [r for r in docs if r["tipo_fonte"] in OPINION_TYPES]      # só opiniões de consumidores
         n = len(lst)
-        asp_neg, asp_pos = Counter(), Counter()
-        targets = Counter()
+        c = Counter(r["sentiment_label"] for r in lst)
+        asp_neg, asp_pos = defaultdict(list), Counter()
         for r in lst:
+            low = " " + tx.strip_accents(f"{r['title'] or ''} {r['text'] or ''}").lower() + " "
+            found = {a for a, v in r["aspects"].items() if v <= -0.05 and a in THEMES}
+            if r["sentiment_label"] == "negativo":
+                found |= {k for k, rx in _EXTRA_THEMES.items() if rx.search(low)}
+            for a in found:
+                asp_neg[a].append(r)
             for a, v in r["aspects"].items():
-                if v <= -0.05:
-                    asp_neg[a] += 1
-                elif v >= 0.05:
+                if v >= 0.05 and a in THEMES:
                     asp_pos[a] += 1
-            if r["sentiment_label"] == "negativo" and r["target"]:
-                targets[r["target"]] += 1
+        problems = []
+        for a, rs in sorted(asp_neg.items(), key=lambda kv: -len(kv[1])):
+            fontes = {(x["source"], x["author"] or x["item_id"]) for x in rs}
+            dates = sorted(x["published_at"] for x in rs if x["published_at"])
+            rec = len(rs) >= 3 and len(fontes) >= 2
+            problems.append({"aspecto": THEMES.get(a) or _EXTRA_NAMES[a], "codigo": a, "mencoes": len(rs),
+                             "fontes_independentes": len(fontes), "periodo": [dates[0], dates[-1]] if dates else None,
+                             "classificacao": "tema recorrente" if rec else "relato isolado",
+                             "confianca": "moderada" if rec and len(fontes) >= 3 else "baixa",
+                             "limitacao": "Frequência de reclamações publicadas — não é taxa de defeito."})
+        pos, neg, neu = c["positivo"], c["negativo"], c["neutro"]
+        polar = pos + neg
+        suf = n >= min_n and polar >= 3
         neg_prod = sum(1 for r in lst if r["sentiment_label"] == "negativo" and r["target"] == "produto")
 
         def ex(lbl):
@@ -102,28 +170,38 @@ def review_summary(store: MarketStore, content: ContentStore, min_n: int = 5) ->
                     sel.append(r)
                 if len(sel) == 3:
                     break
-            return [{"trecho": _snip(r), "fonte": r["source"], "autor": r["author"], "url": r["url"],
-                     "data": r["published_at"], "aspectos": list(r["aspects"])} for r in sel]
+            return [{"trecho": _snip(r), "fonte": r["source"], "tipo_fonte": SOURCE_TYPES[r["tipo_fonte"]], "autor": r["author"],
+                     "url": r["url"], "data": r["published_at"], "aspectos": list(r["aspects"])} for r in sel]
         prods.append({
-            "product_key": pk, "nome": names.get(pk, pk), "n": n, "positivos": c["positivo"], "negativos": c["negativo"],
-            "neutros": c["neutro"], "saldo": (c["positivo"] - c["negativo"]) / n if n else None,
-            "suficiente": n >= min_n, "problemas": [{"aspecto": nlp.ASPECT_NAMES[a], "codigo": a, "mencoes": k}
-                                                    for a, k in asp_neg.most_common(6)],
-            "elogios": [{"aspecto": nlp.ASPECT_NAMES[a], "codigo": a, "mencoes": k} for a, k in asp_pos.most_common(5)],
-            "alvo_reclamacoes": dict(targets), "share_problemas_produto": neg_prod / n if n else None,
-            "fontes": sorted({r["source"] for r in lst}), "exemplos_positivos": ex("positivo"),
-            "exemplos_negativos": ex("negativo")})
+            "product_key": pk, "nome": names.get(pk, pk), "n": n, "documentos": len(docs),
+            "por_tipo_fonte": {SOURCE_TYPES[k]: v for k, v in tipos.items()},
+            "positivos": pos, "negativos": neg, "neutros": neu,
+            "saldo": (pos - neg) / n if n else None,
+            "proporcao_criticas": neg / n if n else None, "proporcao_neutras": neu / n if n else None,
+            "criticas_lb95": _wilson_lb(neg, n), "elogios_lb95": _wilson_lb(pos, n),
+            "suficiente": suf, "evidencia": "suficiente" if suf else "evidência insuficiente",
+            "problemas": problems[:8],
+            "elogios": [{"aspecto": THEMES[a], "codigo": a, "mencoes": k} for a, k in asp_pos.most_common(5)],
+            "share_problemas_produto": neg_prod / n if n else None, "fontes": sorted({r["source"] for r in lst}),
+            "exemplos_positivos": ex("positivo"), "exemplos_negativos": ex("negativo")})
     prods.sort(key=lambda p: -p["n"])
     ok = [p for p in prods if p["suficiente"]]
     agg = Counter()
     for p in ok:
         for pr in p["problemas"]:
-            agg[pr["aspecto"]] += pr["mencoes"]
+            if pr["classificacao"] == "tema recorrente":
+                agg[pr["aspecto"]] += pr["mencoes"]
+    crit = sorted([p for p in ok if p["negativos"] >= 3 and p["negativos"] > p["positivos"] * 0.5], key=lambda p: -(p["criticas_lb95"] or 0))
+    elog = sorted([p for p in ok if p["positivos"] >= 3], key=lambda p: -(p["elogios_lb95"] or 0))
     return {"produtos": prods, "total_opinioes": sum(p["n"] for p in prods),
-            "mais_elogiados": [p["product_key"] for p in sorted(ok, key=lambda p: -(p["saldo"] or 0))[:15]],
-            "mais_criticados": [p["product_key"] for p in sorted(ok, key=lambda p: (p["saldo"] or 0))[:15]],
+            "mais_elogiados": [p["product_key"] for p in elog[:15]],
+            "mais_criticados": [p["product_key"] for p in crit[:15]],
             "problemas_recorrentes": [{"aspecto": a, "mencoes": k} for a, k in agg.most_common(10)],
-            "minimo_opinioes": min_n,
+            "minimo_opinioes": min_n, "tipos_de_fonte": SOURCE_TYPES,
+            "metodo": "Opiniões = avaliações de compradores e relatos de experiência (notícias, material promocional e discussões "
+                      "gerais ficam fora). 'Mais criticados' ordena pelo limite inferior (95%, Wilson) da proporção de opiniões "
+                      "negativas, exigindo ao menos 3 negativas — opiniões neutras não viram críticas. Tema recorrente: ≥ 3 "
+                      "manifestações de ≥ 2 fontes independentes.",
             "aviso": "Contagens de opiniões publicadas — não representam taxa de defeito nem satisfação do total de compradores."}
 
 

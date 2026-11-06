@@ -1,0 +1,42 @@
+# CONJUNTO DE DESENVOLVIMENTO — v0.9. Usado para criar e ajustar regras. Textos diferentes do conjunto de teste.
+# Colunas: idioma | estado | família | variante | marca | modelo | grupo | texto
+en	ambigua	-	-	-	-	semelhante	Robot vacuum vs stick vacuum — which is better for pets?
+pt	ambigua	-	-	-	-	semelhante	Air fryer ou forno elétrico: qual compensa mais?
+pt	ambigua	-	-	-	-	semelhante	smartwatch x smart band, diferença na prática
+en	ambigua	-	-	-	-	semelhante	earbuds versus headphones for the gym
+pt	confirmada	drone	-	-	-	semelhante	drone com câmera dobrável
+pt	confirmada	phone_case	-	-	-	semelhante	capa para Galaxy A54 com suporte
+pt	confirmada	screen_protector	-	-	-	semelhante	película hidrogel para iPhone 14
+pt	ambigua	-	-	-	-	noticia	Receita Federal apreende eletrônicos sem nota no aeroporto
+pt	ambigua	-	-	-	-	noticia	Polícia investiga incêndio causado por carregador de celular
+en	ambigua	-	-	-	-	noticia	Government announces tariff on imported e-bikes, police say
+pt	ambigua	-	-	-	-	noticia	Procon notifica loja por venda de power bank sem certificação
+pt	ambigua	-	-	-	-	video_irrelevante	Desafio do slime gigante com meus amigos kkkk
+en	ambigua	-	-	-	-	video_irrelevante	Reacting to cursed toys from the internet
+pt	ambigua	-	-	-	-	video_irrelevante	vlog: comprei brinquedos para a festa da turma
+pt	confirmada	microphone	-	-	-	variante	microfone de lapela sem fio para podcast
+en	confirmada	microphone	-	-	-	variante	USB microphone for podcast and streaming
+pt	confirmada	smartphone	-	xiaomi	POCOX6	modelo	Xiaomi Poco X6 Pro vale a pena?
+pt	confirmada	smartphone	-	motorola	MOTOG84	modelo	Motorola Moto G84 5G review
+pt	confirmada	smartphone	-	samsung	GALAXYA55	modelo	Samsung Galaxy A55 câmera teste
+pt	confirmada	action_camera	-	gopro	HERO11	modelo	GoPro Hero 11 mini teste de estabilização
+pt	confirmada	smart_speaker	-	-	-	generico	caixa de som inteligente com assistente
+pt	confirmada	smart_speaker	-	amazon	-	semelhante	Echo Pop Amazon com Alexa
+pt	confirmada	toothbrush	-	-	-	generico	escova de dente elétrica sônica
+pt	confirmada	speaker	-	-	-	generico	caixa de som bluetooth à prova d'água
+pt	confirmada	power_bank	-	anker	-	variante	Anker power bank 20000mAh 22,5W
+pt	confirmada	charger	-	anker	-	variante	Carregador Anker Nano 30W
+pt	confirmada	lock	-	-	-	semelhante	fechadura com senha e cartão para porta de madeira
+en	confirmada	doorbell	-	-	-	semelhante	battery video doorbell no subscription
+pt	confirmada	camera	-	-	-	semelhante	câmera IP Wi-Fi 360 graus
+pt	confirmada	chair	-	-	-	discussao	vale a pena cadeira gamer barata ou espera promoção?
+pt	nao_identificado	-	-	-	-	discussao	alguém indica um bom filme de terror?
+pt	ambigua	-	-	-	-	ambiguo	alarme
+pt	ambigua	-	-	-	-	ambiguo	sensor
+en	ambigua	-	-	-	-	ambiguo	Power Rangers new season trailer
+es	confirmada	charger	-	-	-	multilingue	cargador inalámbrico para celular
+es	ambigua	-	-	-	-	multilingue	freidora de aire o horno eléctrico: ¿cuál conviene?
+zh	confirmada	smartwatch	-	-	-	multilingue	运动手表 GPS 防水
+pt	confirmada	monitor	-	lg	-	variante	Monitor LG UltraGear 24 polegadas 144Hz
+pt	confirmada	router	-	-	-	variante	roteador mesh Wi-Fi 6 kit com 3 unidades
+pt	confirmada	blender	-	-	-	variante	liquidificador 1200W 12 velocidades

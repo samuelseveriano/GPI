@@ -1,0 +1,1 @@
+SELECT name, type FROM sqlite_master WHERE name IN ('ebay_notifications','ebay_public_keys','sync_nonces','rate_limits','audit_log','schema_migrations','idx_ebay_notifications_status','idx_audit_at') ORDER BY type, name;

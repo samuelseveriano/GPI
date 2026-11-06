@@ -183,6 +183,22 @@ PROVIDERS = [
                    "revisão do app → informar App ID e App Secret → Conectar.",
      "link": "https://developers.facebook.com/apps/", "documentacao": "https://developers.facebook.com/docs/facebook-login",
      "assistente": "meta"},
+    {"id": "meta_negocios", "nome": "Meta — app de negócios (Páginas, Instagram e Anúncios)", "tipo": "oauth", "oauth_especial": "meta",
+     "conectores": [],
+     "campos": [{"nome": "client_id", "rotulo": "App ID do app de negócios", "secreto": False},
+                {"nome": "client_secret", "rotulo": "App Secret do app de negócios", "secreto": True},
+                {"nome": "ig_user_id", "rotulo": "ID numérico da conta profissional do Instagram (preenchido ao conectar)", "secreto": False}],
+     "descricao": "v0.9: segundo app da Meta, só para os módulos de dados. O app de Login (caso de uso 'Authenticate and "
+                  "request data from users with Facebook Login') é incompatível com o caso de uso de Páginas — por isso a Meta "
+                  "responde 'Invalid Scopes'. O Login básico continua no app atual.",
+     "permissoes": "Páginas: pages_show_list, pages_read_engagement · Instagram (API with Facebook Login): instagram_basic, "
+                   "pages_show_list, pages_read_engagement + recurso Instagram Public Content Access · Anúncios: acesso à API da "
+                   "Biblioteca de Anúncios (identidade confirmada).",
+     "como_obter": "developers.facebook.com → Criar app → tipo Empresa → casos de uso 'Manage everything on your Page' e "
+                   "'Instagram (Facebook Login for Business)' → URIs de redirecionamento: a mesma do app de Login → informar "
+                   "App ID e App Secret aqui → Central de Integrações → Meta → Conectar cada módulo.",
+     "link": "https://developers.facebook.com/apps/", "documentacao": "https://developers.facebook.com/documentation/development/create-an-app",
+     "assistente": "meta"},
     {"id": "amazon", "nome": "Amazon Brasil / EUA", "tipo": "approval", "conectores": ["amazon_br", "amazon_us"],
      "descricao": "Preços e rankings de produtos.", "permissoes": "Product Advertising API: exige conta aprovada no "
      "Programa de Associados com vendas qualificadas.", "link": "https://associados.amazon.com.br/"},
@@ -209,7 +225,7 @@ CATEGORIA_DE = {
     "google_trends_rss": ["pesquisas"], "google_ads": ["pesquisas"], "google_bigquery": ["pesquisas"], "google_trends": ["pesquisas"],
     "msads": ["pesquisas"], "mercadolivre": ["pesquisas", "marketplaces"],
     "ebay": ["marketplaces"], "amazon": ["marketplaces"], "shopee": ["marketplaces"], "china_marketplaces": ["marketplaces"],
-    "comparadores": ["marketplaces"], "tiktok": ["redes_sociais"], "meta": ["redes_sociais"], "youtube": ["redes_sociais"],
+    "comparadores": ["marketplaces"], "tiktok": ["redes_sociais"], "meta": ["redes_sociais"], "meta_negocios": ["redes_sociais"], "youtube": ["redes_sociais"],
     "reddit": ["redes_sociais"], "publicas": ["dados_publicos"], "comtrade": ["dados_publicos"], "gdelt": ["dados_publicos"],
     "rss": ["conteudo"], "google_news": ["conteudo"], "trustpilot": ["conteudo"],
 }

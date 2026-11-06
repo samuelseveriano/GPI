@@ -152,9 +152,23 @@ def main(out: str):
     rep["I_series"] = res
     rep["I_nota"] = ("Previsões de ATENÇÃO PÚBLICA e de COMÉRCIO EXTERIOR — não são previsões de demanda comercial. "
                      "Demanda efetiva só com vendas do usuário.")
+    # ---- J (v0.9): compreensão de produtos em textos REAIS (buscas em alta do Google Trends RSS). Sem rótulos: conta e
+    # lista as associações confirmadas para inspeção — não é medida de precisão.
+    from gpi.intel import understanding as UND
+    terms = db.query("SELECT DISTINCT term, lang FROM search_observations WHERE source LIKE 'google_trends%'")
+    est = Counter()
+    conf = []
+    for t in terms:
+        u = UND.understand(t["term"], t["lang"])
+        est[u["estado"]] += 1
+        if u["estado"] == "confirmada":
+            conf.append({"termo": t["term"], "produto": u["produto_id"], "nivel": u["nivel_rotulo"]})
+    rep["J_compreensao_real"] = {"fonte": "Google Trends RSS (buscas em alta)", "termos": len(terms), "por_estado": dict(est),
+                                 "confirmadas": conf[:60],
+                                 "nota": "Buscas em alta são majoritariamente notícias, esportes e celebridades: espera-se poucas associações."}
     rep["segundos"] = round(time.time() - t0, 1)
     Path(out).write_text(json.dumps(rep, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-    for k in ("registros", "G_declinio", "H_sazonalidade", "C_wikipedia", "F_internacional", "I_backtesting_real"):
+    for k in ("registros", "G_declinio", "H_sazonalidade", "C_wikipedia", "F_internacional", "I_backtesting_real", "J_compreensao_real"):
         v = rep[k]
         if isinstance(v, dict):
             v = {a: b for a, b in v.items() if a not in ("exemplos", "medianas_coorte")}

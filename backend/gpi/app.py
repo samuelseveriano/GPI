@@ -36,6 +36,7 @@ from .market import service as msv
 from .market.analysis import make_analyzer
 from .products.api import routes as consumer_routes
 from .intel.api import routes as intel_routes
+from .intel.api09 import routes as intel09_routes
 from .regulatory.api import routes as regulatory_routes
 from .reports.api import routes as report_routes
 from .reports.service import ReportService
@@ -463,11 +464,14 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         if not values:
             return err("nenhum campo válido informado")
         reset = False
-        if p["id"] == "meta" and values.get("client_id"):
+        if p["id"] in ("meta", "meta_negocios") and values.get("client_id"):
             from .integrations import meta as MT
             if not str(values["client_id"]).isdigit():
                 return err("o App ID da Meta é numérico (Configurações → Básico do app)")
-            reset = MT.reset_if_app_changed(sync.creds, values["client_id"])   # token/permissões do app anterior
+            other = sync.creds.get("meta_negocios" if p["id"] == "meta" else "meta").get("client_id")
+            if p["id"] == "meta_negocios" and other and str(other) == str(values["client_id"]):
+                return err("o app de negócios precisa ser OUTRO app: o app de Login não aceita o caso de uso de Páginas")
+            reset = MT.reset_if_app_changed(sync.creds, values["client_id"], p["id"])   # token/permissões do app anterior
         sync.creds.set(p["id"], values)
         log.info("credenciais atualizadas para %s (campos: %s)", p["id"], ", ".join(values))
         return JSONResponse({"ok": True, "credenciais": sync.creds.masked(p["id"]),
@@ -537,12 +541,13 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
             return err("informe primeiro o App ID (client_id)")
         if p.get("oauth_especial"):
             b = await body_json(request)
-            if p["id"] == "meta":
+            if p["id"] in ("meta", "meta_negocios"):
                 from .integrations.meta import MODULES
-                mode = b.get("modulo") if b.get("modulo") in MODULES else "basico"
+                dflt = "paginas" if p["id"] == "meta_negocios" else "basico"
+                mode = b.get("modulo") if b.get("modulo") in MODULES else dflt
             else:
                 mode = "conta" if b.get("modo") == "conta" else "anunciante"
-            if p["id"] == "meta":                 # v0.8.1: redirect HTTPS (GitHub Pages) ou localhost (modo desenvolvimento)
+            if p["id"] in ("meta", "meta_negocios"):   # v0.8.1: redirect HTTPS (GitHub Pages) ou localhost (modo desenvolvimento)
                 from .integrations import meta as MT
                 try:
                     return JSONResponse(MT.start(flows, sync.creds, cfg, request.url.port or 8765, mode))
@@ -727,6 +732,13 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         return Response(body, media_type="application/json",
                         headers={"Content-Disposition": "attachment; filename=gpi_ebay_diagnostico.json", "Cache-Control": "no-store"})
 
+    async def meta_modules(_):
+        """v0.9: diagnóstico por módulo (Páginas, Instagram, Anúncios) com consulta real e erro oficial."""
+        from .integrations import meta_modules as MM
+        r = await run_in_threadpool(MM.diagnose, sync.http, sync.creds, cfg)
+        sync.store.save_result("diag:meta_modulos", {"resultado": r})
+        return JSONResponse(r)
+
     async def meta_redirect(request):
         from .integrations import meta as MT
         b = await body_json(request)
@@ -809,6 +821,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/oauth/meta/concluir", meta_complete, methods=["POST"]),
         Route("/api/integrations/meta/assistente", meta_assistant, methods=["POST"]),
         Route("/api/integrations/meta/redirect", meta_redirect, methods=["POST"]),
+        Route("/api/integrations/meta/modulos", meta_modules, methods=["POST"]),
         Route("/api/integrations/ebay/conformidade", ebay_status),
         Route("/api/integrations/ebay/conformidade/sincronizar", ebay_sync, methods=["POST"]),
         Route("/api/integrations/ebay/conformidade/verificar", ebay_compliance_check, methods=["POST"]),
@@ -846,6 +859,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         Route("/api/market/models", m_models),
         *consumer_routes(db, sync, cfg, save_user_settings),
         *intel_routes(db, sync, cfg),
+        *intel09_routes(db, sync, cfg),
         *regulatory_routes(db, None),
         *v061_routes(db, sync, cfg, data_dir, save_user_settings),
         *report_routes(reports),

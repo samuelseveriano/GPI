@@ -1,0 +1,131 @@
+# CONJUNTO DE AVALIAÇÃO INDEPENDENTE — v0.9 (Product Understanding 2.0)
+# Escrito ANTES de qualquer alteração das regras da v0.9 e NÃO usado para ajustá-las (ajustes usam understanding_dev_v09.tsv).
+# Correções de rótulo feitas APÓS a primeira medição (erros do anotador, documentadas em docs/V09.md): TGC12 e AX23 eram
+# modelos explícitos no texto com rótulo vazio; 'carregador veicular' pertence à família car_charger já existente no léxico.
+# Nenhuma regra foi criada ou ajustada a partir deste arquivo.
+# Colunas: idioma | estado esperado (confirmada/ambigua/nao_identificado) | família (cabeça do léxico ou -) | variante (- se não há)
+#          | marca (- se não há) | modelo (- se não há) | grupo | texto
+pt	confirmada	charger	65w	baseus	-	variante	Carregador GaN 65W Baseus com 3 portas
+pt	confirmada	charger	-	-	-	generico	carregador de celular rápido
+en	confirmada	charger	140w	-	-	variante	140W USB-C GaN charger for MacBook Pro
+es	confirmada	charger	20w	-	-	multilingue	cargador rápido USB C 20W original
+zh	confirmada	charger	65w	-	-	multilingue	氮化镓充电器 65W 快充
+pt	confirmada	doorbell	-	-	-	semelhante	Campainha inteligente com câmera Wi-Fi e visão noturna
+pt	confirmada	lock	-	intelbras	FR201	modelo	Fechadura digital biométrica Intelbras FR 201
+en	ambigua	-	-	-	-	semelhante	Video doorbell vs smart lock: which one should you buy first?
+pt	ambigua	-	-	-	-	semelhante	Fechadura inteligente ou campainha com câmera: qual instalar primeiro?
+en	confirmada	doorbell	-	ring	-	semelhante	Ring Video Doorbell 4 review after one year
+pt	confirmada	projector	-	magcubic	HY300	modelo	Projetor portátil Magcubic HY300 4K review
+pt	confirmada	projector	-	-	HY320	modelo	Mini projetor HY320 vale a pena em 2026?
+en	confirmada	projector	4k	-	-	variante	Best 4K portable projector under 300 dollars
+pt	confirmada	projector	-	-	-	generico	projetor
+pt	confirmada	earbuds	-	jbl	TUNE520BT	modelo	Fone bluetooth JBL Tune 520BT unboxing
+pt	confirmada	earbuds	-	qcy	T13	modelo	Fone sem fio QCY T13 ANC é bom?
+en	confirmada	earbuds	-	-	-	generico	wireless earbuds with noise cancelling
+pt	confirmada	chair	-	thunderx3	TGC12	variante	Cadeira gamer ThunderX3 TGC12 reclinável
+pt	confirmada	chair	-	-	-	generico	cadeira
+pt	confirmada	chair	-	-	-	variante	cadeira de escritório ergonômica com apoio lombar
+pt	confirmada	smartphone	-	xiaomi	REDMINOTE13	modelo	Xiaomi Redmi Note 13 Pro 256GB review
+pt	confirmada	smartphone	-	-	-	generico	celular barato bom para jogos
+en	confirmada	smartphone	-	-	-	generico	cheap smartphone with good camera
+pt	confirmada	vacuum	-	xiaomi	S10	modelo	Robô aspirador Xiaomi S10 review completo
+pt	confirmada	vacuum	-	-	-	variante	aspirador robô com mop e mapeamento a laser
+es	confirmada	vacuum	-	-	-	multilingue	aspiradora robot con mapeo láser barata
+pt	confirmada	air_fryer	5l	mondial	-	variante	Air fryer Mondial 5 litros 1500W
+pt	confirmada	air_fryer	-	-	-	generico	fritadeira sem óleo
+en	confirmada	air_fryer	-	-	-	generico	best air fryer for small kitchens
+es	confirmada	air_fryer	-	-	-	multilingue	freidora de aire digital 6 litros
+zh	confirmada	air_fryer	-	-	-	multilingue	空气炸锅 家用 大容量
+pt	confirmada	power_bank	20000mah	-	-	variante	Power bank 20000mAh com carregamento rápido
+pt	confirmada	power_bank	-	baseus	-	variante	Carregador portátil Baseus 10000mAh magnético
+en	confirmada	smartwatch	-	-	-	generico	smartwatch with blood oxygen and GPS
+pt	confirmada	smartwatch	-	xiaomi	-	modelo	Relógio inteligente Xiaomi Smart Band 9 review
+pt	confirmada	drone	-	dji	MINI4PRO	modelo	Drone DJI Mini 4 Pro vale a pena?
+pt	confirmada	drone	-	-	-	generico	drone com câmera 4K para iniciantes
+pt	confirmada	router	-	tp-link	AX23	variante	Roteador Wi-Fi 6 TP-Link Archer AX23
+pt	confirmada	ssd	1tb	-	-	variante	SSD NVMe 1TB para notebook
+pt	confirmada	pendrive	64gb	sandisk	-	variante	Pendrive SanDisk 64GB USB 3.0
+pt	confirmada	mouse	-	logitech	G305	modelo	Mouse gamer sem fio Logitech G305
+pt	confirmada	keyboard	-	redragon	-	variante	Teclado mecânico Redragon Kumara switch blue
+pt	confirmada	monitor	-	-	-	variante	Monitor gamer 27 polegadas 165Hz IPS
+en	confirmada	speaker	-	jbl	FLIP6	modelo	JBL Flip 6 portable bluetooth speaker test
+pt	confirmada	smart_speaker	-	-	-	generico	alto-falante inteligente com Alexa
+pt	confirmada	kettle	-	-	-	variante	chaleira elétrica inox 1,8 litros 127V
+pt	confirmada	scooter	-	xiaomi	-	variante	Patinete elétrico Xiaomi 4 Pro 25 km/h
+pt	confirmada	led_strip	5m	-	-	variante	Fita LED RGB 5 metros Wi-Fi
+pt	confirmada	bulb	-	-	-	variante	Lâmpada inteligente Wi-Fi 10W compatível com Alexa
+pt	confirmada	plug	-	sonoff	-	variante	Tomada inteligente Sonoff 16A Wi-Fi
+pt	confirmada	hair_dryer	-	philips	-	variante	Secador de cabelo Philips 2100W íon
+pt	confirmada	toothbrush	-	-	-	generico	escova de dente elétrica recarregável
+pt	confirmada	ring_light	-	-	-	generico	ring light de mesa com tripé
+pt	confirmada	webcam	-	logitech	C920	modelo	Webcam Logitech C920 Full HD
+pt	confirmada	microphone	-	-	-	variante	microfone condensador USB para podcast
+pt	confirmada	tv_box	-	-	-	generico	TV box Android 4K
+pt	confirmada	dash_cam	-	-	-	generico	câmera veicular gravação em loop
+pt	confirmada	action_camera	-	gopro	HERO12	modelo	GoPro Hero 12 Black review
+pt	confirmada	power_station	-	-	-	variante	Estação de energia portátil 1000W bateria LiFePO4
+pt	confirmada	solar_panel	-	-	-	variante	painel solar 550W monocristalino
+pt	confirmada	drill	-	makita	-	variante	Furadeira de impacto Makita 18V sem fio
+pt	confirmada	multimeter	-	-	-	generico	multímetro digital automotivo
+pt	confirmada	tire_inflator	-	-	-	generico	compressor de ar portátil para pneu 12V
+pt	confirmada	oximeter	-	-	-	generico	oxímetro de dedo
+pt	confirmada	pet_feeder	-	-	-	variante	comedouro automático para gatos com câmera
+en	confirmada	gimbal	-	dji	OSMOMOBILE6	modelo	DJI Osmo Mobile 6 gimbal tutorial
+pt	confirmada	inverter	-	-	-	variante	inversor de tensão 12V para 220V 1000W
+pt	confirmada	blender	-	-	-	variante	liquidificador portátil USB recarregável
+pt	confirmada	fan	-	-	-	variante	ventilador de mesa silencioso 40cm
+pt	confirmada	thermometer	-	-	-	generico	termômetro infravermelho digital
+pt	confirmada	camera	-	-	-	variante	câmera de segurança Wi-Fi externa à prova d'água
+pt	confirmada	toy	-	-	-	generico	brinquedo educativo de montar para crianças
+pt	ambigua	-	-	-	-	video_irrelevante	Brinquedo slime caseiro DIY com a turma — vlog divertido
+pt	ambigua	-	-	-	-	video_irrelevante	Reagindo aos piores brinquedos da internet kkkk
+pt	nao_identificado	-	-	-	-	video_irrelevante	Vlog de viagem: um dia em Gramado
+en	nao_identificado	-	-	-	-	video_irrelevante	Minecraft survival episode 12
+pt	ambigua	-	-	-	-	video_irrelevante	Trailer oficial do filme do Super Mario
+pt	nao_identificado	-	-	-	-	video_irrelevante	Receita de bolo de cenoura fofinho
+pt	ambigua	-	-	-	-	video_irrelevante	Nintendo Switch: melhores jogos do ano
+en	ambigua	-	-	-	-	video_irrelevante	Toy Story 5 official teaser
+pt	ambigua	-	-	-	-	noticia	Anatel apreende carregadores falsificados em operação no porto
+pt	ambigua	-	-	-	-	noticia	Governo anuncia nova regra para importação de celulares
+en	ambigua	-	-	-	-	noticia	Police seize counterfeit power banks at airport
+pt	ambigua	-	-	-	-	noticia	Explosão de patinete elétrico causa incêndio em apartamento, diz polícia
+pt	confirmada	air_fryer	-	-	-	discussao	alguém sabe se air fryer pequena vale a pena para solteiro?
+pt	confirmada	chair	-	-	-	discussao	minha cadeira gamer descascou em 6 meses, normal?
+en	confirmada	earbuds	-	-	-	discussao	anyone else's earbuds lose battery after a year?
+pt	nao_identificado	-	-	-	-	discussao	qual o melhor time do brasileirão?
+pt	ambigua	-	-	-	-	ambiguo	lock
+en	ambigua	-	-	-	-	ambiguo	switch
+pt	ambigua	-	-	-	-	ambiguo	monitor
+pt	ambigua	-	-	-	-	ambiguo	Black Mirror nova temporada
+en	ambigua	-	-	-	-	ambiguo	safe mode android how to disable
+pt	nao_identificado	-	-	-	-	ambiguo	lockdown na cidade
+pt	confirmada	car_charger	-	-	-	semelhante	carregador veicular duplo USB
+pt	confirmada	cable	-	-	-	semelhante	cabo USB-C para Lightning 1 metro
+pt	confirmada	phone_case	-	-	-	semelhante	capinha para iPhone 15 transparente
+pt	confirmada	screen_protector	-	-	-	semelhante	película de vidro para Galaxy S24
+pt	confirmada	smart_speaker	-	-	-	semelhante	Echo Dot 5ª geração com relógio
+pt	confirmada	vacuum	-	-	-	semelhante	aspirador vertical sem fio 2 em 1
+pt	confirmada	scale	-	-	-	semelhante	balança digital de banheiro bioimpedância
+pt	confirmada	food_scale	-	-	-	semelhante	balança de cozinha digital 10kg
+pt	confirmada	lamp	-	-	-	semelhante	luminária de mesa LED com carregador sem fio
+en	ambigua	-	-	-	-	semelhante	power bank vs portable power station: what's the difference?
+pt	ambigua	-	-	-	-	semelhante	comparativo: robô aspirador x aspirador vertical
+es	confirmada	smartwatch	-	-	-	multilingue	reloj inteligente para mujer resistente al agua
+es	confirmada	speaker	-	-	-	multilingue	bocina bluetooth portátil a prueba de agua
+es	confirmada	earbuds	-	-	-	multilingue	audífonos inalámbricos con cancelación de ruido
+es	confirmada	projector	-	-	-	multilingue	proyector portátil 1080p para casa
+es	confirmada	drill	-	-	-	multilingue	taladro inalámbrico 20V con batería
+zh	confirmada	power_bank	-	-	-	multilingue	充电宝 20000毫安 快充
+zh	confirmada	earbuds	-	-	-	multilingue	蓝牙耳机 降噪 无线
+zh	confirmada	projector	-	-	-	multilingue	投影仪 家用 高清
+zh	confirmada	vacuum	-	-	-	multilingue	扫地机器人 激光导航
+zh	confirmada	smartwatch	-	-	-	multilingue	智能手表 心率 血氧
+en	confirmada	vacuum	-	-	-	multilingue	robot vacuum with self-emptying base
+en	confirmada	lock	-	-	-	semelhante	smart door lock with fingerprint and keypad
+en	confirmada	doorbell	-	-	-	semelhante	wireless video doorbell with chime
+pt	confirmada	lock	-	-	-	generico	fechadura eletrônica para porta de vidro
+pt	confirmada	doorbell	-	-	-	generico	campainha sem fio para casa
+pt	confirmada	chair	-	-	-	variante	cadeira gamer com apoio para os pés reclinável 180 graus
+pt	confirmada	projector	-	-	-	variante	projetor 4K com Wi-Fi e Bluetooth
+pt	confirmada	charger	100w	ugreen	-	variante	Carregador Ugreen Nexode 100W GaN
+pt	confirmada	charger	20w	apple	-	variante	carregador Apple 20W USB-C original

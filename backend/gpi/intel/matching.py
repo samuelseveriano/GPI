@@ -42,6 +42,24 @@ FALSE_FRIENDS = re.compile(
     r"mixer de som|scale up|power ranger|power rangers)\b")
 
 
+# v0.9 — sinais adicionais (ajustados SOMENTE no conjunto de desenvolvimento understanding_dev_v09.tsv)
+NEWS = re.compile(r"\b(apreende|apreendem|apreensao|apreendid\w*|seize\w*|policia|police|investiga\w*|incendio|explosao|"
+                  r"explosion|governo|government|anuncia|announces|procon|receita federal|notifica|tarifa|tariff|operacao)\b")
+ENTERTAINMENT = re.compile(r"\b(vlog|k{3,}|reagindo|reacting|desafio|challenge|cursed|divertido|divertida)\b")
+COMPARE = re.compile(r"\b(vs\.?|versus|comparativo|comparacao|comparison|diferenca|difference|diferencia)\b|[a-z] x [a-z]")
+ALT_Q = {"pt": re.compile(r"\bou\b[^?]*\b(qual|quais|compensa)\b"), "en": re.compile(r"\bor\b[^?]*\b(which|better)\b"),
+         "es": re.compile(r"\bo\b[^?]*\b(cual|cuales|conviene)\b")}
+# linhas de modelo que identificam a família sem o nome genérico (ex.: "Poco X6 Pro" é um celular)
+MODEL_LINES = [("smartphone", re.compile(r"\b(poco [xfmc]\d|redmi( note)? ?\d|moto [ge]\d|galaxy [asz]\d|iphone ?\d|pixel ?\d)")),
+               ("action_camera", re.compile(r"\b(gopro|go pro)\b|\bhero ?\d{1,2}\b")),
+               ("smart_speaker", re.compile(r"\becho (dot|pop|show)\b"))]
+MODEL_NOUN = {"smartphone": "smartphone", "action_camera": "action camera", "smart_speaker": "smart speaker"}
+FEATURE_HEADS = {"camera", "gps", "led_strip"}   # citados como característica de outro produto ("celular com câmera", "LED desk lamp")
+# v0.9 (achado na auditoria com dados REAIS: "007 first light" virou luminária): "light" sozinho tem outros sentidos
+LIGHT_ALONE = re.compile(r"\blight\b")
+LIGHT_QUALIFIED = re.compile(r"\b(lamp|lampada|luminaria|desk|night|led|ring|bulb|strip|luz|ceiling|floor|reading|solar|smart|rgb)\b")
+
+
 def _norm(t: str) -> str:
     return " " + nlp.strip_accents(t).lower() + " "
 
@@ -95,6 +113,7 @@ def match(text: str, lang: str | None = None, catalog_ids: set | None = None, ta
     """
     original = text or ""
     src = original
+    lang_in = (lang or "")[:2]
     if lang == "es" or (lang in (None, "pt", "und") and ES_HINT.search(nlp.strip_accents(original).lower())):
         src, lang = _es_to_pt(original), "pt"
     a = nlp.analyze(src, lang)
@@ -102,6 +121,15 @@ def match(text: str, lang: str | None = None, catalog_ids: set | None = None, ta
         b = nlp.analyze(_singular(src), lang)          # plural ("patinetes elétricos", "drones")
         if b["produto"]:
             a = b
+    if not a["produto"]:                               # v0.9: linha de modelo identifica a família
+        low = nlp.strip_accents(src).lower()
+        for fam, rx in MODEL_LINES:
+            if rx.search(low):
+                b = nlp.analyze(src + " " + MODEL_NOUN[fam], "en" if lang in (None, "und") else lang)
+                if b["produto"] and b["produto"]["chave"].split("+")[0] == fam:
+                    a = b
+                    a["linha_de_modelo"] = True
+                break
     a["texto"] = a["texto"] if src == original else original
     t = _norm(original + " " + src)
     out = {"texto": a["texto"], "idioma": a["idioma"], "estado": NONE, "produto_id": None, "familia": None, "variante": None,
@@ -117,14 +145,43 @@ def match(text: str, lang: str | None = None, catalog_ids: set | None = None, ta
     fam, var = p["chave"], p["variante"]
     out.update(familia=fam, variante=var, produto_id=f"{fam}:{var}" if var else fam, nucleo=p["nucleo"], categoria=p["categoria"])
     heads = [c for c, _ in nlp.find_concepts(a["texto"], a["idioma"] if a["idioma"] != "und" else "en") if c in nlp.HEADS]
+    if len(set(heads)) > 1:                           # v0.9: câmera/GPS citados como característica de outro produto
+        heads = [h for h in heads if h not in FEATURE_HEADS] or heads
+        if fam.split("+")[0] in FEATURE_HEADS and heads and heads[0] not in FEATURE_HEADS:
+            b = nlp.analyze(re.sub(r"(?i)\bgps\b|\bc[aâ]mera\b|\bcamera\b|摄像头|相机", " ", a["texto"]), a["idioma"])
+            if b["produto"] and b["produto"]["chave"].split("+")[0] == heads[0]:
+                p, fam, var = b["produto"], b["produto"]["chave"], b["produto"]["variante"]
+                out.update(familia=fam, variante=var, produto_id=f"{fam}:{var}" if var else fam, nucleo=p["nucleo"], categoria=p["categoria"])
     cats = {nlp.CONCEPTS[h][1] for h in heads}
+    out["mencionados"] = list(dict.fromkeys(heads))
     reasons = out["motivos"]
-    if NON_COMMERCIAL.search(t) and not out["comercial"]:
+    tq = re.sub(r"\b(para|pra|for) (o |a |the )?podcast\b|\bpodcast and\b", " ", t)   # "microfone para podcast" é produto
+    lg = lang_in if lang_in in ALT_Q else (a["idioma"] or "pt")[:2]
+    comparison = bool(COMPARE.search(t) or (ALT_Q.get(lg) and ALT_Q[lg].search(t)))
+    if comparison and (len(set(heads)) > 1 or heads.count(p["nucleo"] if p.get("nucleo") in heads else fam.split("+")[0]) > 1
+                       or not _is_accessory_phrase(t)):
+        out["estado"] = AMBIGUOUS
+        out["contexto"] = "comparativo"
+        reasons.append("comparação entre produtos: o texto não trata de um único produto" +
+                       (f" ({', '.join(out['mencionados'])})" if len(out["mencionados"]) > 1 else ""))
+    elif NEWS.search(t):
+        out["estado"] = AMBIGUOUS
+        out["contexto"] = "noticia"
+        reasons.append("notícia: o produto é citado, não avaliado nem procurado para compra")
+    elif ENTERTAINMENT.search(t):
+        out["estado"] = AMBIGUOUS
+        out["contexto"] = "entretenimento"
+        reasons.append("conteúdo de entretenimento: o produto pode ser apenas citado")
+    elif NON_COMMERCIAL.search(tq) and not out["comercial"]:
         out["estado"] = AMBIGUOUS
         reasons.append("contexto de entretenimento/notícia: o produto pode ser apenas citado")
     elif len(cats) > 1 and not _is_accessory_phrase(t):
         out["estado"] = AMBIGUOUS
         reasons.append(f"produtos de categorias diferentes no mesmo texto ({', '.join(sorted(set(heads)))})")
+    elif (fam.split("+")[0] == "lamp" and LIGHT_ALONE.search(t) and not LIGHT_QUALIFIED.search(t) and not var
+          and not a["atributos"]):
+        out["estado"] = PROBABLE
+        reasons.append("'light' sem qualificador (pode ser título de jogo, filme ou marca)")
     elif _bare(t) in POLY_WORDS and not var and not a["atributos"] and not out["comercial"]:
         out["estado"] = PROBABLE
         reasons.append(f"termo genérico com mais de um sentido ('{p['nome_pt']}') sem qualificador")
@@ -134,6 +191,12 @@ def match(text: str, lang: str | None = None, catalog_ids: set | None = None, ta
     else:
         out["estado"] = CONFIRMED
         reasons.append("núcleo do produto reconhecido" + (f"; variante {var.upper()}" if var else ""))
+    at = out["atributos"]
+    if at.get("modelo") and re.search(r"\b(para|pra|for|compativel com|compatible with)\b[^,;]*" +
+                                      re.escape(nlp.strip_accents(str(at["modelo"])).lower()), t):
+        at = dict(at)                                   # v0.9: modelo do aparelho compatível ≠ modelo do produto
+        at["modelo_compativel"] = at.pop("modelo")
+        out["atributos"] = at
     return _vs_target(out, target)
 
 
