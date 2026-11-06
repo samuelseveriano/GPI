@@ -43,7 +43,7 @@ jobs:
           if ($c -ne 0) { $t = (Get-Content pytest.log -Tail 60) -join '%0A'; Write-Output "::error title=pytest::$t"; exit $c }
       - name: Publicar relatório de testes
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: relatorio-testes
           path: |
@@ -70,7 +70,7 @@ jobs:
           { echo "### Conectores (coleta real)"; echo '```'; cat val.log | cut -c1-180; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           [ -f auditoria_fontes.md ] && cat auditoria_fontes.md >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=validacao-conectores::$(tail -n 30 val.log | cut -c1-200 | sed ':a;N;$!ba;s/\n/%0A/g')"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: validacao-conectores
@@ -220,7 +220,7 @@ jobs:
           $ok = (Start-Process zipcheck/GPI/GPI.exe -ArgumentList "--check" -Wait -PassThru).ExitCode
           if ($ok -ne 0) { Write-Output "::error title=zip::verificação de integridade do pacote extraído falhou ($ok)"; exit 1 }
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: GPI-Windows-Portable-v0.9
           path: |
@@ -236,7 +236,7 @@ jobs:
 
       - name: Preservar logs em caso de falha
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: logs-build
           path: |
