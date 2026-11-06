@@ -1,5 +1,11 @@
 # GPI — Manual de utilização (v0.3)
 
+## 0. Novidades da v0.9.1 — Product Intelligence Suite
+
+Em **Inteligência de Consumo**: Pesquisa de Produtos, Explorador de Nichos, Inteligência de Marketplaces, Palavras-chave,
+Pesquisa por Imagem, Inteligência de Fornecedores, Investigação de Importação, Produtos Monitorados e Histórico de
+Pesquisas. Tudo funciona com os dados locais e sem custos. Guia completo: `docs/V091.md` (seção "Manual rápido").
+
 ## 1. Abrir
 1. Extraia `GPI-Windows-Portable.zip` em qualquer pasta sua (ex.: `Documentos\GPI`). Não precisa instalar nada nem ser administrador.
 2. Clique duas vezes em **GPI.exe**.

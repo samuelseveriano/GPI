@@ -6,6 +6,7 @@ pandas>=2.2
 scipy>=1.11
 openpyxl>=3.1
 reportlab>=4.0   # v0.6: PDF dos relatórios (BSD, sem serviço externo)
+Pillow>=10.0   # v0.9.1: busca visual local (hashes perceptuais) — já instalada como dependência do reportlab
 scikit-learn>=1.3   # Fase 2: Random Forest, HistGradientBoosting, K-Means, HDBSCAN, PCA, Isolation Forest
 starlette>=0.37
 uvicorn>=0.29

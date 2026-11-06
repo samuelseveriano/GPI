@@ -37,6 +37,7 @@ com o Python removido do PATH e sem variáveis PYTHON\***:
 | G — Integridade | altera um arquivo do pacote e confirma que o GPI recusa abrir (código 4) |
 | I — Relatórios | gera o Relatório Executivo em XLSX e PDF pelo executável, confere os cabeçalhos dos arquivos (PK / %PDF) e, após reabrir, confere que os 2 relatórios continuam no histórico |
 | J — Painel e integrações (v0.6.1) | painel de sincronização responde, Google Ads sem campo de developer token, estados das integrações, YouTube e exportação de diagnóstico |
+| Q — Product Intelligence Suite (v0.9.1) | suíte responde com modo sem custos ativo, pesquisa de produto conclui 100% das etapas, consulta paga do ImportYeti **não** é feita, busca visual local aceita PNG sem gravar a imagem, exportação XLSX da pesquisa |
 | H — Distribuição limpa | todos os testes acima rodam na cópia sem Python no PATH |
 
 Em caso de falha, a etapa mostra a anotação `smoke`/`smoke-excecao` com a linha e o final do `gpi.log`,

@@ -281,3 +281,14 @@ main .panel > table, main .panel table { max-width: 100%; }
 ul.clean{list-style:none;padding-left:0;margin:.3em 0}ul.clean>li{padding:4px 0;border-bottom:1px solid var(--line,#e5e7eb)}
 details.inline{display:inline-block;margin-left:6px}details.inline>summary{cursor:pointer;color:var(--muted,#667)}
 .badge{display:inline-block;padding:0 6px;border-radius:8px;background:rgba(220,120,30,.18);font-size:11px;font-weight:600}
+/* v0.9.1 — Product Intelligence Suite */
+.pbar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 6px 0 10px; }
+.pbar > div { height: 100%; background: var(--accent); transition: width .3s; }
+.tw { max-width: 100%; overflow-x: auto; }
+.dropzone { border: 2px dashed var(--line); border-radius: 10px; padding: 22px; text-align: center; color: var(--muted); margin-bottom: 10px; }
+.dropzone.on { border-color: var(--accent); color: var(--ink); }
+.imgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.imgrid figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; padding: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.imgrid img { width: 100%; height: 130px; object-fit: contain; background: var(--bg, #fff); border-radius: 4px; }
+a.kpi { text-decoration: none; color: inherit; }
+label.f[hidden] { display: none; }

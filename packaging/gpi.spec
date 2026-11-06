@@ -14,6 +14,10 @@ hidden = collect_submodules("gpi") + collect_submodules("uvicorn") + [
     "sklearn.cluster._hdbscan.hdbscan",
     "scipy.special.cython_special",
     "openpyxl",
+    # v0.9.1: busca visual local (formatos verificados pelo conteúdo)
+    "PIL.Image", "PIL.ImageOps", "PIL.ImageDraw", "PIL.JpegImagePlugin", "PIL.PngImagePlugin", "PIL.WebPImagePlugin",
+    "gpi.suite.api", "gpi.suite.research", "gpi.suite.marketplace", "gpi.suite.visual", "gpi.suite.suppliers",
+    "gpi.suite.importx", "gpi.suite.importyeti", "gpi.suite.export", "gpi.suite.monitor", "gpi.suite.capabilities",
 ]
 binaries, datas = [], [
     (os.path.join(ROOT, "frontend"), "frontend"),

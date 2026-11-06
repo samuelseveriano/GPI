@@ -37,6 +37,7 @@ from .market.analysis import make_analyzer
 from .products.api import routes as consumer_routes
 from .intel.api import routes as intel_routes
 from .intel.api09 import routes as intel09_routes
+from .suite.api import routes as suite_routes
 from .regulatory.api import routes as regulatory_routes
 from .reports.api import routes as report_routes
 from .reports.service import ReportService
@@ -146,6 +147,16 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         except Exception as e:  # noqa: BLE001 — falha no relatório não invalida a sincronização
             log.exception("falha no relatório semanal automático")
             out["relatorio_semanal"] = {"erro": str(e)}
+        try:                                   # v0.9.1: produtos/fornecedores monitorados — mesma rotina, sem agendador paralelo
+            state["atual"] = "produtos e fornecedores monitorados"
+            from .intel import decision as _D
+            from .intel.api import _payload_for_v09
+            from .suite import monitor as _MON
+            out["monitorados"] = _MON.refresh(db, lambda: _payload_for_v09(db, sync, cfg),
+                                              lambda: _D.stages(_payload_for_v09(db, sync, cfg), db, sync.today_fn()), sync.today_fn())
+        except Exception as e:  # noqa: BLE001
+            log.exception("falha ao atualizar monitorados")
+            out["monitorados"] = {"erro": str(e)}
         return out
     analyzer.steps = getattr(base_analyzer, "steps", 10)
     sync = SyncManager(db, data_dir, cfg, connectors=connectors, http=sync_http,
@@ -865,6 +876,7 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
         *report_routes(reports),
         *social_routes(db, sync, cfg),
         *comp_routes,
+        *suite_routes(db, sync, cfg, comp_state, data_dir),
         Mount("/static", StaticFiles(directory=frontend_dir), name="static"),
     ]
     app = Starlette(routes=routes, middleware=[
@@ -872,7 +884,9 @@ def create_app(data_dir: Path, frontend_dir: Path, shutdown_cb=None, cfg: dict |
                    per_path={"/api/import": 50 * 1024 * 1024, "/api/compliance/anexos": 12 * 1024 * 1024,
                              "/api/compliance/ncm/arquivo": 42 * 1024 * 1024, "/api/compliance/base/pacote": 20 * 1024 * 1024,
                              "/api/compliance/anatel/arquivo": 310 * 1024 * 1024,
-                             "/api/regulatorio/inmetro/arquivo": 200 * 1024 * 1024}),
+                             "/api/regulatorio/inmetro/arquivo": 200 * 1024 * 1024,
+                             "/api/suite/imagem/comparar": 30 * 1024 * 1024, "/api/suite/imagem": 11 * 1024 * 1024,
+                             "/api/suite/importar": 20 * 1024 * 1024, "/api/suite/avaliacoes/arquivo": 20 * 1024 * 1024}),
         Middleware(HostGuard)])
     for k, v in vars(comp_state).items():
         setattr(app.state, k, v)

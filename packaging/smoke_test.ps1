@@ -264,6 +264,22 @@ $mm = Invoke-RestMethod -Uri "$base/api/integrations/meta/modulos" -Method Post 
 foreach ($m in @("paginas", "instagram", "anuncios")) { if ($mm.modulos.$m.estado -ne "configuracao_incompleta") { Fail "Meta/$m sem credenciais deveria ser 'configuracao_incompleta' (obtido: $($mm.modulos.$m.estado))" } }
 Note "   painel: $($pn.A_resumo.produtos) produtos · estágio 3: $($pn.A_resumo.investigacao_recomendada) · identificação: $([math]::Round(100 * $cp.avaliacao.teste.precisao_alta_confianca, 1))% (teste) · Meta sem credenciais: configuração incompleta"
 
+Note "Q) v0.9.1: Product Intelligence Suite (pesquisa, nichos, imagem local, fornecedores, importação, sem custos por padrão)"
+$sv = Invoke-RestMethod -Uri "$base/api/suite/visao" -NoProxy -TimeoutSec 60
+if ($sv.versao -ne "0.9.1") { Fail "suíte v0.9.1 não respondeu" }
+if (-not $sv.modo_sem_custos) { Fail "modo sem custos externos deveria estar ativo por padrão" }
+$rq = Invoke-RestMethod -Uri "$base/api/suite/pesquisa" -Method Post -Headers $hdr -ContentType "application/json" -Body '{"consulta":"carregador GaN 65W","sincrono":true}' -NoProxy -TimeoutSec 300
+$rj = Invoke-RestMethod -Uri "$base/api/suite/pesquisa/$($rq.id)" -NoProxy -TimeoutSec 60
+if ($rj.progresso.pct -ne 100 -or -not $rj.result.abas.visao_geral) { Fail "pesquisa de produto não concluiu ($($rj.status))" }
+$iy = Invoke-RestMethod -Uri "$base/api/suite/importyeti/consulta" -Method Post -Headers $hdr -ContentType "application/json" -Body '{"consulta":"company_search","autorizado":true,"custo_maximo":1}' -NoProxy -TimeoutSec 30
+if ($iy.requisicao_feita -ne $false) { Fail "consulta paga foi tentada no modo sem custos" }
+$png = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAiUlEQVR42mP88OEDAy0BEwONwdC3gIVIdTf09DAFNS5dIqiRkWAkYzWaeGvwWUDQaGKsYaKK6XjUM1HFdDy6mKhlOi69dM8HlDgfqwn09QHlzsc0Z7SwG7WAyhYQU76TWrLSPYgo9wSaCQMRyZR4AlMvExnVLEm1JhN5VTnx6ge0VUGndtGIL4sAyd0+He/AT5YAAAAASUVORK5CYII=")
+$im = Invoke-RestMethod -Uri "$base/api/suite/imagem/buscar" -Method Post -Headers $hdr -ContentType "application/octet-stream" -Body $png -NoProxy -TimeoutSec 60
+if ($im.consulta.formato -ne "PNG" -or $im.consulta.gravada) { Fail "busca visual local falhou" }
+$sx = Invoke-WebRequest -Uri "$base/api/suite/pesquisa/$($rq.id).xlsx" -NoProxy -TimeoutSec 120 -UseBasicParsing
+if ($sx.Content[0] -ne 80) { Fail "exportação XLSX da pesquisa inválida" }
+Note "   pesquisa nº $($rq.id): $($rj.result.decisao.cor) · ImportYeti bloqueado sem custos · imagem PNG comparada localmente · XLSX ok"
+
 Note "F) Encerramento seguro e liberação da porta"
 StopApp $app
 Start-Sleep -Seconds 2
@@ -293,4 +309,4 @@ Move-Item -Force "$victim.bak" $victim
 if ($code -ne 4) { Fail "arquivo alterado não foi detectado (código $code)" }
 Note "   alteração detectada"
 
-Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–P)"
+Note "TODOS OS TESTES DO EXECUTÁVEL PASSARAM (A–Q)"
