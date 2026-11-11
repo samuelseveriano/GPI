@@ -32,6 +32,43 @@ def _sq(g):
     return max(0.0, min(1.0, 0.5 + 0.5 * math.tanh(2 * g)))
 
 
+def _offer_summary(c: dict) -> dict:
+    return {"tipo_evidencia": "Oferta observada", "mercado": c.get("mercado"), "fonte": c.get("fonte"), "moeda": c.get("moeda"),
+            "anuncios": c.get("anuncios"), "anuncios_elegiveis": c.get("anuncios_elegiveis"),
+            "excluidos": c.get("excluidos_acessorios_incompativeis"), "concorrentes_observados": c.get("concorrentes_observados", c.get("vendedores_unicos")),
+            "marcas_distintas": c.get("marcas_distintas"), "preco_min": c.get("preco_min"), "preco_mediano": c.get("preco_mediano"),
+            "preco_max": c.get("preco_max"), "posicionamento": c.get("posicionamento"), "pressao_competitiva": c.get("pressao_competitiva"),
+            "dias_observados": c.get("dias_observados"), "ultima_coleta": c.get("ultima_coleta"), "status": c.get("status"),
+            "afeta_indicadores_do_mercado": c.get("mercado") == MARKET}
+
+
+GROUPS = {"Interesse do consumidor": ("consumer_search_strength", "social_momentum", "trend_persistence"),
+          "Mercado": ("competition_pressure", "marketplace_evidence"),
+          "Viabilidade": ("import_readiness", "product_quality_risk"),
+          "Confiabilidade": ("forecast_confidence",)}
+
+
+def _groups(d: dict) -> dict:
+    out = {g: {k: d[k] for k in ks if k in d} for g, ks in GROUPS.items()}
+    out["Comércio exterior"] = "contexto — não entra no índice (importação ≠ procura)"
+    return out
+
+
+def _trade(pid: str, ctx: dict) -> dict | None:
+    from .catalog import NCM_HINT
+    from ..suite.trade import EXTRA_SH4
+    head = pid.split("+")[0].split(":")[0]
+    sh4 = NCM_HINT.get(head) or EXTRA_SH4.get(head)
+    t = ctx.get(sh4) if sh4 else None
+    if not t:
+        return {"sh4_candidata": sh4, "estado": "sem série Comex Stat de 24 meses"} if sh4 else None
+    return {"sh4_candidata": sh4, "descricao": t["descricao"], "variacao_12m_pct": t["variacao_12m_pct"], "ultimos_12m_usd": t["ultimos_12m_usd"],
+            "ate": t["ate"], "tipo_evidencia": "Informações contextuais (classificação ampla, Brasil)"}
+
+
+MARKET = "BR"      # indicadores de decisão do GPI (importação para o Brasil): só oferta do mercado brasileiro entra no índice
+
+
 def build(consumer: dict, social: dict | None, reviews: dict | None, competition: dict | None, db=None) -> dict:
     social = social or {}
     series = consumer.get("series", [])
@@ -56,8 +93,15 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
     by = {}
     for s in series:
         by.setdefault(s["product_id"], []).append(s)
-    ids = set(by) | set(soc)
+    ids = set(by) | set(soc) | {p for p, cs in comp.items() if any(c.get("anuncios_elegiveis") for c in cs)}
     rows = []
+    trade_ctx = {}
+    if db is not None:
+        try:
+            from ..suite.trade import category_growth
+            trade_ctx = {i["codigo"]: i for i in category_growth(db, 100000, 0)["itens"]}
+        except Exception:  # noqa: BLE001 — contexto opcional
+            trade_ctx = {}
     for pid in ids:
         lst = by.get(pid, [])
         sc = scores.get(pid, {})
@@ -76,7 +120,10 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
         vals = [v for v in (pers, sp) if v is not None]
         if vals:
             d["trend_persistence"] = round(100 * float(np.mean(vals)), 1)
-        cp = [c.get("pressao_competitiva") for c in comp.get(pid, []) if c.get("pressao_competitiva") is not None]
+        # v0.9.1 MVP: só a oferta do mercado do índice (Brasil) entra; anúncios dos EUA ficam como oferta observada
+        # contextual e NÃO influenciam indicadores brasileiros. Amostra pequena → pressão None (dimensão ausente).
+        local = [c for c in comp.get(pid, []) if c.get("mercado", MARKET) == MARKET]
+        cp = [c.get("pressao_competitiva") for c in local if c.get("pressao_competitiva") is not None]
         if cp:
             d["competition_pressure"] = round(float(np.mean(cp)), 1)
         elif sc.get("componentes", {}).get("concorrencia_baixa") is not None:
@@ -89,7 +136,7 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
         if sc.get("forecast_confidence"):
             d["forecast_confidence"] = sc["forecast_confidence"]
         ready = dict(sc.get("checklist_importacao") or {})
-        if comp.get(pid):
+        if any(c.get("anuncios_elegiveis", 1) for c in local):
             ready["Preços observados"] = True
         if ready:
             d["import_readiness"] = round(100 * sum(bool(v) for v in ready.values()) / len(ready), 1)
@@ -138,9 +185,34 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
         nxt.append("cotar fornecedores e custos de importação (Viabilidade de Importação)")
         if "product_quality_risk" not in d:
             nxt.append("ler avaliações de consumidores do produto")
-        nome = (lst[0]["nome"] if lst else soc.get(pid, {}).get("nome")) or pid
+        nome = (lst[0]["nome"] if lst else soc.get(pid, {}).get("nome"))
+        if not nome and db is not None:
+            from ..suite import naming as NM
+            nome = NM.name_of(db, pid)
+        nome = nome or pid
         cat = (lst[0].get("categoria") if lst else soc.get(pid, {}).get("categoria"))
-        rows.append({"product_id": pid, "nome": nome, "categoria": cat, "indice": idx, "prioridade": prio, "dimensoes": d,
+        elig = prio != "Evidência insuficiente"
+        # v0.9.1: o índice é renormalizado pelos pesos DISPONÍVEIS — com 1 dimensão a 100 ele virava 100 com evidência
+        # insuficiente. Agora só é exibido como índice de decisão quando elegível; caso contrário fica como parcial.
+        expl = [{"dimensao": k, "peso": W[k], "valor": v, "invertido": k in INVERTED,
+                 "contribuicao": round(W[k] * ((100 - v) if k in INVERTED else v) / cov, 1) if cov else None} for k, v in avail.items()]
+        rows.append({"product_id": pid, "nome": nome, "categoria": cat, "indice": idx if elig else None, "indice_parcial": idx,
+                     "elegivel_para_decisao": elig, "explicacao": {"componentes": expl, "dimensoes_ausentes": [k for k in W if k not in avail],
+                                                                    "peso_disponivel": round(cov / sum(W.values()), 2),
+                                                                    "motivo": None if elig else "cobertura < 40% ou menos de 2 dimensões de demanda: "
+                                                                    "índice parcial NÃO elegível para decisão"},
+                     "prioridade": prio, "dimensoes": d,
+                     "oferta_observada": [_offer_summary(c) for c in comp.get(pid, [])],
+                     "dimensoes_agrupadas": _groups(d),
+                     "comercio_exterior": _trade(pid, trade_ctx),
+                     "tipos_de_evidencia": {
+                         "Oferta observada": bool(comp.get(pid)),
+                         "Interesse de pesquisa": "consumer_search_strength" in d,
+                         # só série MENSAL de busca com ≥ 15 meses (crescimento 12m) e tendência significativa; oferta nunca conta
+                         "Crescimento comprovado": any((s["ind"].get("crescimento_12m") or 0) > 0.05 and
+                                                       ((s["ind"].get("tendencia") or {}).get("p_valor") or 1) < 0.05 for s in srch),
+                         "Informações contextuais": bool(soc.get(pid)) or any(c.get("mercado") != MARKET for c in comp.get(pid, [])),
+                         "Evidência insuficiente": not elig},
                      "cobertura_indice": round(cov / sum(W.values()), 2), "fontes_em_alta": rising,
                      "fornecedores": "não verificado (sem fonte autorizada conectada)",
                      "ncm": None, "riscos": list(dict.fromkeys(risks)), "proximos_passos": nxt})
@@ -149,6 +221,6 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
         for r in rows:
             r["ncm"] = hints.get(r["product_id"])
     order = {"Alta": 0, "Média": 1, "Baixa": 2, "Evidência insuficiente": 3}
-    rows.sort(key=lambda r: (order[r["prioridade"]], -(r["indice"] or -1)))
+    rows.sort(key=lambda r: (order[r["prioridade"]], -(r["indice"] if r["indice"] is not None else -1)))
     return {"produtos": rows, "pesos": W, "metodologia": __doc__.strip(),
             "aviso": "Classificação para priorizar investigação. Não é probabilidade de sucesso, margem nem recomendação de compra."}

@@ -88,9 +88,12 @@ class SourceError(Exception):
     """Falha ao obter dados de uma fonte (rede, HTTP, formato)."""
 
     def __init__(self, msg: str, kind: str = "erro", retryable: bool = False, status: int | None = None,
-                 body: str | None = None):
+                 body: str | None = None, cause: str | None = None):
         super().__init__(redact(msg))
-        self.kind = kind            # rede | http | tls | formato | restrita | limite
+        self.kind = kind            # rede | http | tls | formato | restrita | limite | bloqueada
+        # v0.9.1: causa específica para o diagnóstico — dns | tls | timeout | proxy | conexao_recusada | servidor | limite |
+        # token (401) | permissao (403 com credencial) | recusado (403 sem credencial) | nao_encontrado | formato
+        self.cause = cause
         self.retryable = retryable
         self.status = status
         self.body = redact(body) if body else None     # corpo do erro (ex.: códigos do Google Ads), sem segredos
@@ -483,32 +486,55 @@ class HttpClient:
                 except Exception:  # noqa: BLE001
                     full = ""
                 detail = full[:300]
-                if status in (401, 403):
-                    raise SourceError(f"acesso negado (HTTP {status}); a fonte exige credenciais, permissão "
-                                      f"ou o acesso foi bloqueado pela rede", "restrita", status=status, body=full[:4000])
+                eh = {k.lower(): v for k, v in (e.headers or {}).items()} if e.headers else {}
+                if status == 407 or (status == 403 and (any(k in eh for k in ("proxy-authenticate", "x-squid-error", "proxy-agent"))
+                                                        or "squid" in full[:2000].lower())):
+                    # 403/407 gerado pelo PROXY corporativo (não pelo servidor de destino): não insistir, não contornar
+                    raise SourceError("Não foi possível estabelecer conexão com a fonte. Verifique as configurações de rede ou "
+                                      f"consulte a TI. (proxy respondeu HTTP {status} para {host})", "bloqueada", status=status,
+                                      body=full[:4000], cause="proxy")
+                if status == 401:
+                    raise SourceError("credencial recusada pela fonte (HTTP 401): token ausente, inválido ou expirado", "restrita",
+                                      status=401, body=full[:4000], cause="token")
+                if status == 403:
+                    authed = any(k.lower() in ("authorization", "iyapikey", "x-api-key") for k in h) or "key=" in url
+                    raise SourceError("permissão insuficiente (HTTP 403): a credencial é válida, mas não autoriza este recurso" if authed
+                                      else "o servidor de destino recusou o acesso (HTTP 403)", "restrita", status=403,
+                                      body=full[:4000], cause="permissao" if authed else "recusado")
                 if status == 404:
-                    raise SourceError(f"recurso não encontrado (HTTP 404) {detail}", "http", status=404, body=full[:4000])
+                    raise SourceError(f"recurso não encontrado (HTTP 404) {detail}", "http", status=404, body=full[:4000],
+                                      cause="nao_encontrado")
                 if status == 429 or status >= 500:
                     retry_after = retry_after_seconds(e.headers.get("Retry-After") if e.headers else None)
-                    last_err = SourceError(f"HTTP {status}: {detail}", "limite" if status == 429 else "http",
-                                           True, status, body=full[:4000])
+                    last_err = SourceError(("Limite de requisições atingido. " if status == 429 else "falha do servidor da fonte. ")
+                                           + f"HTTP {status}: {detail}", "limite" if status == 429 else "http",
+                                           True, status, body=full[:4000], cause="limite" if status == 429 else "servidor")
                 else:
-                    raise SourceError(f"HTTP {status}: {detail}", "http", status=status, body=full[:4000])
+                    raise SourceError(f"HTTP {status}: {detail}", "http", status=status, body=full[:4000], cause="servidor")
             except ssl.SSLError as e:
                 raise SourceError(f"certificado TLS não verificado ({e.__class__.__name__}). Peça à TI "
-                                  f"a cadeia de certificados e configure 'ca_bundle' em config/gpi.json", "tls")
+                                  f"a cadeia de certificados e configure 'ca_bundle' em config/gpi.json", "tls", cause="tls")
             except urllib.error.URLError as e:
                 if isinstance(e.reason, ssl.SSLError) or "CERTIFICATE" in str(e.reason).upper():
                     raise SourceError(f"certificado TLS não verificado ({e.reason}). Peça à TI a cadeia "
-                                      f"de certificados e configure 'ca_bundle' em config/gpi.json", "tls")
+                                      f"de certificados e configure 'ca_bundle' em config/gpi.json", "tls", cause="tls")
                 reason = str(e.reason)
                 if "Tunnel connection failed" in reason or " 403" in reason or " 407" in reason:
-                    # bloqueio do proxy corporativo: não insistir, não contornar
-                    raise SourceError(f"a rede/proxy da empresa bloqueou o acesso a {host} ({reason}). "
-                                      f"Solicite à TI a liberação do endereço (ver docs/TI.md)", "bloqueada")
-                last_err = SourceError(f"falha de rede: {e.reason}", "rede", True)
-            except (TimeoutError, ConnectionError, OSError) as e:
-                last_err = SourceError(f"falha de rede: {e}", "rede", True)
+                    # bloqueio do proxy/túnel corporativo (a requisição nem chegou ao destino): não insistir, não contornar
+                    raise SourceError("Não foi possível estabelecer conexão com a fonte. Verifique as configurações de rede ou "
+                                      f"consulte a TI. (proxy/túnel recusou {host}: {reason}; ver docs/TI.md)", "bloqueada", cause="proxy")
+                import socket as _socket
+                if isinstance(e.reason, _socket.gaierror):
+                    raise SourceError(f"o endereço {host} não foi resolvido (DNS): verifique a conexão ou o DNS da rede", "rede", cause="dns")
+                cause = ("timeout" if isinstance(e.reason, TimeoutError) or "timed out" in reason.lower() else
+                         "conexao_recusada" if isinstance(e.reason, ConnectionRefusedError) else "rede")
+                last_err = SourceError(("tempo de conexão esgotado" if cause == "timeout" else "falha de rede") + f": {e.reason}", "rede", True,
+                                       cause=cause)
+            except TimeoutError as e:
+                last_err = SourceError(f"tempo de resposta esgotado ({e})", "rede", True, cause="timeout")
+            except (ConnectionError, OSError) as e:
+                last_err = SourceError(f"falha de rede: {e}", "rede", True,
+                                       cause="conexao_recusada" if isinstance(e, ConnectionRefusedError) else "rede")
             hs["erros"] += 1
             if timing.get("primeira_resposta") is None:
                 self._emit(endpoint=redact(url.split("?")[0]), metodo=method, status=None, req=True, erro=True,

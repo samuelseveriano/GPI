@@ -1,9 +1,64 @@
-GPI - Global Product Intelligence (versao portatil para Windows)
+GPI - Global Product Intelligence v0.9.1 (MVP) - versao portatil para Windows 10/11 (64 bits)
+==========================================================================================
 
-1. Clique duas vezes em GPI.exe.
-2. O navegador abre em http://127.0.0.1:8765 e a janela "GPI em execucao" aparece.
-3. Para encerrar, feche a janela "GPI em execucao".
+Nao precisa instalar Python, banco de dados nem ser administrador. O GPI funciona somente
+no seu computador (endereco 127.0.0.1, sem abrir portas para a rede).
 
-Nao precisa instalar Python, banco de dados nem ser administrador.
-Seus dados ficam em %LOCALAPPDATA%\GPI.
+1. EXTRAIR O ZIP
+   Clique com o botao direito em GPI-Windows-Portable-Trade-Intelligence.zip > "Extrair tudo...".
+   Escolha uma pasta sua (ex.: Documentos\GPI). Nao execute de dentro do ZIP.
+
+2. ABRIR O GPI
+   Abra a pasta extraida GPI e clique duas vezes em GPI.exe.
+   O navegador abre sozinho em http://127.0.0.1:8765 e aparece a janela "GPI em execucao".
+   Se o Windows SmartScreen avisar (programa nao assinado): "Mais informacoes" > "Executar assim mesmo".
+
+3. ONDE FICAM OS DADOS
+   %LOCALAPPDATA%\GPI  (cole esse endereco na barra do Explorador de Arquivos).
+   Banco: gpi.sqlite; copias de seguranca: backups\; relatorios: relatorios\; registros: logs\.
+   Atualizar a versao NAO apaga dados: antes de migrar o banco, o GPI cria uma copia em backups\.
+   PERFIL DE TESTE (sem tocar no banco principal): abra o Prompt de Comando na pasta do GPI e rode
+       set GPI_DATA_DIR=%USERPROFILE%\GPI-teste
+       GPI.exe
+   Tudo dessa sessao fica em %USERPROFILE%\GPI-teste.
+
+4. CONFIGURAR AS APIS
+   Menu "Central de Integracoes": informe as chaves de cada fonte (eBay, Mercado Livre, Google Ads,
+   Microsoft Ads, YouTube, Meta...). As chaves ficam protegidas no seu usuario do Windows (DPAPI) e
+   nunca vao para o pacote. Fontes nao configuradas aparecem como "nao autorizada"; o resto continua
+   funcionando. Fontes publicas (Comex Stat, GDELT, Google Trends, Wikipedia) nao precisam de chave.
+
+5. DIAGNOSTICO
+   Menus "Diagnostico de Integracoes" e "Saude das Fontes" (versao, banco, fontes, autenticacao,
+   erros de rede). O botao "Exportar diagnostico" gera um arquivo sem senhas nem tokens.
+   Teste rapido sem abrir a interface: no Prompt de Comando, "GPI.exe --check".
+
+6. FAZER UMA PESQUISA
+   Menu "Pesquisa de Produtos": digite o produto (ex.: Carregador GaN 65W), escolha o mercado
+   (Brasil/EUA) e "Rapida" ou "Completa". O progresso aparece por etapa; o resultado mostra
+   classificacao, confianca, evidencias e limitacoes.
+
+7. SALVAR UMA INVESTIGACAO
+   No resultado, use "Salvar"/"Monitorar". Pesquisas ficam em "Historico de Pesquisas" e os produtos
+   acompanhados em "Produtos Monitorados" e "Lista de Investigacao".
+
+8. EXPORTAR RELATORIOS
+   No resultado da pesquisa (ou no "Centro de Relatorios"): botoes XLSX e PDF.
+
+9. BACKUP
+   Menu "Importacao" (dados) > "Fazer backup do banco", ou feche o GPI e copie a pasta
+   %LOCALAPPDATA%\GPI inteira para um pen-drive/nuvem.
+
+10. ENCERRAR
+   Feche a janela "GPI em execucao" (ou rode "GPI.exe --stop"). Fechar so o navegador nao encerra.
+
+11. NOVIDADES - TRADE + PRODUCT INTELLIGENCE
+   Menu Visao Geral > Inicio: escolha "Investigar importacoes" ou "Descobrir oportunidades de produtos".
+   Trade Intelligence > Painel de Importacoes: evolucao mensal/anual por NCM/SH (Brasil, Comex Stat) ou HS/HTS
+   (EUA, Census), paises de origem, variacao 12 meses, CAGR. Os numeros sao da CLASSIFICACAO inteira, nao do produto.
+   Trade Intelligence > Empresas e Embarques: importe B/L ou manifestos (PDF textual, TXT, CSV, XLSX) e investigue
+   uma empresa. Sem arquivos/provedor autorizado, o GPI informa que nao ha embarques individuais disponiveis.
+   Visao Geral > Assistente IA: perguntas respondidas com os dados reais do GPI (com ou sem modelo local).
+   Fontes e Sistema > Matriz de Fontes: estado real de cada fonte (operacional, pendente, manual...).
+
 Manual completo: MANUAL.md. Informacoes para a TI: docs\TI.md.

@@ -131,8 +131,13 @@ def test_ebay_listings_and_competition(tmp_path):
     assert len(parse_ebay(EBAY)) == 12
     from gpi.market.reviews2 import competition
     comp = competition(db)["itens"][0]
-    assert comp["anuncios"] == 12 and comp["vendedores_unicos"] == 4 and comp["anuncios_em_promocao"] == 3
-    assert 0 <= comp["pressao_competitiva"] <= 100 and comp["marcas"][0]["marca"] == "ninja"
+    # v0.9.1 MVP: anúncios de air fryer gravados para o produto 'baby_monitor' NÃO entram nas estatísticas dele
+    assert comp["anuncios"] == 12 and comp["anuncios_elegiveis"] == 0 and comp["excluidos_acessorios_incompativeis"] == 12
+    assert comp["pressao_competitiva"] is None and comp["status"] == "amostra insuficiente"
+    db.execute("UPDATE market_listings SET product_id = 'air_fryer'")
+    comp = competition(db)["itens"][0]
+    assert comp["anuncios"] == 12 and comp["anuncios_elegiveis"] == 12 and comp["vendedores_unicos"] == 4 and comp["anuncios_em_promocao"] == 3
+    assert 0 <= comp["pressao_competitiva"] <= 100 and comp["marcas"][0]["marca"] == "ninja" and comp["mercado"] == "US"
     sellers = {r["seller"] for r in db.query("SELECT DISTINCT seller FROM market_listings WHERE source = 'ebay'")}
     assert sellers and all(x.startswith("h:") for x in sellers)          # v0.8.2: só pseudônimos
 
@@ -363,7 +368,7 @@ def test_sidebar_structure_accessibility_and_routes():
     hrefs = re.findall(r'<a href="#([^"]+)" data-tip', html)
     assert len(hrefs) == len(set(hrefs))                                       # sem duplicar páginas
     js = "".join((ROOT / "frontend" / f).read_text(encoding="utf-8") for f in ("app.js", "market.js", "market3.js", "consumer.js", "v05.js", "v06.js", "v061.js")
-                 + tuple(p.name for p in sorted((ROOT / "frontend").glob("v0[78]*.js"))))   # v0.7+: módulos novos
+                 + tuple(p.name for p in sorted((ROOT / "frontend").glob("v0[789]*.js"))))   # v0.7+: módulos novos
     for h in hrefs:
         assert f"'{h.split('/')[0]}'" in js or f"{h.split('/')[0]}:" in js or f"'{h.split('/')[0]}':" in js, h
     css = (ROOT / "frontend" / "styles.css").read_text(encoding="utf-8")
@@ -381,5 +386,6 @@ def test_windows_packaging_metadata():
     spec = (ROOT / "packaging" / "gpi.spec").read_text(encoding="utf-8")
     assert "upx=False" in spec and "uac_admin" not in spec.replace("uac_admin=False", "") and 'icon=' in spec
     wf = (ROOT / ".github" / "workflows" / "windows-build.yml").read_text(encoding="utf-8")
-    assert "MpCmdRun" in wf and "Get-FileHash" in wf and (f"GPI-Windows-Portable-v{__version__}.zip" in wf or f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf)
+    assert "MpCmdRun" in wf and "Get-FileHash" in wf and (f"GPI-Windows-Portable-v{__version__}.zip" in wf or f"GPI-Windows-Portable-v{__version__}-MVP-RC.zip" in wf
+                                                                        or f"GPI-Windows-Portable-v{__version__.rsplit('.', 1)[0]}.zip" in wf)
     assert "SIGNING_ENABLED" in wf                                               # assinatura opcional, só com secrets configurados

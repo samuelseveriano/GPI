@@ -252,9 +252,21 @@ window.GPI_V07 = function (H, PAGES) {
         $('#aa').innerHTML = `<div class="panel"><h2>Resposta <span class="badge">${r.modo === 'ia_local' ? 'IA local verificada' : 'Modo Essencial'}</span></h2>${r.aviso_ia ? `<p class="small neg">${escH(r.aviso_ia)}</p>` : ''}${r.frescor && r.frescor.aviso ? `<div class="banner">${escH(r.frescor.aviso)}</div>` : ''}
           <p style="white-space:pre-wrap">${escH(r.resposta)}</p>${r.geracao ? `<p class="small muted">${escH(r.geracao.modelo || '')} · ${fmt(r.geracao.segundos, 1)} s</p>` : ''}
           ${r.verificacao && r.verificacao.removidos.length ? `<details><summary class="small">Removido pela verificação (${r.verificacao.removidos.length})</summary>${r.verificacao.removidos.map((x) => `<p class="small">✖ ${escH(x.trecho)} — <i>${escH(x.motivo)}</i></p>`).join('')}</details>` : ''}
-          <h3>Fontes</h3><ul class="small">${r.fontes.map((f) => `<li>[${escH(f.id)}] ${link(f.url_oficial, f.orgao + ' — ' + f.titulo)} <span class="muted">(${escH(f.situacao)}, verificado ${escH(f.ultima_verificacao || '?')})</span></li>`).join('')}</ul></div>`;
+          <h3>Fontes</h3><ul class="small">${r.fontes.map((f) => `<li>[${escH(f.id)}] ${link(f.url_oficial, f.orgao + ' — ' + f.titulo)} <span class="muted">(${escH(f.situacao)}, verificado ${escH(f.ultima_verificacao || '?')})</span></li>`).join('')}</ul></div>${ficha(r.investigacao)}`;
       } catch (e) { $('#aa').innerHTML = errBox(e); } finally { $('#ago').disabled = false; $('#acancel').disabled = true; req = null; }
     };
+  }
+
+  function ficha(f) {                 // v0.9.1: ficha de investigação regulatória (sem afirmar obrigações)
+    if (!f || f.erro) return f && f.erro ? `<p class="small muted">Ficha indisponível: ${escH(f.erro)}</p>` : '';
+    const t = (rows, cols) => rows && rows.length ? `<div class="tw"><table class="small compact"><thead><tr>${cols.map((c) => `<th>${escH(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.map((x) => `<tr>${cols.map((c) => `<td>${escH(x[c[0]] == null ? '—' : String(x[c[0]]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="small muted">Nada encontrado.</p>';
+    return `<div class="panel"><h2>Ficha de investigação — ${escH(f.produto)}</h2><p class="small">Categoria provável: <b>${escH(f.categoria_provavel)}</b> · família técnica: ${escH(f.familia_tecnica || '—')} · identificação: ${escH(f.identificacao)}</p>
+      <h3>Questões técnicas relevantes</h3>${t(f.questoes_tecnicas, [['questao', 'Questão'], ['resposta', 'Informado'], ['situacao', 'Situação']])}
+      <h3>Requisitos potenciais (a confirmar)</h3>${t(f.requisitos_potenciais, [['requisito_potencial', 'Requisito potencial'], ['orgao', 'Órgão'], ['fundamento', 'Documentos-base'], ['aplicabilidade', 'Aplicabilidade'], ['evidencia', 'Evidência'], ['situacao', 'Situação'], ['pendencia', 'Pendência']])}
+      <h3>Registros locais (Anatel/Inmetro) — ${f.registros_locais.total}</h3>${t(f.registros_locais.itens, [['correspondencia', 'Correspondência'], ['orgao', 'Órgão'], ['registro', 'Registro'], ['fabricante', 'Fabricante'], ['modelo', 'Modelo'], ['empresa', 'Titular'], ['data', 'Data']])}
+      <p class="small muted">${escH(f.registros_locais.regra)}</p><h3>Checklist</h3><ol class="small">${f.checklist.map((x) => `<li>${escH(x)}</li>`).join('')}</ol>
+      <ul class="small muted">${f.avisos.map((x) => `<li>${escH(x)}</li>`).join('')}</ul>
+      <button class="btn small" onclick="(async()=>{const r=await fetch('/api/suite/conformidade/relatorio.xlsx',{method:'POST',headers:{'Content-Type':'application/json','X-GPI':'1'},body:JSON.stringify(${escH(JSON.stringify({ q: f.produto }))})});const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='gpi-conformidade-preliminar.xlsx';a.click();})()">Gerar relatório de conformidade preliminar</button></div>`;
   }
 
   /* --------------------------------------------------------------- IA LOCAL */

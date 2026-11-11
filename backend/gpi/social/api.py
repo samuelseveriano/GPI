@@ -43,8 +43,9 @@ def routes(db, sync, cfg) -> list[Route]:
         if r:
             return r
         from ..products import opportunity3
+        from ..market.reviews2 import competition_cached
         r = opportunity3.build(sync.store.load_result("consumer") or {}, social(), sync.store.load_result("reviews2"),
-                               sync.store.load_result("competition"), db)
+                               competition_cached(sync.store), db)
         sync.store.save_result("opportunity3", r)
         return r
 

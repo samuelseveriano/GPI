@@ -1,4 +1,11 @@
-# GPI — Global Product Intelligence · v0.7
+# GPI — Global Product Intelligence · v0.9.1
+
+> **v0.9.1 — Product Intelligence Suite (somente ferramentas gratuitas):** Pesquisa de Produtos (rápida/completa, dossiê de
+> 9 abas), Explorador de Nichos, Palavras-chave, Inteligência de Marketplaces, Pesquisa por Imagem **local** (Pillow + NumPy,
+> com recorte e busca reversa assistida), Inteligência de Fornecedores (cadastro canônico, embarques, rede de relações com
+> grau de comprovação) e Investigação de Importação (NCM candidata, Comex Stat agregado, regulatório, simulador). Modo sem
+> custos externos ativo por padrão; ImportYeti opcional e bloqueado sem autorização e orçamento. Ver
+> [docs/V091.md](docs/V091.md), [docs/API_SUITE.md](docs/API_SUITE.md) e [CHANGELOG.md](CHANGELOG.md).
 
 > **v0.7 — Product Compliance & Security Intelligence:** novo módulo **Conformidade de Importação** (triagem regulatória
 > Anatel/Inmetro/Receita/Siscomex com 5 estados, NCM, homologações, checklist PT/EN/中文, relatório de 17 seções), IA local

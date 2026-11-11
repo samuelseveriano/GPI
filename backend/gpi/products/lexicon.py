@@ -69,6 +69,7 @@ CONCEPTS: dict[str, tuple] = {
     "kettle": ("head", "Eletroportáteis", ["chaleira elétrica", "chaleira eletrica", "chaleira"], ["electric kettle", "kettle"], ["电水壶", "烧水壶"]),
     "rice_cooker": ("head", "Eletroportáteis", ["panela elétrica de arroz", "panela de arroz"], ["rice cooker"], ["电饭煲"]),
     "pressure_cooker": ("head", "Eletroportáteis", ["panela de pressão elétrica", "panela de pressao eletrica"], ["electric pressure cooker", "instant pot"], ["电压力锅"]),
+    "waffle_maker": ("head", "Eletroportáteis", ["máquina de waffle", "maquina de waffle", "waffleira", "máquina de waffles", "maquina de waffles"], ["waffle maker", "waffle iron"], ["华夫饼机"]),
     "sandwich_maker": ("head", "Eletroportáteis", ["sanduicheira", "grill elétrico", "grill eletrico"], ["sandwich maker", "electric grill"], ["三明治机", "电烤盘"]),
     "mixer": ("head", "Eletroportáteis", ["batedeira"], ["stand mixer", "hand mixer"], ["打蛋器", "厨师机"]),
     "juicer": ("head", "Eletroportáteis", ["espremedor", "centrífuga de suco", "extrator de suco"], ["juicer"], ["榨汁机"]),

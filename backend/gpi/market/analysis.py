@@ -94,8 +94,9 @@ def _social(store, cfg):
 
 def _opportunity3(store):
     from ..products import opportunity3
+    from . import reviews2
     res = opportunity3.build(store.load_result("consumer") or {}, store.load_result("social"), store.load_result("reviews2"),
-                             store.load_result("competition"), store.db)
+                             reviews2.competition_cached(store), store.db)
     store.save_result("opportunity3", res)
     return {"produtos": len(res["produtos"])}
 

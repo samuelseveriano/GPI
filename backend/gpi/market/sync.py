@@ -67,7 +67,8 @@ DONE = {"concluido", "atualizado", "em_cache", "ignorado", "requer_autorizacao",
         "sem_novidades", "pendente", "sem_coleta"}
 
 
-_DIRECT_TABLES = (("search_observations", "source"), ("content_items", "source"), ("social_observations", "platform"))
+_DIRECT_TABLES = (("search_observations", "source"), ("content_items", "source"), ("social_observations", "platform"),
+                  ("market_listings", "source"))    # v0.9.1: anúncios (eBay) eram gravados mas contados como 0 na sincronização
 
 
 def _direct_rows(db, source: str) -> int:
