@@ -42,8 +42,9 @@ def detect(url: str) -> dict:
         return {"tipo": "URL direta de imagem", "url": u}
     host = urllib.parse.urlsplit(u).hostname or ""
     return {"tipo": "página de produto", "url": u, "host": host,
-            "motivo": "Página sem API oficial integrada ao GPI: não é lida automaticamente (sem raspagem). Cole a URL DIRETA da "
-                      "imagem (botão direito na foto → copiar endereço da imagem) ou o link de um anúncio do eBay/Mercado Livre."}
+            "motivo": "Página sem API oficial integrada ao GPI: o GPI só lê metadados públicos (Schema.org/OpenGraph) quando os termos "
+                      "e o robots.txt do site permitem. Se não for permitido, cole a URL DIRETA da imagem (botão direito na foto → "
+                      "copiar endereço da imagem) ou o link de um anúncio do eBay/Mercado Livre."}
 
 
 def _persist(db, creds, source, it: dict, pid, query):

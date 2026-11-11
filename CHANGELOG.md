@@ -5,6 +5,11 @@
 Somente ferramentas gratuitas; nenhuma dependência paga obrigatória.
 
 ### Adicionado
+- **Trade + Product Intelligence**: Painel de Importações (Comex Stat por NCM/SH × país e U.S. Census por HS × país,
+  evolução mensal/anual, 12m × 12m, CAGR, países, anomalias, modo degradado), Empresas e Embarques (importação de B/L e
+  manifestos em PDF/TXT, investigação por empresa, classificação de carga), leitura de páginas públicas permitidas
+  (Schema.org/OpenGraph, robots.txt, anti-SSRF), Assistente de Inteligência sobre as ferramentas reais do GPI, Matriz de
+  Fontes, Início com os dois motores. Ver docs/V091_TRADE_PRODUCT.md.
 - **MVP final — evidência comercial integrada**: oferta observada filtrada por equivalência técnica (sem cabos/
   acessórios) por produto × mercado alimenta as dimensões existentes do Opportunity Engine (só Brasil no índice; EUA
   como contexto), recálculo só dos produtos afetados após cada coleta, Dashboard com tipos de evidência, comparador

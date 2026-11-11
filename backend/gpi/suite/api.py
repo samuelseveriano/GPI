@@ -251,6 +251,9 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             if r.get("encontrado"):
                 return r
             d = UL.detect(ref)
+            if d["tipo"] == "página de produto":
+                from . import webextract as WX
+                return {**r, "url": d, "pagina": WX.read_page(sync.http, ref)}     # só se permitido (termos + robots.txt)
             if d["tipo"] != "anúncio de marketplace":
                 return {**r, "url": d}
             api = UL.fetch_listing(db, sync, ref)            # consulta a API oficial do marketplace
@@ -344,7 +347,12 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             try:
                 return fetch_image(url), {**d, "tipo": "URL direta de imagem"}     # algumas URLs de imagem não têm extensão
             except ValueError:
-                raise ValueError(d["motivo"]) from None
+                from . import webextract as WX
+                pg = WX.read_page(sync.http, url)                                  # metadados públicos (og:image / Schema.org)
+                img = (pg.get("campos") or {}).get("imagem") if pg.get("ok") else None
+                if not img:
+                    raise ValueError(pg.get("motivo") or d["motivo"]) from None
+                return fetch_image(img), {**d, "imagem": img, "pagina": {k: pg.get(k) for k in ("campos", "origem_dos_dados", "produto_identificado")}}
         return fetch_image(url), d
 
     async def img_add(request):
@@ -439,6 +447,9 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
         try:
             raw, name, f = await upload(request)
             fn = {"empresas": SP.import_companies, "embarques": SP.import_shipments}.get(kind)
+            if kind == "embarques" and (raw[:5] == b"%PDF-" or name.lower().endswith(".txt")):
+                from . import shipments as SH
+                fn = SH.import_document                     # B/L, manifestos e registros comerciais em PDF textual/TXT
             if not fn:
                 return err("tipo deve ser 'empresas' ou 'embarques'")
             fonte = (f.get("fonte") or "")[:110] or None
@@ -606,8 +617,87 @@ def routes(db, sync, cfg, comp_state=None, data_dir: Path | None = None) -> list
             return j({"erro": "pesquisa sem resultado"}, 404)
         return j(await run_in_threadpool(MON.from_research, db, r["result"], r["id"]))
 
+    # ---------------------------------------------------------------- Trade Intelligence / embarques / web / assistente
+    from . import trade as TR
+    from . import shipments as SH
+    from . import webextract as WX
+    from . import analyst as AN
+    from . import sources_matrix as SMX
+
+    def trade_report_data(q):
+        return TR.report(db, sync.http, sync.creds, (q.get("q") or "")[:200], q.get("mercado") or "BR", int(q.get("meses") or 36), today(),
+                         getattr(comp_state, "ncm", None), (q.get("codigo") or "").strip()[:12] or None)
+
+    async def trade_panel(request):
+        return j(await run_in_threadpool(TR.dashboard, db))
+
+    async def trade_report(request):
+        q = request.query_params
+        if not (q.get("q") or q.get("codigo")):
+            return err("informe ?q= (produto/categoria) ou ?codigo= (NCM/SH/HTS)")
+        return j(await run_in_threadpool(trade_report_data, q))
+
+    async def trade_export(request):
+        fmt = request.path_params["fmt"]
+        if fmt not in MIME:
+            return err("formato inválido")
+        d = await run_in_threadpool(trade_report_data, request.query_params)
+        data = await run_in_threadpool((EX.xlsx if fmt == "xlsx" else EX.pdf), "trade", d, d["titulo"])
+        return Response(data, media_type=MIME[fmt], headers={"Content-Disposition": f'attachment; filename="gpi-comercio-exterior.{fmt}"'})
+
+    async def ship_company(request):
+        n = (request.query_params.get("nome") or "").strip()
+        if not n:
+            return err("informe ?nome=")
+        return j(await run_in_threadpool(SH.investigate_company, db, n[:200], request.query_params.get("pais") or None))
+
+    async def ship_company_export(request):
+        fmt = request.path_params["fmt"]
+        n = (request.query_params.get("nome") or "").strip()
+        if fmt not in MIME or not n:
+            return err("informe ?nome= e formato xlsx/pdf")
+        d = await run_in_threadpool(SH.investigate_company, db, n[:200], request.query_params.get("pais") or None)
+        data = await run_in_threadpool((EX.xlsx if fmt == "xlsx" else EX.pdf), "empresa", d, f"Empresa: {n[:80]}")
+        return Response(data, media_type=MIME[fmt], headers={"Content-Disposition": f'attachment; filename="gpi-empresa.{fmt}"'})
+
+    async def ship_overview(request):
+        return j(await run_in_threadpool(SH.overview, db))
+
+    async def ship_classify(request):
+        b = await body(request)
+        return j(await run_in_threadpool(SH.classify_cargo, str(b.get("texto") or "")[:1000]))
+
+    async def web_page(request):
+        from . import url_lookup as UL
+        u = (request.query_params.get("url") or "").strip()[:2000]
+        d = UL.detect(u)
+        if d["tipo"] != "página de produto":
+            return j({"ok": False, "deteccao": d, "motivo": "use Pesquisa por URL (anúncio/imagem) para este tipo de endereço"})
+        return j({**(await run_in_threadpool(WX.read_page, sync.http, u)), "deteccao": d})
+
+    async def assistant(request):
+        b = await body(request)
+        return j(await run_in_threadpool(AN.ask, db, str(b.get("pergunta") or ""), getattr(comp_state, "ai", None), bool(b.get("ia"))))
+
+    async def sources_matrix(request):
+        def calc():
+            ok = {}
+            for k in SMX.META:
+                try:
+                    ok[k] = bool(sync.creds.get(k)) if sync.creds else False
+                except Exception:  # noqa: BLE001
+                    ok[k] = False
+            return {"fontes": SMX.build(db, ok), "estados": SMX.STATES,
+                    "regra": "Uma fonte só é 'Operacional com dados reais' após consulta bem-sucedida com registros gravados."}
+        return j(await run_in_threadpool(calc))
+
     P = "/api/suite"
     return [
+        Route(f"{P}/trade/painel", trade_panel), Route(f"{P}/trade/relatorio", trade_report),
+        Route(f"{P}/trade/relatorio.{{fmt}}", trade_export), Route(f"{P}/embarques/empresa", ship_company),
+        Route(f"{P}/embarques/empresa.{{fmt}}", ship_company_export), Route(f"{P}/embarques/resumo", ship_overview),
+        Route(f"{P}/embarques/classificar", ship_classify, methods=["POST"]), Route(f"{P}/web/pagina", web_page),
+        Route(f"{P}/assistente", assistant, methods=["POST"]), Route(f"{P}/fontes/matriz", sources_matrix),
         Route(f"{P}/visao", overview), Route(f"{P}/config", config_get), Route(f"{P}/config", config_set, methods=["POST"]),
         Route(f"{P}/provedores", providers),
         Route(f"{P}/pesquisa", research_start, methods=["POST"]), Route(f"{P}/pesquisa/{{rid:int}}", research_get),

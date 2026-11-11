@@ -1,7 +1,7 @@
 @echo off
 rem ==== GPI v0.9.1 - compilar o GPI.exe neste computador (sem GitHub) ====
 rem Requer Python 3.12 64 bits instalado (python.org, "Install for me only"). Nao requer administrador.
-rem Gera GPI-Windows-Portable-v0.9.1-MVP.zip e GPI-Build-Report.txt nesta pasta.
+rem Gera GPI-Windows-Portable-Trade-Intelligence.zip e GPI-Build-Report.txt nesta pasta.
 setlocal
 cd /d "%~dp0"
 echo.
@@ -17,6 +17,6 @@ if errorlevel 1 (
   echo [GPI] A compilacao falhou. Veja build_local.log, pyi.log, pytest.log ou smoke_resultados.txt nesta pasta.
 ) else (
   echo.
-  echo [GPI] Pronto. Extraia GPI-Windows-Portable-v0.9.1-MVP.zip e abra GPI\GPI.exe
+  echo [GPI] Pronto. Extraia GPI-Windows-Portable-Trade-Intelligence.zip e abra GPI\GPI.exe
 )
 pause

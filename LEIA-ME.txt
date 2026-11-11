@@ -5,7 +5,7 @@ Nao precisa instalar Python, banco de dados nem ser administrador. O GPI funcion
 no seu computador (endereco 127.0.0.1, sem abrir portas para a rede).
 
 1. EXTRAIR O ZIP
-   Clique com o botao direito em GPI-Windows-Portable-v0.9.1-MVP.zip > "Extrair tudo...".
+   Clique com o botao direito em GPI-Windows-Portable-Trade-Intelligence.zip > "Extrair tudo...".
    Escolha uma pasta sua (ex.: Documentos\GPI). Nao execute de dentro do ZIP.
 
 2. ABRIR O GPI
@@ -51,5 +51,14 @@ no seu computador (endereco 127.0.0.1, sem abrir portas para a rede).
 
 10. ENCERRAR
    Feche a janela "GPI em execucao" (ou rode "GPI.exe --stop"). Fechar so o navegador nao encerra.
+
+11. NOVIDADES - TRADE + PRODUCT INTELLIGENCE
+   Menu Visao Geral > Inicio: escolha "Investigar importacoes" ou "Descobrir oportunidades de produtos".
+   Trade Intelligence > Painel de Importacoes: evolucao mensal/anual por NCM/SH (Brasil, Comex Stat) ou HS/HTS
+   (EUA, Census), paises de origem, variacao 12 meses, CAGR. Os numeros sao da CLASSIFICACAO inteira, nao do produto.
+   Trade Intelligence > Empresas e Embarques: importe B/L ou manifestos (PDF textual, TXT, CSV, XLSX) e investigue
+   uma empresa. Sem arquivos/provedor autorizado, o GPI informa que nao ha embarques individuais disponiveis.
+   Visao Geral > Assistente IA: perguntas respondidas com os dados reais do GPI (com ou sem modelo local).
+   Fontes e Sistema > Matriz de Fontes: estado real de cada fonte (operacional, pendente, manual...).
 
 Manual completo: MANUAL.md. Informacoes para a TI: docs\TI.md.

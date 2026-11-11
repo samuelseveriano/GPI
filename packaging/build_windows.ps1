@@ -7,7 +7,7 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 -SkipTests # sem a suíte pytest
 param(
   [switch]$SkipTests,
-  [string]$ZipName = "GPI-Windows-Portable-v0.9.1-MVP.zip",
+  [string]$ZipName = "GPI-Windows-Portable-Trade-Intelligence.zip",
   [string]$Python = ""
 )
 $ErrorActionPreference = "Stop"

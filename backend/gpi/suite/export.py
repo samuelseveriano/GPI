@@ -109,6 +109,27 @@ def tables_from(kind: str, data: dict) -> list[tuple[str, list[dict], list[str]]
                 ("Requisitos potenciais", data.get("requisitos_potenciais") or [], ["Requisitos NÃO confirmados — triagem preliminar."]),
                 ("Registros locais", (data.get("registros_locais") or {}).get("itens") or [], [(data.get("registros_locais") or {}).get("regra") or ""]),
                 ("Checklist", [{"passo": i + 1, "acao": x} for i, x in enumerate(data.get("checklist") or [])], [])]
+    if kind == "trade":
+        out = [("Resumo", [{"campo": "título", "valor": data.get("titulo")}, {"campo": "consulta", "valor": data.get("consulta")},
+                           {"campo": "produto", "valor": data.get("produto")}] + [{"campo": "conclusão", "valor": c} for c in data.get("conclusoes") or []],
+                data.get("limitacoes") or []),
+               ("Códigos candidatos", data.get("codigos_candidatos") or [], [data.get("aviso_codigos") or ""])]
+        for b in data.get("classificacoes") or []:
+            an = b.get("analise") or {}
+            tag = f"{b['tipo_codigo']} {b['codigo']} {b['mercado']}"[:22]
+            out.append((f"Mensal {tag}"[:31], an.get("mensal") or [], [b.get("fonte") or "", b.get("modo") or "", b.get("abrangencia") or ""]))
+            out.append((f"Anual {tag}"[:31], an.get("anual") or [], [json.dumps(an.get("variacoes") or {}, ensure_ascii=False)]))
+            out.append((f"Países {tag}"[:31], an.get("paises") or [], an.get("mudancas_relevantes") or []))
+        return out
+    if kind == "empresa":
+        k = "fornecedores_observados" if "fornecedores_observados" in data else "clientes_observados"
+        return [("Resumo", [{"campo": "consulta", "valor": data.get("consulta")}, {"campo": "resultado", "valor": data.get("resultado")},
+                            {"campo": "confiança", "valor": data.get("confianca")}], data.get("limitacoes") or []),
+                ("Correspondências", data.get("correspondencias") or [], ["Nomes parecidos não são unidos automaticamente."]),
+                ("Embarques", [{k2: v for k2, v in e.items() if k2 != "classificacao"} | {"produto_provavel": (e.get("classificacao") or {}).get("produto_provavel"),
+                               "categoria": (e.get("classificacao") or {}).get("categoria")} for e in data.get("embarques") or []], []),
+                ("Parceiros", data.get(k) or [], []), ("Categorias", data.get("categorias") or [], []),
+                ("Evidências", data.get("evidencias") or [], [])]
     return [("Dados", data if isinstance(data, list) else [data], [])]
 
 

@@ -42,6 +42,30 @@ def _offer_summary(c: dict) -> dict:
             "afeta_indicadores_do_mercado": c.get("mercado") == MARKET}
 
 
+GROUPS = {"Interesse do consumidor": ("consumer_search_strength", "social_momentum", "trend_persistence"),
+          "Mercado": ("competition_pressure", "marketplace_evidence"),
+          "Viabilidade": ("import_readiness", "product_quality_risk"),
+          "Confiabilidade": ("forecast_confidence",)}
+
+
+def _groups(d: dict) -> dict:
+    out = {g: {k: d[k] for k in ks if k in d} for g, ks in GROUPS.items()}
+    out["Comércio exterior"] = "contexto — não entra no índice (importação ≠ procura)"
+    return out
+
+
+def _trade(pid: str, ctx: dict) -> dict | None:
+    from .catalog import NCM_HINT
+    from ..suite.trade import EXTRA_SH4
+    head = pid.split("+")[0].split(":")[0]
+    sh4 = NCM_HINT.get(head) or EXTRA_SH4.get(head)
+    t = ctx.get(sh4) if sh4 else None
+    if not t:
+        return {"sh4_candidata": sh4, "estado": "sem série Comex Stat de 24 meses"} if sh4 else None
+    return {"sh4_candidata": sh4, "descricao": t["descricao"], "variacao_12m_pct": t["variacao_12m_pct"], "ultimos_12m_usd": t["ultimos_12m_usd"],
+            "ate": t["ate"], "tipo_evidencia": "Informações contextuais (classificação ampla, Brasil)"}
+
+
 MARKET = "BR"      # indicadores de decisão do GPI (importação para o Brasil): só oferta do mercado brasileiro entra no índice
 
 
@@ -71,6 +95,13 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
         by.setdefault(s["product_id"], []).append(s)
     ids = set(by) | set(soc) | {p for p, cs in comp.items() if any(c.get("anuncios_elegiveis") for c in cs)}
     rows = []
+    trade_ctx = {}
+    if db is not None:
+        try:
+            from ..suite.trade import category_growth
+            trade_ctx = {i["codigo"]: i for i in category_growth(db, 100000, 0)["itens"]}
+        except Exception:  # noqa: BLE001 — contexto opcional
+            trade_ctx = {}
     for pid in ids:
         lst = by.get(pid, [])
         sc = scores.get(pid, {})
@@ -172,6 +203,8 @@ def build(consumer: dict, social: dict | None, reviews: dict | None, competition
                                                                     "índice parcial NÃO elegível para decisão"},
                      "prioridade": prio, "dimensoes": d,
                      "oferta_observada": [_offer_summary(c) for c in comp.get(pid, [])],
+                     "dimensoes_agrupadas": _groups(d),
+                     "comercio_exterior": _trade(pid, trade_ctx),
                      "tipos_de_evidencia": {
                          "Oferta observada": bool(comp.get(pid)),
                          "Interesse de pesquisa": "consumer_search_strength" in d,

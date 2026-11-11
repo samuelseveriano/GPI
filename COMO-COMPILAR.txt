@@ -15,11 +15,11 @@ Precisa fazer UMA vez, em um computador Windows 10/11 64 bits com internet:
    (caminhos muito longos podem falhar no Windows).
 
 3. Clique duas vezes em COMPILAR-GPI-WINDOWS.bat e escolha:
-   1 = completo (roda os 627 testes automatizados antes; ~45 min)
+   1 = completo (roda os ~640 testes automatizados antes; ~45 min)
    2 = rapido   (gera e testa so o executavel; ~15 min)
 
 4. Ao terminar, na mesma pasta aparecem:
-   - GPI-Windows-Portable-v0.9.1-MVP.zip  -> o programa portatil (extraia e abra GPI\GPI.exe)
+   - GPI-Windows-Portable-Trade-Intelligence.zip  -> o programa portatil (extraia e abra GPI\GPI.exe)
    - GPI-Build-Report.txt                 -> versao, bibliotecas, testes, SHA-256
    - SHA256SUMS.txt
    Se algo falhar, os detalhes ficam em build_local.log, pyi.log, pytest.log ou smoke_resultados.txt.
