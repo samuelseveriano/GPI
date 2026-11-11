@@ -1,0 +1,32 @@
+GPI v0.9.1 - COMO GERAR O GPI.exe NO SEU COMPUTADOR (sem GitHub)
+===============================================================
+
+Este ZIP contem o codigo-fonte completo do GPI v0.9.1 (commit 40affd6 + scripts de build local)
+e o historico Git completo (GPI-historico-completo.gitbundle). Nao contem senhas, tokens nem bancos.
+
+Precisa fazer UMA vez, em um computador Windows 10/11 64 bits com internet:
+
+1. Instale o Python 3.12 (64 bits): https://www.python.org/downloads/windows/
+   - Escolha "Windows installer (64-bit)" da versao 3.12.x.
+   - Na instalacao marque "Add python.exe to PATH" e use "Install Now" (nao precisa de administrador).
+   O Python so e necessario para COMPILAR. Quem for usar o GPI.exe nao precisa dele.
+
+2. Extraia este ZIP (botao direito > Extrair tudo...) para uma pasta curta, ex.: C:\GPI-src
+   (caminhos muito longos podem falhar no Windows).
+
+3. Clique duas vezes em COMPILAR-GPI-WINDOWS.bat e escolha:
+   1 = completo (roda os 627 testes automatizados antes; ~45 min)
+   2 = rapido   (gera e testa so o executavel; ~15 min)
+
+4. Ao terminar, na mesma pasta aparecem:
+   - GPI-Windows-Portable-v0.9.1-MVP.zip  -> o programa portatil (extraia e abra GPI\GPI.exe)
+   - GPI-Build-Report.txt                 -> versao, bibliotecas, testes, SHA-256
+   - SHA256SUMS.txt
+   Se algo falhar, os detalhes ficam em build_local.log, pyi.log, pytest.log ou smoke_resultados.txt.
+
+Alternativa sem compilar (precisa do Python instalado): Start_GPI.bat abre o GPI direto do codigo-fonte
+(antes, uma vez: "py -3.12 -m pip install -r requirements.txt -r requirements-optional.txt").
+
+Restaurar o repositorio Git com todo o historico (quando quiser, ex.: em outra conta/servidor):
+   git clone GPI-historico-completo.gitbundle GPI
+   cd GPI && git checkout feature/gpi-v0.9.1-product-intelligence-suite
