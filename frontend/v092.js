@@ -156,5 +156,5 @@ window.GPI_V092 = function (H, PAGES) {
     } catch (e) { $('#mx').innerHTML = errBox(e); }
   }
 
-  return { inicio, dashboard, trade, 'empresas-embarques': empresas, assistente, 'matriz-fontes': matriz };
+  return { inicio: inicio, dashboard: dashboard, trade: trade, 'empresas-embarques': empresas, assistente: assistente, 'matriz-fontes': matriz };
 };
